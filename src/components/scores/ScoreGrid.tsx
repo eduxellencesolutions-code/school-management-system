@@ -35,6 +35,7 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     return map
   })
 
+  // Properly typed save function with useCallback
   const saveScore = useCallback(async (learnerId: string, componentId: string, value: number | null) => {
     setScores(prev => ({
       ...prev,
@@ -51,12 +52,13 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
       return
     }
 
+    const { data: userData } = await supabase.auth.getUser()
     const { error } = await supabase.from('scores').upsert({
       learner_id: learnerId,
       subject_id: subjectId,
       component_id: componentId,
       score: value,
-      entered_by: (await supabase.auth.getUser()).data.user?.id,
+      entered_by: userData.user?.id,
     }, { onConflict: 'learner_id,subject_id,component_id' })
 
     setScores(prev => ({
@@ -70,12 +72,30 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     if (error) toast.error('Failed to save score')
   }, [supabase, subjectId, components])
 
-  // Debounced save — fires 600ms after last keystroke
-  const debouncedSave = useRef(
-    debounce((learnerId: string, componentId: string, value: number | null) => {
+  // FIX: Use a simple timeout-based debounce instead of the utility function
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  const debouncedSave = useCallback((learnerId: string, componentId: string, value: number | null) => {
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    
+    // Set a new timeout
+    timeoutRef.current = setTimeout(() => {
       saveScore(learnerId, componentId, value)
+      timeoutRef.current = null
     }, 600)
-  ).current
+  }, [saveScore])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   function handleChange(learnerId: string, componentId: string, raw: string) {
     const value = raw === '' ? null : parseFloat(raw)
@@ -83,6 +103,7 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
       ...prev,
       [learnerId]: { ...prev[learnerId], [componentId]: { value, status: 'idle' } },
     }))
+    // Call debounced save
     debouncedSave(learnerId, componentId, value)
   }
 

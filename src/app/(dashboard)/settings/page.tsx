@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { PLAN_PRICING, PLAN_LIMITS } from '@/types'
+import { PLAN_PRICING, PLAN_LIMITS, type SubscriptionPlan } from '@/types'
 import { CheckCircle2, XCircle } from 'lucide-react'
 
 export default async function SettingsPage() {
@@ -8,12 +8,18 @@ export default async function SettingsPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single()
+  
   const { data: org } = profile?.organization_id
     ? await supabase.from('organizations').select('*').eq('id', profile.organization_id).single()
     : { data: null }
 
-  const currentPlan = org?.subscription_plan ?? 'free'
+  // FIX: Type assertion to ensure it's a valid SubscriptionPlan
+  const currentPlan = (org?.subscription_plan ?? 'free') as SubscriptionPlan
   const planInfo = PLAN_PRICING[currentPlan]
   const planLimits = PLAN_LIMITS[currentPlan]
 
@@ -82,26 +88,26 @@ export default async function SettingsPage() {
       <div className="card">
         <div className="card-header flex items-center justify-between">
           <h2 className="font-semibold text-sm text-ink">Subscription</h2>
-          <span className="badge badge-blue">{planInfo.label}</span>
+          <span className="badge badge-blue">{planInfo?.label}</span>
         </div>
         <div className="card-body flex flex-col gap-5">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-ink">{planInfo.naira}</span>
-            <span className="text-sm text-ink-muted">{planInfo.period}</span>
+            <span className="text-3xl font-bold text-ink">{planInfo?.naira}</span>
+            <span className="text-sm text-ink-muted">{planInfo?.period}</span>
           </div>
 
           {/* Feature checklist */}
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: `${planLimits.max_groups === null ? 'Unlimited' : planLimits.max_groups} class${planLimits.max_groups === 1 ? '' : 'es'}`, enabled: true },
-              { label: `${planLimits.max_learners === null ? 'Unlimited' : planLimits.max_learners} students`, enabled: true },
-              { label: 'Excel export', enabled: planLimits.has_excel_export },
-              { label: 'PDF reports', enabled: planLimits.has_pdf_export },
-              { label: 'School branding', enabled: planLimits.has_branding },
-              { label: 'AI remarks', enabled: planLimits.has_ai_remarks },
-              { label: 'Analytics dashboard', enabled: planLimits.has_analytics },
-              { label: 'Multiple teachers', enabled: planLimits.has_multi_staff },
-              { label: 'Parent portal', enabled: planLimits.has_parent_portal },
+              { label: `${planLimits?.max_groups === null ? 'Unlimited' : planLimits?.max_groups} class${planLimits?.max_groups === 1 ? '' : 'es'}`, enabled: true },
+              { label: `${planLimits?.max_learners === null ? 'Unlimited' : planLimits?.max_learners} students`, enabled: true },
+              { label: 'Excel export', enabled: planLimits?.has_excel_export ?? false },
+              { label: 'PDF reports', enabled: planLimits?.has_pdf_export ?? false },
+              { label: 'School branding', enabled: planLimits?.has_branding ?? false },
+              { label: 'AI remarks', enabled: planLimits?.has_ai_remarks ?? false },
+              { label: 'Analytics dashboard', enabled: planLimits?.has_analytics ?? false },
+              { label: 'Multiple teachers', enabled: planLimits?.has_multi_staff ?? false },
+              { label: 'Parent portal', enabled: planLimits?.has_parent_portal ?? false },
             ].map(({ label, enabled }) => (
               <div key={label} className="flex items-center gap-2 text-sm">
                 {enabled

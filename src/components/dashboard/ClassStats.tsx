@@ -37,15 +37,26 @@ export default function ClassStats({ groupId, totalStudents }: Props) {
 
       if (!scores?.length) { setLoading(false); return }
 
-      // Filter to only this group's subjects
+      // FIX: Filter to only this group's subjects
+      // Handle subject as array or single object
       const groupScores = scores.filter(s => {
-        const subj = s.subject as { name: string; group_id: string } | null
-        return subj?.group_id === groupId
+        // If subject is an array, check the first item's group_id
+        if (Array.isArray(s.subject)) {
+          return s.subject[0]?.group_id === groupId
+        }
+        // If subject is a single object
+        return (s.subject as any)?.group_id === groupId
       })
 
       // Subject averages
       const bySubject = groupScores.reduce<Record<string, number[]>>((acc, s) => {
-        const name = (s.subject as { name: string } | null)?.name ?? 'Unknown'
+        // Get subject name from array or single object
+        let name = 'Unknown'
+        if (Array.isArray(s.subject)) {
+          name = s.subject[0]?.name || 'Unknown'
+        } else if (s.subject) {
+          name = (s.subject as any)?.name || 'Unknown'
+        }
         if (!acc[name]) acc[name] = []
         if (s.score !== null) acc[name].push(s.score)
         return acc

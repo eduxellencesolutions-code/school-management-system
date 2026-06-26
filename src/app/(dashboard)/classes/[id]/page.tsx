@@ -27,7 +27,7 @@ export default async function ClassDetailPage({ params }: Props) {
 
   const [
     { data: learners, count: learnerCount },
-    { data: subjects },
+    { data: subjectsData },
     { data: templates },
   ] = await Promise.all([
     supabase
@@ -48,6 +48,20 @@ export default async function ClassDetailPage({ params }: Props) {
       .select('id, name')
       .order('name'),
   ])
+
+  // FIX: Transform subjects to match Subject type
+  const subjects = subjectsData?.map((subject: any) => ({
+    id: subject.id,
+    name: subject.name,
+    code: subject.code,
+    template_id: subject.template_id,
+    instructor: subject.instructor?.[0] || null,  // Extract first instructor or null
+    is_active: true,
+    organization_id: group.organization_id,
+    group_id: params.id,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  })) ?? []
 
   const instructor = group.instructor as { id: string; name: string; email: string } | null
   const session = group.session as { name: string } | null
@@ -112,7 +126,7 @@ export default async function ClassDetailPage({ params }: Props) {
         <div className="lg:col-span-3" id="subjects">
           <SubjectManager
             groupId={params.id}
-            subjects={subjects ?? []}
+            subjects={subjects}
             templates={templates ?? []}
           />
         </div>

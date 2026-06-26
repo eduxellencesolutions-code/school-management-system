@@ -25,7 +25,7 @@ export default async function StudentDetailPage({ params }: Props) {
   if (!learner) notFound()
 
   // Fetch score summary for this student
-  const { data: scores } = await supabase
+  const { data: scoresData } = await supabase
     .from('scores')
     .select(`
       score, entered_at,
@@ -36,7 +36,21 @@ export default async function StudentDetailPage({ params }: Props) {
     .order('entered_at', { ascending: false })
     .limit(50)
 
+  // FIX: Transform scores to match ScoreEntry type
+  const scores = scoresData?.map((score: any) => ({
+    score: score.score,
+    entered_at: score.entered_at,
+    subject: score.subject?.[0] || null,      // Extract first subject or null
+    component: score.component?.[0] || null,  // Extract first component or null
+  })) ?? []
+
   const group = learner.group as { id: string; name: string; code?: string } | null
+
+  // Calculate average score
+  const validScores = scores.filter(s => s.score !== null && s.score !== undefined)
+  const avgScore = validScores.length > 0
+    ? (validScores.reduce((a, b) => a + (b.score || 0), 0) / validScores.length).toFixed(1)
+    : '—'
 
   return (
     <div className="max-w-3xl flex flex-col gap-6">
@@ -85,18 +99,11 @@ export default async function StudentDetailPage({ params }: Props) {
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="stat-card">
-          <div className="stat-value">{scores?.length ?? 0}</div>
+          <div className="stat-value">{scores.length}</div>
           <div className="stat-label">Score entries</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">
-            {scores && scores.length > 0
-              ? (() => {
-                  const vals = scores.map(s => s.score).filter((v): v is number => v !== null)
-                  return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—'
-                })()
-              : '—'}
-          </div>
+          <div className="stat-value">{avgScore}</div>
           <div className="stat-label">Avg score</div>
         </div>
         <div className="stat-card">
@@ -111,7 +118,7 @@ export default async function StudentDetailPage({ params }: Props) {
       <StudentEditForm learner={learner} groups={[group].filter(Boolean) as { id: string; name: string }[]} />
 
       {/* Score history */}
-      <StudentScoreHistory scores={scores ?? []} />
+      <StudentScoreHistory scores={scores} />
     </div>
   )
 }

@@ -119,8 +119,8 @@ export interface Subject {
   is_active: boolean
   created_at: string
   updated_at: string
-  // Joined
-  instructor?: User
+  // Joined - FIXED: instructor can be null or an object with name
+  instructor?: { name: string } | null
   template?: AssessmentTemplate
 }
 
