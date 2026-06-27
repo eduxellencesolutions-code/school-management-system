@@ -25,7 +25,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
 
-  // ✅ FIX: Add 'trigger' to destructure
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { account_type: 'individual' },
@@ -36,15 +35,12 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      // FIX: Validate required fields before proceeding
       if (!data.email || !data.password) {
         throw new Error('Email and password are required')
       }
 
-      // ✅ FIX: Use emailRedirectTo instead of redirectTo (Supabase v2+)
       const redirectUrl = new URL('/dashboard', window.location.origin).toString()
 
-      // 1. Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
         password: data.password,
@@ -53,7 +49,6 @@ export default function SignupPage() {
             name: data.name?.trim() || '',
             role: data.account_type === 'organization' ? 'admin' : 'teacher' 
           },
-          // ✅ FIX: Use emailRedirectTo (not redirectTo)
           emailRedirectTo: redirectUrl,
         },
       })
@@ -63,7 +58,6 @@ export default function SignupPage() {
       }
       if (!authData.user) throw new Error('Signup failed')
 
-      // 2. If organization, create org record
       if (data.account_type === 'organization' && data.org_name) {
         const { data: org, error: orgError } = await supabase
           .from('organizations')
@@ -80,7 +74,6 @@ export default function SignupPage() {
           throw new Error('Failed to create organization: ' + orgError.message)
         }
 
-        // Link user to org
         const { error: updateError } = await supabase
           .from('users')
           .update({ organization_id: org.id, role: 'admin' })
@@ -88,10 +81,8 @@ export default function SignupPage() {
         
         if (updateError) {
           console.error('User update error:', updateError)
-          // Don't throw - user is created, just log
         }
 
-        // Seed default grading system
         try {
           const { error: gradeError } = await supabase.from('grading_systems').insert(
             DEFAULT_GRADES.map(g => ({
@@ -125,7 +116,6 @@ export default function SignupPage() {
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         {step === 1 && (
           <>
-            {/* Account type */}
             <div>
               <label className="block text-sm font-medium text-ink mb-2">I am signing up as</label>
               <div className="grid grid-cols-2 gap-2">
@@ -167,7 +157,6 @@ export default function SignupPage() {
             </div>
 
             {accountType === 'organization' ? (
-              // ✅ FIX: Validate step 1 fields before moving to step 2
               <button 
                 type="button" 
                 onClick={async () => {
