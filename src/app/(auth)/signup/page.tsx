@@ -21,7 +21,9 @@ type FormData = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
-  const supabase = createClient()
+  // ✅ FIX: Remove this line — will create inside onSubmit
+  // const supabase = createClient()
+  
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
 
@@ -35,12 +37,15 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
+      // ✅ FIX: Create Supabase client HERE (only runs in browser)
+      const supabase = createClient()
+      
       if (!data.email || !data.password) {
         throw new Error('Email and password are required')
       }
 
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://results.eduxellence.org'
-const redirectUrl = `${siteUrl}/dashboard`
+      const redirectUrl = `${siteUrl}/dashboard`
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
