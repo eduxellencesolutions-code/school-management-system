@@ -35,12 +35,22 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
+      // FIX: Validate required fields before proceeding
+      if (!data.email || !data.password) {
+        throw new Error('Email and password are required')
+      }
+
       // 1. Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
+        email: data.email.trim(),
         password: data.password,
         options: {
-          data: { name: data.name, role: data.account_type === 'organization' ? 'admin' : 'teacher' },
+          data: { 
+            name: data.name?.trim() || '',
+            role: data.account_type === 'organization' ? 'admin' : 'teacher' 
+          },
+          // FIX: Add valid redirectTo
+          redirectTo: `${window.location.origin}/dashboard`,
         },
       })
       if (authError) throw authError
@@ -51,7 +61,7 @@ export default function SignupPage() {
         const { data: org, error: orgError } = await supabase
           .from('organizations')
           .insert({
-            name: data.org_name,
+            name: data.org_name.trim(),
             type: data.org_type ?? 'school',
             subscription_plan: 'free',
             subscription_status: 'active',
@@ -61,20 +71,26 @@ export default function SignupPage() {
         if (orgError) throw orgError
 
         // Link user to org
-        await supabase
+        const { error: updateError } = await supabase
           .from('users')
           .update({ organization_id: org.id, role: 'admin' })
           .eq('id', authData.user.id)
+        
+        if (updateError) throw updateError
 
         // Seed default grading system
-        await supabase.from('grading_systems').insert(DEFAULT_GRADES.map(g => ({
-          ...g, organization_id: org.id,
-        })))
+        const { error: gradeError } = await supabase.from('grading_systems').insert(
+          DEFAULT_GRADES.map(g => ({
+            ...g, organization_id: org.id,
+          }))
+        )
+        if (gradeError) console.warn('Grading system seed failed:', gradeError)
       }
 
       toast.success('Account created! Please check your email to confirm.')
       router.push('/dashboard')
     } catch (err: unknown) {
+      console.error('Signup error:', err)
       toast.error(err instanceof Error ? err.message : 'Signup failed')
     } finally {
       setLoading(false)
@@ -82,7 +98,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="card p-8">
+    <div className="card p-8 max-w-md mx-auto">
       <h2 className="text-lg font-semibold text-ink mb-1">Create your free account</h2>
       <p className="text-sm text-ink-muted mb-6">
         Already have an account?{' '}
