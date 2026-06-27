@@ -96,11 +96,11 @@ export default function Sidebar({ user, org }: Props) {
       <div className="border-t border-surface-200 p-3 flex flex-col gap-1">
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-            {getInitials(user.name)}
+            {getInitials(user?.name ?? user?.email ?? 'User')}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-ink truncate">{user.name}</p>
-            <p className="text-[10px] text-ink-faint truncate capitalize">{user.role}</p>
+            <p className="text-xs font-semibold text-ink truncate">{user?.name ?? user?.email ?? 'User'}</p>
+            <p className="text-[10px] text-ink-faint truncate capitalize">{user?.role ?? 'teacher'}</p>
           </div>
         </div>
         <button

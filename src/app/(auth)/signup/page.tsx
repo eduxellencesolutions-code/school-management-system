@@ -44,9 +44,7 @@ export default function SignupPage() {
         throw new Error('Email and password are required')
       }
 
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://results.eduxellence.org'
-      const redirectUrl = `${siteUrl}/dashboard`
-
+      // ✅ FIX: REMOVED emailRedirectTo entirely
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
         password: data.password,
@@ -55,7 +53,7 @@ export default function SignupPage() {
             name: data.name?.trim() || '',
             role: data.account_type === 'organization' ? 'admin' : 'teacher' 
           },
-          emailRedirectTo: redirectUrl,
+          // emailRedirectTo: REMOVED to fix Invalid value error
         },
       })
       if (authError) {

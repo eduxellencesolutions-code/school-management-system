@@ -7,11 +7,17 @@ import { formatDate } from '@/lib/utils'
 interface Props { searchParams: { class?: string; q?: string } }
 
 export default async function StudentsPage({ searchParams }: Props) {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single()
+  
   const orgId = profile?.organization_id
 
   const { data: groups } = await supabase

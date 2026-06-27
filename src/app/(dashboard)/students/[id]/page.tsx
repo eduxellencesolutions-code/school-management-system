@@ -8,7 +8,8 @@ import StudentScoreHistory from '@/components/students/StudentScoreHistory'
 interface Props { params: { id: string } }
 
 export default async function StudentDetailPage({ params }: Props) {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 

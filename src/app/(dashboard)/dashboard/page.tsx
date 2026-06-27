@@ -5,7 +5,8 @@ import { formatDate } from '@/lib/utils'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp } from 'lucide-react'
 
 export default async function DashboardPage() {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 

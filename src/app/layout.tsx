@@ -1,6 +1,20 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import '@/styles/globals.css'
+
+// ✅ Google Fonts using Next.js built-in optimization
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: {
@@ -11,17 +25,23 @@ export const metadata: Metadata = {
   keywords: ['school results', 'academic records', 'result management', 'education technology'],
   authors: [{ name: 'Eduxellence' }],
   manifest: '/manifest.json',
-  themeColor: '#1C6EF2',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   icons: {
     icon: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
     apple: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
   },
 }
 
+// ✅ MOVED THEME COLOR AND VIEWPORT TO SEPARATE EXPORT
+export const viewport: Viewport = {
+  themeColor: '#1C6EF2',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
         <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
         <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />

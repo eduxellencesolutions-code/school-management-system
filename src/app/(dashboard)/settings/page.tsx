@@ -4,7 +4,8 @@ import { PLAN_PRICING, PLAN_LIMITS, type SubscriptionPlan } from '@/types'
 import { CheckCircle2, XCircle } from 'lucide-react'
 
 export default async function SettingsPage() {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 

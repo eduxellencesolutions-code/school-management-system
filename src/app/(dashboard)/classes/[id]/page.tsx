@@ -8,7 +8,8 @@ import { Users, BookOpen, ClipboardList, FileText, ArrowLeft } from 'lucide-reac
 interface Props { params: { id: string } }
 
 export default async function ClassDetailPage({ params }: Props) {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
@@ -55,7 +56,7 @@ export default async function ClassDetailPage({ params }: Props) {
     name: subject.name,
     code: subject.code,
     template_id: subject.template_id,
-    instructor: subject.instructor?.[0] || null,  // Extract first instructor or null
+    instructor: subject.instructor?.[0] || null,
     is_active: true,
     organization_id: group.organization_id,
     group_id: params.id,

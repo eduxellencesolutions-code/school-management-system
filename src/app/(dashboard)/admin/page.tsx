@@ -4,13 +4,12 @@ import TemplateManager from '@/components/dashboard/TemplateManager'
 import GradingManager from '@/components/dashboard/GradingManager'
 
 export default async function AdminPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
 
-  // Only admins access this page
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const orgId = profile.organization_id

@@ -26,22 +26,35 @@ export default function LoginPage() {
 
   async function onSubmit(data: FormData) {
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    })
-    if (error) {
-      toast.error(error.message)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email.trim(),
+        password: data.password,
+      })
+      if (error) {
+        // ✅ Better error handling for email confirmation
+        if (error.message.includes('Email not confirmed')) {
+          toast.error('Please confirm your email address before logging in.')
+        } else {
+          toast.error(error.message)
+        }
+        setLoading(false)
+        return
+      }
+      toast.success('Welcome back!')
+      // Wait for session to be written before navigating
+      await new Promise(resolve => setTimeout(resolve, 500))
+      router.refresh()
+      router.push('/dashboard')
+    } catch (err) {
+      console.error('Login error:', err)
+      toast.error('Something went wrong. Please try again.')
       setLoading(false)
-      return
     }
-    toast.success('Welcome back!')
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (
-    <div className="card p-8">
+    <div className="card p-8 max-w-md mx-auto">
       <h2 className="text-lg font-semibold text-ink mb-1">Sign in to your account</h2>
       <p className="text-sm text-ink-muted mb-6">
         Don&apos;t have an account?{' '}

@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import ReportGenerator from '@/components/reports/ReportGenerator'
 
 export default async function ReportsPage() {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 

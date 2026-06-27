@@ -5,11 +5,16 @@ import { formatDate } from '@/lib/utils'
 import { BookOpen, Plus, Users, ClipboardList } from 'lucide-react'
 
 export default async function ClassesPage() {
-  const supabase = createClient()
+  // ✅ FIX: Add await here
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single()
 
   const { data: groups } = await supabase
     .from('groups')
