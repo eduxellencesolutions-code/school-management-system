@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Let public routes through immediately
+  // ✅ Let ALL public routes through immediately
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -21,6 +21,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // ✅ Only run session check for protected routes
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -41,6 +42,7 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // ✅ If no user, redirect to login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -49,6 +51,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // ✅ Only protect these routes
   matcher: [
     '/dashboard/:path*',
     '/classes/:path*',
