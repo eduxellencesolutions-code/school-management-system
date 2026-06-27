@@ -10,14 +10,12 @@ export const metadata: Metadata = {
   description: 'Smart academic assessment and result management platform for schools and educators.',
   keywords: ['school results', 'academic records', 'result management', 'education technology'],
   authors: [{ name: 'Eduxellence' }],
-  // PWA
   manifest: '/manifest.json',
   themeColor: '#1C6EF2',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
-  // FIX: Add icon with absolute URL
   icons: {
-    icon: 'https://eduxellence.org/Eduxellence.ico',
-    apple: 'https://eduxellence.org/Eduxellence.ico',
+    icon: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
+    apple: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
   },
 }
 
@@ -25,10 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* FIX: Use absolute URL instead of /favicon.ico */}
-        <link rel="icon" type="image/x-icon" href="https://eduxellence.org/Eduxellence.ico" />
-        <link rel="apple-touch-icon" href="https://eduxellence.org/Eduxellence.ico" />
-        <link rel="shortcut icon" href="https://eduxellence.org/Eduxellence.ico" />
+        <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
+        <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
+        <link rel="shortcut icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
       </head>
       <body>
         {children}
