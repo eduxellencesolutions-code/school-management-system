@@ -25,7 +25,7 @@ export default async function DashboardPage() {
     supabase.from('groups').select('*', { count: 'exact', head: true })
       .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id),
     supabase.from('learners').select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000'),
+      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id)
     supabase.from('scores').select('*', { count: 'exact', head: true })
       .eq('entered_by', authUser.id),
     supabase.from('groups').select('id, name, type, created_at, learner_count:learners(count)')
