@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ScoreGrid from '@/components/scores/ScoreGrid'
+import ScoreSelectors from '@/components/scores/ScoreSelectors'
 import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 
@@ -16,18 +17,17 @@ export default async function ScoresPage({ searchParams }: Props) {
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
   const orgId = profile?.organization_id
 
-  // Fetch all groups for the selector
+  // ✅ Fix: query by org OR instructor
   const { data: groups } = await supabase
     .from('groups')
     .select('id, name, code')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+    .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id)
     .eq('is_active', true)
     .order('name')
 
   const selectedGroupId = searchParams.class
   const selectedSubjectId = searchParams.subject
 
-  // Fetch subjects for selected class
   const { data: subjects } = selectedGroupId
     ? await supabase
         .from('subjects')
@@ -37,7 +37,6 @@ export default async function ScoresPage({ searchParams }: Props) {
         .order('name')
     : { data: null }
 
-  // Full data for ScoreGrid
   let learners = null
   let components = null
   let existingScores = null
@@ -87,55 +86,14 @@ export default async function ScoresPage({ searchParams }: Props) {
         <p className="page-subtitle">Select a class and subject to start entering scores</p>
       </div>
 
-      {/* Selectors */}
-      <div className="card p-4 flex flex-wrap gap-4 items-end">
-        <div className="flex flex-col gap-1 min-w-[200px]">
-          <label className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Class</label>
-          <select
-            defaultValue={selectedGroupId ?? ''}
-            onChange={(e) => {
-              const url = new URL(window.location.href)
-              url.searchParams.set('class', e.target.value)
-              url.searchParams.delete('subject')
-              window.location.href = url.toString()
-            }}
-            className="input"
-          >
-            <option value="">Select class…</option>
-            {groups?.map(g => (
-              <option key={g.id} value={g.id}>{g.name}{g.code ? ` (${g.code})` : ''}</option>
-            ))}
-          </select>
-        </div>
+      {/* ✅ Move window-dependent selectors to client component */}
+      <ScoreSelectors
+        groups={groups ?? []}
+        subjects={subjects ?? []}
+        selectedGroupId={selectedGroupId ?? ''}
+        selectedSubjectId={selectedSubjectId ?? ''}
+      />
 
-        {selectedGroupId && subjects && subjects.length > 0 && (
-          <div className="flex flex-col gap-1 min-w-[200px]">
-            <label className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Subject</label>
-            <select
-              defaultValue={selectedSubjectId ?? ''}
-              onChange={(e) => {
-                const url = new URL(window.location.href)
-                url.searchParams.set('subject', e.target.value)
-                window.location.href = url.toString()
-              }}
-              className="input"
-            >
-              <option value="">Select subject…</option>
-              {subjects.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {selectedGroupId && (
-          <Link href={`/classes/${selectedGroupId}`} className="btn-secondary btn-sm btn mb-px">
-            Manage class →
-          </Link>
-        )}
-      </div>
-
-      {/* Score grid */}
       {selectedGroupId && selectedSubjectId && learners && components && selectedSubject && existingScores ? (
         learners.length === 0 ? (
           <div className="card py-12 flex flex-col items-center text-center">
