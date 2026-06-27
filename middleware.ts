@@ -13,7 +13,9 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico
      * - public folder assets
+     * - /parent (public route - no auth required)
+     * - /api/parent (public API - no auth required)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|api/parent).*)',
   ],
 }
