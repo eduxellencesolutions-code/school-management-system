@@ -130,7 +130,7 @@ export default async function DashboardPage() {
                 { label: 'Add a class',      href: '/classes/new',   icon: '📚' },
                 { label: 'Enrol students',   href: '/students/new',  icon: '👤' },
                 { label: 'Enter scores',     href: '/scores',        icon: '✏️' },
-                { label: 'Generate report',  href: '/reports/new',   icon: '📄' },
+                { label: 'Generate report', href: '/reports', icon: '📄' },
               ].map((a) => (
                 <Link
                   key={a.href}
