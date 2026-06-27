@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   // FIX: Add icon with absolute URL
   icons: {
     icon: 'https://eduxellence.org/Eduxellence.ico',
+    apple: 'https://eduxellence.org/Eduxellence.ico',
   },
 }
 
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* FIX: Use absolute URL instead of /favicon.ico */}
         <link rel="icon" type="image/x-icon" href="https://eduxellence.org/Eduxellence.ico" />
         <link rel="apple-touch-icon" href="https://eduxellence.org/Eduxellence.ico" />
+        <link rel="shortcut icon" href="https://eduxellence.org/Eduxellence.ico" />
       </head>
       <body>
         {children}
