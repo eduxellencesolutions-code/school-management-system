@@ -26,7 +26,7 @@ export default async function ClassesPage() {
       learner_count:learners(count),
       subject_count:subjects(count)
     `)
-    .eq('organization_id', profile?.organization_id ?? '00000000-0000-0000-0000-000000000000')
+    .eq('organization_id', profile?.organization_id ?? authUser.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
