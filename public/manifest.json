@@ -9,15 +9,9 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://eduxellence.org/Eduxellence.ico",
+      "src": "https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
-    },
-    {
-      "src": "https://eduxellence.org/icon-192.png",
-      "sizes": "192x205",
-      "type": "image/png",
-      "purpose": "any"
     }
   ],
   "categories": ["education", "productivity"]
