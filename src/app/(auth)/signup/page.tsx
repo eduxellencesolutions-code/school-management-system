@@ -39,7 +39,8 @@ export default function SignupPage() {
         throw new Error('Email and password are required')
       }
 
-      const redirectUrl = new URL('/dashboard', window.location.origin).toString()
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://results.eduxellence.org'
+const redirectUrl = `${siteUrl}/dashboard`
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
