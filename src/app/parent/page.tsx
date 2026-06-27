@@ -26,9 +26,10 @@ export default function ParentPage() {
 
     setLoading(true)
     try {
+      // FIX: Use learner_id directly and fetch learner separately
       const { data: pinData, error: pinError } = await supabase
         .from('learner_pins')
-        .select('learner_id, learners:learner_id(first_name, last_name, admission_number)')
+        .select('learner_id')
         .eq('pin', pin.trim())
         .single()
 
@@ -38,14 +39,21 @@ export default function ParentPage() {
         return
       }
 
-      const learner = pinData.learners as {
-        first_name: string
-        last_name: string
-        admission_number: string
+      // Fetch learner details separately
+      const { data: learnerData, error: learnerError } = await supabase
+        .from('learners')
+        .select('first_name, last_name, admission_number')
+        .eq('id', pinData.learner_id)
+        .single()
+
+      if (learnerError || !learnerData) {
+        toast.error('Student not found. Please contact the school.')
+        setLoading(false)
+        return
       }
 
-      setStudent(learner)
-      toast.success(`Welcome, ${learner.first_name}!`)
+      setStudent(learnerData)
+      toast.success(`Welcome, ${learnerData.first_name}!`)
 
       sessionStorage.setItem('parent_pin', pin.trim())
       sessionStorage.setItem('parent_learner_id', pinData.learner_id)
