@@ -5,7 +5,6 @@ import { formatDate } from '@/lib/utils'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp } from 'lucide-react'
 
 export default async function DashboardPage() {
-  // ✅ FIX: Add await here
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -15,7 +14,6 @@ export default async function DashboardPage() {
 
   const orgId = user?.organization_id
 
-  // Parallel data fetch
   const [
     { count: groupCount },
     { count: learnerCount },
@@ -25,7 +23,7 @@ export default async function DashboardPage() {
     supabase.from('groups').select('*', { count: 'exact', head: true })
       .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id),
     supabase.from('learners').select('*', { count: 'exact', head: true })
-      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id)
+      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id),
     supabase.from('scores').select('*', { count: 'exact', head: true })
       .eq('entered_by', authUser.id),
     supabase.from('groups').select('id, name, type, created_at, learner_count:learners(count)')
@@ -36,10 +34,10 @@ export default async function DashboardPage() {
   ])
 
   const stats = [
-    { label: 'Classes',       value: groupCount  ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
-    { label: 'Students',      value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
-    { label: 'Scores entered',value: scoreCount  ?? 0, icon: ClipboardList, href: '/scores',   color: 'text-amber-600',  bg: 'bg-amber-50' },
-    { label: 'Reports ready', value: 0,                icon: FileText,      href: '/reports',  color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'Classes',        value: groupCount  ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
+    { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
+    { label: 'Scores entered', value: scoreCount  ?? 0, icon: ClipboardList, href: '/scores',   color: 'text-amber-600',  bg: 'bg-amber-50' },
+    { label: 'Reports ready',  value: 0,                icon: FileText,      href: '/reports',  color: 'text-purple-600', bg: 'bg-purple-50' },
   ]
 
   const greeting = (() => {
@@ -51,7 +49,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
@@ -62,7 +59,6 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, href, color, bg }) => (
           <Link key={label} href={href} className="stat-card hover:shadow-md transition-shadow group">
@@ -78,9 +74,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Quick actions + recent classes */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent classes */}
         <div className="lg:col-span-2 card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
@@ -121,16 +115,15 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick actions */}
         <div className="flex flex-col gap-4">
           <div className="card p-5">
             <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
             <div className="flex flex-col gap-2">
               {[
-                { label: 'Add a class',      href: '/classes/new',   icon: '📚' },
-                { label: 'Enrol students',   href: '/students/new',  icon: '👤' },
-                { label: 'Enter scores',     href: '/scores',        icon: '✏️' },
-                { label: 'Generate report', href: '/reports', icon: '📄' },
+                { label: 'Add a class',     href: '/classes/new',  icon: '📚' },
+                { label: 'Enrol students',  href: '/students/new', icon: '👤' },
+                { label: 'Enter scores',    href: '/scores',       icon: '✏️' },
+                { label: 'Generate report', href: '/reports',      icon: '📄' },
               ].map((a) => (
                 <Link
                   key={a.href}
@@ -145,7 +138,6 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Plan CTA for free users */}
           {user?.organization_id === null && (
             <div className="card p-5 bg-brand-50 border-brand-200">
               <div className="flex items-center gap-2 mb-2">
