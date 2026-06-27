@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default async function ScoresPage({ searchParams }: Props) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
