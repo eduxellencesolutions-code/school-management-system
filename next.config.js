@@ -21,6 +21,9 @@ const nextConfig = {
       ],
     },
   ],
+  experimental: {
+    proxyFile: './src/proxy.ts',
+  },
 }
 
 module.exports = nextConfig
