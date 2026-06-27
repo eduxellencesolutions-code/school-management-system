@@ -35,26 +35,40 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      // FIX: Validate required fields before proceeding
+      // ✅ FIX 1: Validate required fields before proceeding
       if (!data.email || !data.password) {
         throw new Error('Email and password are required')
       }
 
+      // ✅ FIX 2: Clean up the email and name
+      const cleanEmail = data.email.trim()
+      const cleanName = data.name?.trim() || ''
+
+      // ✅ FIX 3: Build the redirect URL properly
+      const redirectUrl = new URL('/dashboard', window.location.origin).toString()
+
       // 1. Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email.trim(),
+        email: cleanEmail,
         password: data.password,
         options: {
           data: { 
-            name: data.name?.trim() || '',
+            name: cleanName,
             role: data.account_type === 'organization' ? 'admin' : 'teacher' 
           },
-          // FIX: Add valid redirectTo
-          redirectTo: `${window.location.origin}/dashboard`,
+          // ✅ FIX 4: Use a valid redirectTo URL
+          emailRedirectTo: redirectUrl,
         },
       })
-      if (authError) throw authError
-      if (!authData.user) throw new Error('Signup failed')
+      
+      if (authError) {
+        console.error('Auth error details:', authError)
+        throw new Error(authError.message || 'Authentication failed')
+      }
+      
+      if (!authData.user) {
+        throw new Error('Signup failed - no user returned')
+      }
 
       // 2. If organization, create org record
       if (data.account_type === 'organization' && data.org_name) {
@@ -68,7 +82,11 @@ export default function SignupPage() {
           })
           .select()
           .single()
-        if (orgError) throw orgError
+        
+        if (orgError) {
+          console.error('Org creation error:', orgError)
+          throw new Error('Failed to create organization: ' + orgError.message)
+        }
 
         // Link user to org
         const { error: updateError } = await supabase
@@ -76,22 +94,30 @@ export default function SignupPage() {
           .update({ organization_id: org.id, role: 'admin' })
           .eq('id', authData.user.id)
         
-        if (updateError) throw updateError
+        if (updateError) {
+          console.error('User update error:', updateError)
+          // Don't throw - user is created, just log the error
+        }
 
         // Seed default grading system
-        const { error: gradeError } = await supabase.from('grading_systems').insert(
-          DEFAULT_GRADES.map(g => ({
-            ...g, organization_id: org.id,
-          }))
-        )
-        if (gradeError) console.warn('Grading system seed failed:', gradeError)
+        try {
+          const { error: gradeError } = await supabase.from('grading_systems').insert(
+            DEFAULT_GRADES.map(g => ({
+              ...g, organization_id: org.id,
+            }))
+          )
+          if (gradeError) console.warn('Grading system seed failed:', gradeError)
+        } catch (gradeErr) {
+          console.warn('Grading seed error:', gradeErr)
+        }
       }
 
       toast.success('Account created! Please check your email to confirm.')
       router.push('/dashboard')
     } catch (err: unknown) {
-      console.error('Signup error:', err)
-      toast.error(err instanceof Error ? err.message : 'Signup failed')
+      console.error('Signup error details:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Signup failed. Please try again.'
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }
