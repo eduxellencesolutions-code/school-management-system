@@ -5,10 +5,13 @@ import { formatDate } from '@/lib/utils'
 import StudentEditForm from '@/components/students/StudentEditForm'
 import StudentScoreHistory from '@/components/students/StudentScoreHistory'
 
-interface Props { params: { id: string } }
+interface Props { 
+  params: Promise<{ id: string }> 
+}
 
 export default async function StudentDetailPage({ params }: Props) {
-  // ✅ FIX: Add await here
+  const { id } = await params
+  
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -20,7 +23,7 @@ export default async function StudentDetailPage({ params }: Props) {
       group:groups(id, name, code),
       organization:organizations(name)
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (!learner) notFound()
@@ -33,7 +36,7 @@ export default async function StudentDetailPage({ params }: Props) {
       subject:subjects(name),
       component:assessment_components(name, max_score)
     `)
-    .eq('learner_id', params.id)
+    .eq('learner_id', id)
     .order('entered_at', { ascending: false })
     .limit(50)
 
