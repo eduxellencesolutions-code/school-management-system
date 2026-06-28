@@ -4,12 +4,16 @@ import Link from 'next/link'
 import { Users, Plus, Upload } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
-interface Props { searchParams: { class?: string; q?: string } }
+interface Props { 
+  searchParams: Promise<{ class?: string; q?: string }> 
+}
 
 // ✅ Extracted to a client component to avoid window on server
 import ClassFilter from '@/components/students/ClassFilter'
 
 export default async function StudentsPage({ searchParams }: Props) {
+  const params = await searchParams
+  
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -37,7 +41,7 @@ export default async function StudentsPage({ searchParams }: Props) {
     .order('last_name')
     .limit(100)
 
-  if (searchParams.class) query = query.eq('group_id', searchParams.class)
+  if (params.class) query = query.eq('group_id', params.class)
 
   const { data: learners } = await query
 
@@ -61,7 +65,7 @@ export default async function StudentsPage({ searchParams }: Props) {
       </div>
 
       {/* ✅ Client component handles window/navigation */}
-      <ClassFilter groups={groups ?? []} selectedClass={searchParams.class ?? ''} />
+      <ClassFilter groups={groups ?? []} selectedClass={params.class ?? ''} />
 
       {learners && learners.length > 0 ? (
         <div className="card overflow-hidden">
