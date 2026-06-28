@@ -6,18 +6,20 @@ import { formatDate } from '@/lib/utils'
 
 interface Props { searchParams: { class?: string; q?: string } }
 
+// ✅ Extracted to a client component to avoid window on server
+import ClassFilter from '@/components/students/ClassFilter'
+
 export default async function StudentsPage({ searchParams }: Props) {
-  // ✅ FIX: Add await here
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase
     .from('users')
-    .select('*')
+    .select('organization_id')
     .eq('id', authUser.id)
     .single()
-  
+
   const orgId = profile?.organization_id
 
   const { data: groups } = await supabase
@@ -44,7 +46,9 @@ export default async function StudentsPage({ searchParams }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">Students</h1>
-          <p className="page-subtitle">{learners?.length ?? 0} student{learners?.length !== 1 ? 's' : ''} found</p>
+          <p className="page-subtitle">
+            {learners?.length ?? 0} student{learners?.length !== 1 ? 's' : ''} found
+          </p>
         </div>
         <div className="flex gap-2">
           <Link href="/students/import" className="btn-secondary btn">
@@ -56,23 +60,9 @@ export default async function StudentsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex gap-3 items-center">
-        <select
-          defaultValue={searchParams.class ?? ''}
-          onChange={(e) => {
-            const url = new URL(window.location.href)
-            e.target.value ? url.searchParams.set('class', e.target.value) : url.searchParams.delete('class')
-            window.location.href = url.toString()
-          }}
-          className="input max-w-[200px]"
-        >
-          <option value="">All classes</option>
-          {groups?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-      </div>
+      {/* ✅ Client component handles window/navigation */}
+      <ClassFilter groups={groups ?? []} selectedClass={searchParams.class ?? ''} />
 
-      {/* Table */}
       {learners && learners.length > 0 ? (
         <div className="card overflow-hidden">
           <div className="table-wrapper">
@@ -97,7 +87,7 @@ export default async function StudentsPage({ searchParams }: Props) {
                       <td>
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full bg-surface-100 text-ink-muted text-xs font-bold flex items-center justify-center flex-shrink-0">
-                            {l.first_name[0]}{l.last_name[0]}
+                            {l.first_name?.[0]}{l.last_name?.[0]}
                           </div>
                           <span className="font-medium text-ink">{l.last_name} {l.first_name}</span>
                         </div>
@@ -106,8 +96,8 @@ export default async function StudentsPage({ searchParams }: Props) {
                       <td className="text-ink-muted text-sm">{group?.name ?? '—'}</td>
                       <td>
                         {l.gender && (
-                          <span className={`badge ${l.gender === 'M' ? 'badge-blue' : 'badge-amber'}`}>
-                            {l.gender === 'M' ? 'Male' : l.gender === 'F' ? 'Female' : 'Other'}
+                          <span className={`badge ${l.gender === 'male' ? 'badge-blue' : 'badge-amber'}`}>
+                            {l.gender === 'male' ? 'Male' : l.gender === 'female' ? 'Female' : 'Other'}
                           </span>
                         )}
                       </td>
