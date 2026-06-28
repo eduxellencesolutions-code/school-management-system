@@ -9,12 +9,14 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function ClassDetailPage({ params }: Props) {
+  const { id } = await params
+  
   console.log('=== CLASS DETAIL PAGE ===')
-  console.log('Params:', params)
+  console.log('Class ID:', id)
   
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -26,7 +28,7 @@ export default async function ClassDetailPage({ params }: Props) {
     redirect('/login')
   }
 
-  console.log('Fetching group with ID:', params.id)
+  console.log('Fetching group with ID:', id)
 
   const { data: group, error: groupError } = await supabase
     .from('groups')
@@ -36,7 +38,7 @@ export default async function ClassDetailPage({ params }: Props) {
       session:academic_sessions(name),
       term:terms(name)
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   console.log('Group query result:', { group, error: groupError })
@@ -60,14 +62,14 @@ export default async function ClassDetailPage({ params }: Props) {
     supabase
       .from('learners')
       .select('id, first_name, last_name, admission_number, gender', { count: 'exact' })
-      .eq('group_id', params.id)
+      .eq('group_id', id)
       .eq('is_active', true)
       .order('last_name')
       .limit(10),
     supabase
       .from('subjects')
       .select('id, name, code, template_id, instructor:users(name)')
-      .eq('group_id', params.id)
+      .eq('group_id', id)
       .eq('is_active', true)
       .order('name'),
     supabase
@@ -84,7 +86,7 @@ export default async function ClassDetailPage({ params }: Props) {
     instructor: subject.instructor?.[0] || null,
     is_active: true,
     organization_id: group.organization_id,
-    group_id: params.id,
+    group_id: id,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   })) ?? []
@@ -120,10 +122,10 @@ export default async function ClassDetailPage({ params }: Props) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/scores?class=${params.id}`} className="btn-primary btn">
+          <Link href={`/scores?class=${id}`} className="btn-primary btn">
             <ClipboardList size={14} /> Enter scores
           </Link>
-          <Link href={`/reports?class=${params.id}`} className="btn-secondary btn">
+          <Link href={`/reports?class=${id}`} className="btn-secondary btn">
             <FileText size={14} /> Reports
           </Link>
         </div>
@@ -132,10 +134,10 @@ export default async function ClassDetailPage({ params }: Props) {
       {/* Quick nav cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Students',  value: learnerCount ?? 0, icon: Users,          href: `/students?class=${params.id}`,   color: 'text-brand-500',  bg: 'bg-brand-50' },
+          { label: 'Students',  value: learnerCount ?? 0, icon: Users,          href: `/students?class=${id}`,   color: 'text-brand-500',  bg: 'bg-brand-50' },
           { label: 'Subjects',  value: subjects?.length ?? 0, icon: BookOpen,   href: `#subjects`,                       color: 'text-green-600',  bg: 'bg-green-50' },
-          { label: 'Enter scores', value: '→', icon: ClipboardList,             href: `/scores?class=${params.id}`,     color: 'text-amber-600',  bg: 'bg-amber-50' },
-          { label: 'Broadsheet', value: '→', icon: FileText,                    href: `/reports?class=${params.id}`,    color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Enter scores', value: '→', icon: ClipboardList,             href: `/scores?class=${id}`,     color: 'text-amber-600',  bg: 'bg-amber-50' },
+          { label: 'Broadsheet', value: '→', icon: FileText,                    href: `/reports?class=${id}`,    color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map(({ label, value, icon: Icon, href, color, bg }) => (
           <Link key={label} href={href} className="stat-card hover:shadow-md transition-shadow group">
             <div className={`w-8 h-8 rounded ${bg} flex items-center justify-center mb-2`}>
@@ -151,7 +153,7 @@ export default async function ClassDetailPage({ params }: Props) {
         {/* Subject manager - left */}
         <div className="lg:col-span-3" id="subjects">
           <SubjectManager
-            groupId={params.id}
+            groupId={id}
             subjects={subjects}
             templates={templates ?? []}
           />
@@ -165,10 +167,10 @@ export default async function ClassDetailPage({ params }: Props) {
                 Students <span className="text-ink-faint font-normal">({learnerCount ?? 0})</span>
               </h2>
               <div className="flex gap-2">
-                <Link href={`/students/import?class=${params.id}`} className="btn-secondary btn-sm btn">
+                <Link href={`/students/import?class=${id}`} className="btn-secondary btn-sm btn">
                   Import CSV
                 </Link>
-                <Link href={`/students/new?class=${params.id}`} className="btn-primary btn-sm btn">
+                <Link href={`/students/new?class=${id}`} className="btn-primary btn-sm btn">
                   + Add
                 </Link>
               </div>
@@ -200,7 +202,7 @@ export default async function ClassDetailPage({ params }: Props) {
                   ))}
                   {(learnerCount ?? 0) > 10 && (
                     <div className="px-5 py-3">
-                      <Link href={`/students?class=${params.id}`} className="text-sm text-brand-500 hover:underline">
+                      <Link href={`/students?class=${id}`} className="text-sm text-brand-500 hover:underline">
                         View all {learnerCount} students →
                       </Link>
                     </div>
@@ -210,7 +212,7 @@ export default async function ClassDetailPage({ params }: Props) {
                 <div className="px-5 py-10 text-center">
                   <Users size={28} className="text-surface-200 mx-auto mb-2" />
                   <p className="text-sm text-ink-muted mb-3">No students yet</p>
-                  <Link href={`/students/new?class=${params.id}`} className="btn-primary btn-sm btn">
+                  <Link href={`/students/new?class=${id}`} className="btn-primary btn-sm btn">
                     Add first student
                   </Link>
                 </div>
