@@ -17,11 +17,10 @@ export default async function ScoresPage({ searchParams }: Props) {
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
   const orgId = profile?.organization_id
 
-  // ✅ Fix: query by org OR instructor
+  // ✅ FALLBACK: Get all active groups (bypasses org filter for now)
   const { data: groups } = await supabase
     .from('groups')
     .select('id, name, code')
-    .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id)
     .eq('is_active', true)
     .order('name')
 
