@@ -6,7 +6,6 @@ import { BookOpen, Plus, Users, ClipboardList, Trash2 } from 'lucide-react'
 import { deleteGroup } from './actions'
 
 export default async function ClassesPage() {
-  // ✅ FIX: Add await here
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -17,7 +16,7 @@ export default async function ClassesPage() {
     .eq('id', authUser.id)
     .single()
 
-  const { data: groups } = await supabase
+  const { data: groups, error: groupsError } = await supabase
     .from('groups')
     .select(`
       id, name, code, type, is_active, created_at,
@@ -30,6 +29,16 @@ export default async function ClassesPage() {
     .eq('organization_id', profile?.organization_id ?? authUser.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
+
+  // TEMPORARY: surface error on screen
+  if (groupsError) {
+    return (
+      <div className="p-8 text-red-600 font-mono text-sm whitespace-pre-wrap">
+        <strong>Groups query error:</strong>{'\n'}
+        {JSON.stringify(groupsError, null, 2)}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
