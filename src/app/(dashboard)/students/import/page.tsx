@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { generateLearnerCSVTemplate, cn } from '@/lib/utils'
@@ -41,7 +42,6 @@ export default function ImportStudentsPage() {
   const [importResults, setImportResults] = useState<{ success: number; failed: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
-  // Load groups
   useState(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -77,9 +77,9 @@ export default function ImportStudentsPage() {
     if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
       errors.push('invalid email')
     }
-
     const normalizedGender = row.gender
-      ? (['m', 'male'].includes(row.gender.toLowerCase()) ? 'M' : ['f', 'female'].includes(row.gender.toLowerCase()) ? 'F' : 'Other')
+      ? (['m', 'male'].includes(row.gender.toLowerCase()) ? 'M'
+        : ['f', 'female'].includes(row.gender.toLowerCase()) ? 'F' : 'Other')
       : undefined
 
     return {
@@ -91,37 +91,59 @@ export default function ImportStudentsPage() {
     }
   }
 
+  function processRows(rows: CSVRow[]) {
+    if (rows.length === 0) { toast.error('File is empty'); return }
+    if (rows.length > 500) { toast.error('Maximum 500 students per import'); return }
+
+    const admNums = rows.map(r => r.admission_number).filter(Boolean)
+    const dupSet = new Set(admNums.filter((v, i, a) => a.indexOf(v) !== i))
+
+    const validated = rows.map((row, i) => {
+      const v = validateRow(row, i)
+      if (row.admission_number && dupSet.has(row.admission_number)) {
+        v._status = 'duplicate'
+        v._errors.push('duplicate admission number in file')
+      }
+      return v
+    })
+
+    setParsed(validated)
+    toast.success(`${validated.length} rows parsed`)
+  }
+
   function handleFile(file: File) {
-    if (!file.name.endsWith('.csv')) {
-      toast.error('Please upload a .csv file')
+    const name = file.name.toLowerCase()
+
+    // ── Excel ──────────────────────────────────────────────
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer)
+          const wb = XLSX.read(data, { type: 'array' })
+          const ws = wb.Sheets[wb.SheetNames[0]]
+          const rows = XLSX.utils.sheet_to_json<CSVRow>(ws, { defval: '' })
+          processRows(rows)
+        } catch {
+          toast.error('Failed to parse Excel file')
+        }
+      }
+      reader.readAsArrayBuffer(file)
       return
     }
 
-    Papa.parse<CSVRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.data.length === 0) { toast.error('CSV file is empty'); return }
-        if (results.data.length > 500) { toast.error('Maximum 500 students per import'); return }
+    // ── CSV ────────────────────────────────────────────────
+    if (name.endsWith('.csv')) {
+      Papa.parse<CSVRow>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => processRows(results.data),
+        error: () => toast.error('Failed to parse CSV file'),
+      })
+      return
+    }
 
-        // Check for duplicate admission numbers within file
-        const admNums = results.data.map(r => r.admission_number).filter(Boolean)
-        const dupSet = new Set(admNums.filter((v, i, a) => a.indexOf(v) !== i))
-
-        const rows = results.data.map((row, i) => {
-          const validated = validateRow(row, i)
-          if (row.admission_number && dupSet.has(row.admission_number)) {
-            validated._status = 'duplicate'
-            validated._errors.push('duplicate admission number in file')
-          }
-          return validated
-        })
-
-        setParsed(rows)
-        toast.success(`${rows.length} rows parsed`)
-      },
-      error: () => toast.error('Failed to parse CSV file'),
-    })
+    toast.error('Please upload a .csv, .xlsx, or .xls file')
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -148,11 +170,8 @@ export default function ImportStudentsPage() {
     let success = 0
     let failed = 0
 
-    // Batch in groups of 50
     const batches = []
-    for (let i = 0; i < validRows.length; i += 50) {
-      batches.push(validRows.slice(i, i + 50))
-    }
+    for (let i = 0; i < validRows.length; i += 50) batches.push(validRows.slice(i, i + 50))
 
     for (const batch of batches) {
       const inserts = batch.map(r => ({
@@ -176,43 +195,33 @@ export default function ImportStudentsPage() {
         .upsert(inserts, { onConflict: 'organization_id,admission_number', ignoreDuplicates: true })
         .select()
 
-      if (error) {
-        failed += batch.length
-      } else {
-        success += data?.length ?? batch.length
-      }
+      if (error) { failed += batch.length } else { success += data?.length ?? batch.length }
     }
 
     setImportResults({ success, failed })
     setImporting(false)
-
-    if (success > 0) {
-      toast.success(`${success} student${success !== 1 ? 's' : ''} imported!`)
-    }
-    if (failed > 0) {
-      toast.error(`${failed} row${failed !== 1 ? 's' : ''} failed to import`)
-    }
+    if (success > 0) toast.success(`${success} student${success !== 1 ? 's' : ''} imported!`)
+    if (failed > 0) toast.error(`${failed} row${failed !== 1 ? 's' : ''} failed`)
   }
 
-  const validCount   = parsed.filter(r => r._status === 'valid').length
-  const errorCount   = parsed.filter(r => r._status === 'error').length
-  const dupCount     = parsed.filter(r => r._status === 'duplicate').length
+  const validCount = parsed.filter(r => r._status === 'valid').length
+  const errorCount = parsed.filter(r => r._status === 'error').length
+  const dupCount   = parsed.filter(r => r._status === 'duplicate').length
 
   return (
     <div className="max-w-4xl flex flex-col gap-6">
-      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
         <Link href="/students" className="text-ink-muted hover:text-ink">Students</Link>
         <span className="text-ink-faint">/</span>
-        <span className="text-ink font-medium">Import CSV</span>
+        <span className="text-ink font-medium">Import</span>
       </div>
 
       <div>
-        <h1 className="page-title mb-1">Import students from CSV</h1>
-        <p className="page-subtitle">Upload a CSV file to enrol multiple students at once.</p>
+        <h1 className="page-title mb-1">Import students</h1>
+        <p className="page-subtitle">Upload a CSV or Excel file to enrol multiple students at once.</p>
       </div>
 
-      {/* Step 1: Download template */}
+      {/* Step 1 */}
       <div className="card p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -221,8 +230,7 @@ export default function ImportStudentsPage() {
               <h2 className="font-semibold text-sm text-ink">Download the template</h2>
             </div>
             <p className="text-xs text-ink-muted ml-7">
-              Fill in your students' details using this template. Required columns: <code>first_name</code>, <code>last_name</code>.
-              Optional: <code>other_names</code>, <code>admission_number</code>, <code>gender</code>, <code>date_of_birth</code>, <code>guardian_name</code>, <code>guardian_phone</code>, <code>email</code>.
+              Required columns: <code>first_name</code>, <code>last_name</code>. Optional: <code>other_names</code>, <code>admission_number</code>, <code>gender</code>, <code>date_of_birth</code>, <code>guardian_name</code>, <code>guardian_phone</code>, <code>email</code>.
             </p>
           </div>
           <button onClick={downloadTemplate} className="btn-secondary btn-sm btn shrink-0">
@@ -231,27 +239,23 @@ export default function ImportStudentsPage() {
         </div>
       </div>
 
-      {/* Step 2: Select class */}
+      {/* Step 2 */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full bg-brand-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
           <h2 className="font-semibold text-sm text-ink">Select destination class</h2>
         </div>
-        <select
-          className="input max-w-xs ml-7"
-          value={selectedGroup}
-          onChange={e => setSelectedGroup(e.target.value)}
-        >
+        <select className="input max-w-xs ml-7" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
           <option value="">Select class…</option>
           {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </div>
 
-      {/* Step 3: Upload */}
+      {/* Step 3 */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full bg-brand-500 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
-          <h2 className="font-semibold text-sm text-ink">Upload your CSV</h2>
+          <h2 className="font-semibold text-sm text-ink">Upload your file</h2>
         </div>
 
         <div
@@ -265,13 +269,19 @@ export default function ImportStudentsPage() {
           onDrop={onDrop}
         >
           <Upload size={24} className="mx-auto mb-2 text-ink-faint" />
-          <p className="text-sm font-medium text-ink mb-1">Drop your CSV here or click to browse</p>
-          <p className="text-xs text-ink-muted">Maximum 500 students per import</p>
-          <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={onFileChange} />
+          <p className="text-sm font-medium text-ink mb-1">Drop your file here or click to browse</p>
+          <p className="text-xs text-ink-muted">Accepts <strong>.csv</strong>, <strong>.xlsx</strong>, <strong>.xls</strong> — max 500 students</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={onFileChange}
+          />
         </div>
       </div>
 
-      {/* Preview table */}
+      {/* Preview */}
       {parsed.length > 0 && (
         <div className="card overflow-hidden">
           <div className="card-header flex items-center justify-between">
@@ -297,14 +307,8 @@ export default function ImportStudentsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Row</th>
-                  <th>Status</th>
-                  <th>Last Name</th>
-                  <th>First Name</th>
-                  <th>Adm. No</th>
-                  <th>Gender</th>
-                  <th>Guardian Phone</th>
-                  <th>Issues</th>
+                  <th>Row</th><th>Status</th><th>Last Name</th><th>First Name</th>
+                  <th>Adm. No</th><th>Gender</th><th>Guardian Phone</th><th>Issues</th>
                 </tr>
               </thead>
               <tbody>
@@ -341,7 +345,7 @@ export default function ImportStudentsPage() {
         </div>
       )}
 
-      {/* Import result */}
+      {/* Result */}
       {importResults && (
         <div className={cn(
           'card p-5 flex items-center gap-4',
