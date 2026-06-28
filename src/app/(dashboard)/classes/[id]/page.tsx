@@ -5,16 +5,30 @@ import SubjectManager from '@/components/dashboard/SubjectManager'
 import ClassStats from '@/components/dashboard/ClassStats'
 import { Users, BookOpen, ClipboardList, FileText, ArrowLeft } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface Props {
   params: { id: string }
 }
 
 export default async function ClassDetailPage({ params }: Props) {
+  console.log('=== CLASS DETAIL PAGE ===')
+  console.log('Params:', params)
+  
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) redirect('/login')
+  
+  console.log('Auth user:', authUser?.id)
+  
+  if (!authUser) {
+    console.log('No auth user - redirecting to login')
+    redirect('/login')
+  }
 
-  const { data: group } = await supabase
+  console.log('Fetching group with ID:', params.id)
+
+  const { data: group, error: groupError } = await supabase
     .from('groups')
     .select(`
       *,
@@ -25,7 +39,18 @@ export default async function ClassDetailPage({ params }: Props) {
     .eq('id', params.id)
     .single()
 
-  if (!group) notFound()
+  console.log('Group query result:', { group, error: groupError })
+
+  if (groupError) {
+    console.error('Supabase error details:', groupError)
+  }
+
+  if (!group) {
+    console.log('⚠️ Group not found - calling notFound()')
+    notFound()
+  }
+
+  console.log('Group found:', group.name)
 
   const [
     { data: learners, count: learnerCount },
