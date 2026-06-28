@@ -1,0 +1,5 @@
+# Next.js dynamic routes
+/classes/* /classes/[id] 200
+
+# Redirect all other routes to Next.js handler
+/* /index.html 404
