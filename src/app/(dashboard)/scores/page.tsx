@@ -6,10 +6,12 @@ import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 
 interface Props {
-  searchParams: { class?: string; subject?: string }
+  searchParams: Promise<{ class?: string; subject?: string }>
 }
 
 export default async function ScoresPage({ searchParams }: Props) {
+  const params = await searchParams
+  
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -24,8 +26,8 @@ export default async function ScoresPage({ searchParams }: Props) {
     .eq('is_active', true)
     .order('name')
 
-  const selectedGroupId = searchParams.class
-  const selectedSubjectId = searchParams.subject
+  const selectedGroupId = params.class
+  const selectedSubjectId = params.subject
 
   const { data: subjects } = selectedGroupId
     ? await supabase
