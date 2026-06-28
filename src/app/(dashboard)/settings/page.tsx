@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { PLAN_PRICING, PLAN_LIMITS, type SubscriptionPlan } from '@/types'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, XCircle, FileSliders, BookOpen } from 'lucide-react'
+import Link from 'next/link'
 
 export default async function SettingsPage() {
-  // ✅ FIX: Add await here
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -19,7 +19,6 @@ export default async function SettingsPage() {
     ? await supabase.from('organizations').select('*').eq('id', profile.organization_id).single()
     : { data: null }
 
-  // FIX: Type assertion to ensure it's a valid SubscriptionPlan
   const currentPlan = (org?.subscription_plan ?? 'free') as SubscriptionPlan
   const planInfo = PLAN_PRICING[currentPlan]
   const planLimits = PLAN_LIMITS[currentPlan]
@@ -28,7 +27,7 @@ export default async function SettingsPage() {
     <div className="max-w-2xl flex flex-col gap-8">
       <div>
         <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Manage your account and subscription</p>
+        <p className="page-subtitle">Manage your account, subscription, and assessment configuration</p>
       </div>
 
       {/* Profile */}
@@ -84,6 +83,51 @@ export default async function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Assessment Configuration */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="font-semibold text-sm text-ink">Assessment Configuration</h2>
+        </div>
+        <div className="card-body flex flex-col gap-3">
+          <p className="text-xs text-ink-muted">
+            Configure how scores are structured for your school. Each school sets their own templates and subjects.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Link 
+              href="/settings/templates" 
+              className="flex items-center justify-between p-3 border border-surface-200 rounded hover:border-brand-300 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
+                  <FileSliders size={16} className="text-brand-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">Assessment Templates</p>
+                  <p className="text-xs text-ink-muted">Define scoring components (CA1, CA2, Exam) and max scores</p>
+                </div>
+              </div>
+              <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Manage →</span>
+            </Link>
+            
+            <Link 
+              href="/settings/subjects" 
+              className="flex items-center justify-between p-3 border border-surface-200 rounded hover:border-brand-300 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                  <BookOpen size={16} className="text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">Subjects</p>
+                  <p className="text-xs text-ink-muted">Add subjects to classes and assign assessment templates</p>
+                </div>
+              </div>
+              <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">Manage →</span>
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* Current plan */}
       <div className="card">
