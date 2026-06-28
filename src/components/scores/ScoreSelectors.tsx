@@ -37,7 +37,6 @@ export default function ScoreSelectors({
   const [subjectId, setSubjectId] = useState(selectedSubjectId)
   const [navigating, setNavigating] = useState(false)
 
-  // Sync if server-side props change
   useEffect(() => { setGroupId(selectedGroupId) }, [selectedGroupId])
   useEffect(() => { setSubjectId(selectedSubjectId) }, [selectedSubjectId])
 
@@ -63,7 +62,6 @@ export default function ScoreSelectors({
     <div className="card p-4">
       <div className="flex flex-col sm:flex-row gap-3">
 
-        {/* Group selector */}
         <div className="flex-1">
           <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
             <Users size={11} className="inline mr-1" />
@@ -91,7 +89,6 @@ export default function ScoreSelectors({
           </div>
         </div>
 
-        {/* Subject selector */}
         <div className="flex-1">
           <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
             <BookOpen size={11} className="inline mr-1" />
@@ -128,7 +125,6 @@ export default function ScoreSelectors({
 
       </div>
 
-      {/* Status bar */}
       {selectedGroup && selectedSubject && (
         <div className="mt-3 flex items-center gap-2 text-xs flex-wrap">
           <span className="badge badge-gray">{selectedGroup.name}</span>
