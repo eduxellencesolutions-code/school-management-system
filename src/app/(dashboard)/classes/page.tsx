@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
-import { BookOpen, Plus, Users, ClipboardList } from 'lucide-react'
+import { BookOpen, Plus, Users, ClipboardList, Trash2 } from 'lucide-react'
+import { deleteGroup } from './actions'
 
 export default async function ClassesPage() {
   // ✅ FIX: Add await here
@@ -89,6 +90,18 @@ export default async function ClassesPage() {
                     <Link href={`/classes/${g.id}`} className="btn-secondary btn-sm btn flex-1 justify-center">
                       Manage
                     </Link>
+                    <form action={deleteGroup}>
+                      <input type="hidden" name="id" value={g.id} />
+                      <button
+                        type="submit"
+                        className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
+                        onClick={e => {
+                          if (!confirm(`Delete "${g.name}"? This cannot be undone.`)) e.preventDefault()
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </form>
                   </div>
                 </div>
               </div>
