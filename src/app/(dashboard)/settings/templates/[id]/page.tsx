@@ -5,9 +5,11 @@ import { ArrowLeft } from 'lucide-react'
 import TemplateBuilder from '@/components/settings/TemplateBuilder'
 import { updateTemplate } from '../actions'
 
-interface Props { params: { id: string } }
+interface Props { params: Promise<{ id: string }> }
 
 export default async function EditTemplatePage({ params }: Props) {
+  const { id } = await params
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -15,7 +17,7 @@ export default async function EditTemplatePage({ params }: Props) {
   const { data: template } = await supabase
     .from('assessment_templates')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (!template) notFound()
@@ -23,7 +25,7 @@ export default async function EditTemplatePage({ params }: Props) {
   const { data: components } = await supabase
     .from('assessment_components')
     .select('name, max_score, pass_mark, sequence')
-    .eq('template_id', params.id)
+    .eq('template_id', id)
     .order('sequence')
 
   const defaultComponents = (components ?? []).map(c => ({
@@ -51,7 +53,7 @@ export default async function EditTemplatePage({ params }: Props) {
 
       <TemplateBuilder
         action={updateTemplate}
-        templateId={params.id}
+        templateId={id}
         defaultName={template.name}
         defaultDescription={template.description ?? ''}
         defaultIsDefault={template.is_default}
