@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Environment variables (if needed)
+[context.production.environment]
+  NEXT_PUBLIC_SUPABASE_URL = "https://your-project.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = "your-anon-key"
