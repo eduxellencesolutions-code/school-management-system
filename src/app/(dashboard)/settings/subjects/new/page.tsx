@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createSubject } from '../actions'
 
-interface Props { searchParams: { class?: string } }
+interface Props { searchParams: Promise<{ class?: string }> }
 
 export default async function NewSubjectPage({ searchParams }: Props) {
+  const { class: classId } = await searchParams
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -65,7 +67,7 @@ export default async function NewSubjectPage({ searchParams }: Props) {
           <label className="block text-xs font-medium text-ink mb-1">
             Class <span className="text-red-500">*</span>
           </label>
-          <select name="group_id" required className="input" defaultValue={searchParams.class ?? ''}>
+          <select name="group_id" required className="input" defaultValue={classId ?? ''}>
             <option value="">Select a class…</option>
             {groups?.map(g => (
               <option key={g.id} value={g.id}>{g.name}</option>
