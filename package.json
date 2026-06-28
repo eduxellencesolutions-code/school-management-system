@@ -24,7 +24,7 @@
     "date-fns": "^3.6.0",
     "file-saver": "^2.0.5",
     "lucide-react": "^0.417.0",
-    "next": "^16.2.9",
+    "next": "15.0.3",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.2.0",
@@ -36,6 +36,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.0.0",
     "@types/node": "^20.14.11",
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.3",
