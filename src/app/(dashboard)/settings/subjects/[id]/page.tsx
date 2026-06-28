@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { updateSubject } from '../actions'
 
-interface Props { params: { id: string } }
+interface Props { params: Promise<{ id: string }> }
 
 export default async function EditSubjectPage({ params }: Props) {
+  const { id } = await params
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -16,7 +18,7 @@ export default async function EditSubjectPage({ params }: Props) {
   const orgId = profile?.organization_id
 
   const [{ data: subject }, { data: groups }, { data: templates }] = await Promise.all([
-    supabase.from('subjects').select('*').eq('id', params.id).single(),
+    supabase.from('subjects').select('*').eq('id', id).single(),
     supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name'),
     supabase.from('assessment_templates').select('id, name, is_default').eq('organization_id', orgId).order('name'),
   ])
