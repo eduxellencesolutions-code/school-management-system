@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp } from 'lucide-react'
+import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -48,6 +48,36 @@ export default async function DashboardPage() {
 
   const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
 
+  // ✅ Fetch subject breakdown for the dashboard
+  const { data: subjectStats } = await supabase
+    .from('subjects')
+    .select(`
+      id,
+      name,
+      code,
+      group:groups(name),
+      score_count:scores(count)
+    `)
+    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+    .eq('is_active', true)
+    .order('name')
+    .limit(10)
+
+  // ✅ Fetch recent scores for the dashboard
+  const { data: recentScores } = await supabase
+    .from('scores')
+    .select(`
+      id,
+      score,
+      created_at,
+      learner:learners(first_name, last_name, admission_number),
+      subject:subjects(name),
+      component:assessment_components(name)
+    `)
+    .eq('entered_by', authUser.id)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
   const stats = [
     { label: 'Classes',        value: groupCount   ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
     { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
@@ -90,6 +120,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
+        {/* Recent Classes */}
         <div className="lg:col-span-2 card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
@@ -140,6 +171,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {/* Quick Actions */}
         <div className="flex flex-col gap-4">
           <div className="card p-5">
             <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
@@ -180,6 +212,92 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ✅ Subject Breakdown */}
+      {subjectStats && subjectStats.length > 0 && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+              <BarChart3 size={16} className="text-ink-muted" />
+              Subject Breakdown
+            </h2>
+            <Link href="/settings/subjects" className="text-xs text-brand-500 hover:underline">Manage subjects</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Subject</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Class</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Scores</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjectStats.map((subject) => {
+                  const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
+                  const group = subject.group as { name: string } | null
+                  return (
+                    <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
+                      <td className="px-4 py-2 font-medium text-ink">
+                        {subject.name}
+                        {subject.code && <span className="text-xs text-ink-faint ml-2 font-mono">{subject.code}</span>}
+                      </td>
+                      <td className="px-4 py-2 text-ink-muted text-sm">{group?.name || '—'}</td>
+                      <td className="px-4 py-2 text-right text-sm font-mono">{scoreCount}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Recent Scores */}
+      {recentScores && recentScores.length > 0 && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink">Recent Scores Entered</h2>
+            <Link href="/scores" className="text-xs text-brand-500 hover:underline">View all</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Student</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Subject</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Component</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Score</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentScores.map((score) => {
+                  const learner = score.learner as { first_name: string; last_name: string; admission_number?: string } | null
+                  const subject = score.subject as { name: string } | null
+                  const component = score.component as { name: string } | null
+                  return (
+                    <tr key={score.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
+                      <td className="px-4 py-2">
+                        {learner ? `${learner.last_name} ${learner.first_name}` : '—'}
+                        {learner?.admission_number && (
+                          <span className="text-xs text-ink-faint ml-2 font-mono">{learner.admission_number}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-ink-muted">{subject?.name || '—'}</td>
+                      <td className="px-4 py-2 text-ink-muted">{component?.name || '—'}</td>
+                      <td className="px-4 py-2 text-right font-semibold font-mono">{score.score ?? '—'}</td>
+                      <td className="px-4 py-2 text-right text-xs text-ink-faint">
+                        {score.created_at ? new Date(score.created_at).toLocaleDateString('en-NG') : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
