@@ -78,6 +78,44 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(10)
 
+  // ✅ NEW: Fetch first class for score grid
+  const { data: firstClass } = await supabase
+    .from('groups')
+    .select('id, name')
+    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+
+  // ✅ NEW: Fetch score grid data if a class exists
+  let scoreGridData = null
+  if (firstClass) {
+    const { data: learners } = await supabase
+      .from('learners')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        admission_number,
+        scores:score!inner(
+          subject_id,
+          score
+        )
+      `)
+      .eq('group_id', firstClass.id)
+      .eq('is_active', true)
+      .order('last_name')
+
+    const { data: subjects } = await supabase
+      .from('subjects')
+      .select('id, name')
+      .eq('group_id', firstClass.id)
+      .eq('is_active', true)
+      .order('name')
+
+    scoreGridData = { learners, subjects }
+  }
+
   const stats = [
     { label: 'Classes',        value: groupCount   ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
     { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
@@ -151,7 +189,8 @@ export default async function DashboardPage() {
                           ✓ Report ready
                         </Link>
                       ) : (
-                        <Link href={`/reports?class=${g.id}`} className="btn-primary btn-sm btn">
+                        // ✅ FIXED: Changed from /reports to /reports/generate
+                        <Link href={`/reports/generate?class=${g.id}`} className="btn-primary btn-sm btn">
                           Generate report
                         </Link>
                       )}
@@ -213,7 +252,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* ✅ Subject Breakdown */}
+      {/* Subject Breakdown */}
       {subjectStats && subjectStats.length > 0 && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
@@ -253,7 +292,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ✅ Recent Scores */}
+      {/* Recent Scores */}
       {recentScores && recentScores.length > 0 && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
@@ -295,6 +334,73 @@ export default async function DashboardPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Per-Student Score Grid */}
+      {scoreGridData && scoreGridData.learners && scoreGridData.learners.length > 0 && scoreGridData.subjects && scoreGridData.subjects.length > 0 && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+              <Users size={16} className="text-ink-muted" />
+              Score Grid: {firstClass?.name || 'Class'}
+            </h2>
+            <Link href={`/scores?class=${firstClass?.id}`} className="text-xs text-brand-500 hover:underline">
+              Enter scores
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider sticky left-0 bg-white z-10">
+                    Student
+                  </th>
+                  {scoreGridData.subjects.map((subj: { id: string; name: string }) => (
+                    <th key={subj.id} className="text-center px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                      {subj.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {scoreGridData.learners.map((learner: { 
+                  id: string; 
+                  first_name: string; 
+                  last_name: string; 
+                  admission_number: string; 
+                  scores: { subject_id: string; score: number }[] 
+                }) => {
+                  const scoreMap = new Map()
+                  learner.scores.forEach((s: { subject_id: string; score: number }) => {
+                    scoreMap.set(s.subject_id, s.score)
+                  })
+                  return (
+                    <tr key={learner.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
+                      <td className="px-3 py-2 font-medium text-ink sticky left-0 bg-white whitespace-nowrap text-xs">
+                        {`${learner.last_name} ${learner.first_name}`}
+                        <span className="text-[10px] text-ink-faint ml-2 font-mono">{learner.admission_number}</span>
+                      </td>
+                      {scoreGridData.subjects.map((subj: { id: string; name: string }) => (
+                        <td key={subj.id} className="text-center px-3 py-2 font-mono text-sm">
+                          {scoreMap.has(subj.id) ? (
+                            <span className="font-medium text-ink">{scoreMap.get(subj.id)}</span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 border-t border-surface-100">
+            <p className="text-xs text-ink-faint">
+              Showing {scoreGridData.learners.length} student{scoreGridData.learners.length !== 1 ? 's' : ''} and {scoreGridData.subjects.length} subject{scoreGridData.subjects.length !== 1 ? 's' : ''}
+            </p>
           </div>
         </div>
       )}
