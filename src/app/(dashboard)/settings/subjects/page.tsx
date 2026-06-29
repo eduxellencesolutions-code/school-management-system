@@ -36,7 +36,6 @@ export default async function SubjectsPage() {
   const groupMap = Object.fromEntries((groups ?? []).map(g => [g.id, g.name]))
   const templateMap = Object.fromEntries((templates ?? []).map(t => [t.id, t.name]))
 
-  // Group subjects by class
   const byGroup: Record<string, typeof subjects> = {}
   for (const s of subjects ?? []) {
     const gid = s.group_id ?? 'ungrouped'
@@ -107,9 +106,6 @@ export default async function SubjectsPage() {
                         <button
                           type="submit"
                           className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
-                          onClick={e => {
-                            if (!confirm(`Remove "${s.name}"? Existing scores will be kept.`)) e.preventDefault()
-                          }}
                         >
                           Remove
                         </button>
