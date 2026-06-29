@@ -1,319 +1,206 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, FileText, Users, BookOpen, ClipboardList, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react'
+import { Plus, FileText, Download, Clock, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
 
-export default async function DashboardPage() {
+export default async function ReportsPage() {
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase
     .from('users')
-    .select('*')
+    .select('*, organization:organizations(*)')
     .eq('id', authUser.id)
     .single()
 
   const orgId = profile?.organization_id
 
-  // Fetch all stats in parallel
-  const [
-    { count: classCount },
-    { count: studentCount },
-    { count: subjectCount },
-    { count: reportCount },
-    { data: recentGroups },
-  ] = await Promise.all([
-    supabase
-      .from('groups')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true),
-    supabase
-      .from('learners')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true),
-    supabase
-      .from('subjects')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true),
-    supabase
-      .from('reports')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('status', 'completed'),
-    supabase
-      .from('groups')
-      .select('id, name, created_at, learner_count:learners(count)')
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(5),
-  ])
+  // Check if user is institution (has organization with type 'school' and paid plan)
+  const isInstitution = profile?.organization?.type === 'school' && 
+    profile?.organization?.subscription_status === 'active'
 
-  // Check which groups have completed reports
-  const recentGroupIds = (recentGroups ?? []).map(g => g.id)
-  const { data: completedReports } = await supabase
+  // Fetch all reports for this organization
+  const { data: reports } = await supabase
     .from('reports')
-    .select('group_id')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-    .eq('status', 'completed')
-    .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
-
-  const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
-
-  // ✅ Fetch subject breakdown for the dashboard
-  const { data: subjectStats } = await supabase
-    .from('subjects')
     .select(`
-      id,
-      name,
-      code,
+      *,
       group:groups(name),
-      score_count:scores(count)
+      learner:learners(first_name, last_name),
+      created_by_user:users(name)
     `)
+    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+    .order('created_at', { ascending: false })
+
+  // Fetch classes for "Generate New Report" dropdown
+  const { data: classes } = await supabase
+    .from('groups')
+    .select('id, name')
     .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
     .eq('is_active', true)
     .order('name')
-    .limit(10)
 
-  // ✅ Fetch recent scores for the dashboard
-  const { data: recentScores } = await supabase
-    .from('scores')
-    .select(`
-      id,
-      score,
-      created_at,
-      learner:learners(first_name, last_name, admission_number),
-      subject:subjects(name),
-      component:assessment_components(name)
-    `)
-    .eq('entered_by', authUser.id)
-    .order('created_at', { ascending: false })
-    .limit(10)
+  // Stats
+  const totalReports = reports?.length ?? 0
+  const completedReports = reports?.filter(r => r.status === 'completed').length ?? 0
+  const processingReports = reports?.filter(r => r.status === 'processing' || r.status === 'pending').length ?? 0
+  const failedReports = reports?.filter(r => r.status === 'failed').length ?? 0
 
-  const stats = [
-    { label: 'Classes', value: classCount ?? 0, icon: BookOpen, href: '/classes', color: 'text-brand-500', bg: 'bg-brand-50' },
-    { label: 'Students', value: studentCount ?? 0, icon: Users, href: '/students', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Subjects', value: subjectCount ?? 0, icon: ClipboardList, href: '/classes', color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Reports ready', value: reportCount ?? 0, icon: FileText, href: '/reports', color: 'text-purple-600', bg: 'bg-purple-50' },
-  ]
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle size={16} className="text-green-600" />
+      case 'processing':
+        return <Clock size={16} className="text-amber-600 animate-pulse" />
+      case 'failed':
+        return <XCircle size={16} className="text-red-600" />
+      default:
+        return <Clock size={16} className="text-amber-600" />
+    }
+  }
 
-  const greeting = (() => {
-    const h = new Date().getHours()
-    if (h < 12) return 'Good morning'
-    if (h < 17) return 'Good afternoon'
-    return 'Good evening'
-  })()
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      completed: 'bg-green-100 text-green-800',
+      processing: 'bg-amber-100 text-amber-800',
+      failed: 'bg-red-100 text-red-800',
+      pending: 'bg-gray-100 text-gray-800',
+    }
+    const style = styles[status] || styles.pending
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${style}`}>
+        {status || 'pending'}
+      </span>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">{greeting}, {profile?.name?.split(' ')[0] || 'Teacher'} 👋</h1>
-          <p className="page-subtitle">Here's what's happening with your classes today.</p>
+          <h1 className="page-title">Reports</h1>
+          <p className="page-subtitle">View and manage all generated reports</p>
         </div>
-        <Link href="/classes/new" className="btn-primary btn">
-          <Plus size={15} /> New Class
-        </Link>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(({ label, value, icon: Icon, href, color, bg }) => (
-          <Link key={label} href={href} className="stat-card hover:shadow-md transition-shadow group">
-            <div className={`w-9 h-9 rounded ${bg} flex items-center justify-center mb-2`}>
-              <Icon size={18} className={color} />
-            </div>
-            <div className="stat-value">{value.toLocaleString()}</div>
-            <div className="stat-label">{label}</div>
-            <div className="flex items-center gap-1 text-xs text-ink-faint mt-1 group-hover:text-brand-500 transition-colors">
-              View all <ArrowRight size={10} />
-            </div>
+        {classes && classes.length > 0 && (
+          <Link href="/reports/generate" className="btn-primary btn">
+            <Plus size={15} /> Generate New Report
           </Link>
-        ))}
+        )}
       </div>
 
-      {/* Recent Classes & Quick Actions */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent Classes */}
-        <div className="lg:col-span-2 card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
-            <Link href="/classes" className="text-xs text-brand-500 hover:underline">View all</Link>
-          </div>
+      {/* Stats Summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stat-card">
+          <div className="stat-value">{totalReports}</div>
+          <div className="stat-label">Total Reports</div>
+        </div>
+        <div className="stat-card border-green-200">
+          <div className="stat-value text-green-600">{completedReports}</div>
+          <div className="stat-label">Completed</div>
+        </div>
+        <div className="stat-card border-amber-200">
+          <div className="stat-value text-amber-600">{processingReports}</div>
+          <div className="stat-label">Processing</div>
+        </div>
+        <div className="stat-card border-red-200">
+          <div className="stat-value text-red-600">{failedReports}</div>
+          <div className="stat-label">Failed</div>
+        </div>
+      </div>
+
+      {/* Reports List */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="font-semibold text-sm text-ink">All Reports</h2>
+        </div>
+
+        {reports && reports.length > 0 ? (
           <div className="divide-y divide-surface-200">
-            {recentGroups && recentGroups.length > 0 ? (
-              recentGroups.map((g) => {
-                const count = (g.learner_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                const hasReport = completedGroupIds.has(g.id)
-                return (
-                  <div key={g.id} className="px-5 py-3 flex items-center justify-between hover:bg-surface-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-brand-50 text-brand-600 text-xs font-bold flex items-center justify-center">
-                        {g.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-ink">{g.name}</p>
-                        <p className="text-xs text-ink-muted">{count} student{count !== 1 ? 's' : ''}</p>
-                      </div>
+            {reports.map((report) => {
+              const groupName = (report.group as { name: string } | null)?.name || '—'
+              const learnerName = (report.learner as { first_name: string; last_name: string } | null)
+                ? `${(report.learner as { first_name: string; last_name: string }).last_name} ${(report.learner as { first_name: string; last_name: string }).first_name}`
+                : 'All Students'
+              const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
+
+              return (
+                <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded bg-brand-50 text-brand-600 text-sm font-bold flex items-center justify-center">
+                      <FileText size={18} />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/scores?class=${g.id}`} className="btn-secondary btn-sm btn">
-                        Enter scores
-                      </Link>
-                      {hasReport ? (
-                        <Link href="/reports" className="btn-sm btn border border-green-200 text-green-600 hover:bg-green-50">
-                          ✓ Report ready
-                        </Link>
-                      ) : (
-                        <Link href={`/reports?class=${g.id}`} className="btn-primary btn-sm btn">
-                          Generate report
-                        </Link>
-                      )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-ink">{groupName}</p>
+                        {getStatusBadge(report.status)}
+                      </div>
+                      <p className="text-xs text-ink-muted">
+                        {learnerName} · Created by {createdBy}
+                      </p>
+                      <p className="text-xs text-ink-faint">
+                        {report.created_at ? new Date(report.created_at).toLocaleDateString('en-NG', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }) : '—'}
+                      </p>
                     </div>
                   </div>
-                )
-              })
+                  <div className="flex items-center gap-2">
+                    {report.status === 'completed' && report.download_url && (
+                      <a
+                        href={report.download_url}
+                        download
+                        className="btn-secondary btn-sm btn flex items-center gap-1"
+                      >
+                        <Download size={14} /> Download
+                      </a>
+                    )}
+                    <Link
+                      href={`/reports/preview?id=${report.id}`}
+                      className="btn-primary btn-sm btn"
+                    >
+                      View
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="px-5 py-12 text-center">
+            <FileText size={40} className="text-surface-200 mx-auto mb-3" />
+            <p className="text-sm text-ink-muted mb-3">No reports generated yet</p>
+            {classes && classes.length > 0 ? (
+              <Link href="/reports/generate" className="btn-primary btn-sm btn">
+                Generate your first report
+              </Link>
             ) : (
-              <div className="px-5 py-10 text-center">
-                <BookOpen size={32} className="text-surface-200 mx-auto mb-3" />
-                <p className="text-sm text-ink-muted mb-3">No classes yet</p>
-                <Link href="/classes/new" className="btn-primary btn-sm btn">
-                  Create your first class
-                </Link>
-              </div>
+              <Link href="/classes/new" className="btn-primary btn-sm btn">
+                Create a class first
+              </Link>
             )}
           </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="flex flex-col gap-4">
-          <div className="card p-5">
-            <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
-            <div className="flex flex-col gap-2">
-              {[
-                { label: 'Add a class',    href: '/classes/new',           icon: '📚' },
-                { label: 'Enrol students', href: '/students/new',          icon: '👤' },
-                { label: 'Enter scores',   href: '/scores',                icon: '✏️' },
-                { label: 'View reports',   href: '/reports',               icon: '📄' },
-                { label: 'Add subjects',   href: '/settings/subjects/new', icon: '📖' },
-              ].map((a) => (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded border border-surface-200 hover:border-brand-300 hover:bg-brand-50 transition-colors text-sm text-ink group"
-                >
-                  <span>{a.icon}</span>
-                  <span className="font-medium">{a.label}</span>
-                  <ArrowRight size={13} className="ml-auto text-ink-faint group-hover:text-brand-500 transition-colors" />
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {profile?.organization_id === null && (
-            <div className="card p-5 bg-brand-50 border-brand-200">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={15} className="text-brand-600" />
-                <span className="text-xs font-semibold text-brand-700 uppercase tracking-wider">Free plan</span>
-              </div>
-              <p className="text-xs text-brand-700 leading-relaxed mb-3">
-                Upgrade to Teacher plan for unlimited classes, PDF reports, and AI remarks — just ₦1,000/term.
-              </p>
-              <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">
-                Upgrade now
-              </Link>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* ✅ Subject Breakdown */}
-      {subjectStats && subjectStats.length > 0 && (
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-              <BarChart3 size={16} className="text-ink-muted" />
-              Subject Breakdown
-            </h2>
-            <Link href="/settings/subjects" className="text-xs text-brand-500 hover:underline">Manage subjects</Link>
+      {/* Institution Features Notice */}
+      {!isInstitution && (
+        <div className="card p-5 bg-brand-50 border-brand-200">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={15} className="text-brand-600" />
+            <span className="text-xs font-semibold text-brand-700 uppercase tracking-wider">Upgrade for PDF Reports</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-200">
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Subject</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Class</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Scores</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjectStats.map((subject) => {
-                  const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                  const group = subject.group as { name: string } | null
-                  return (
-                    <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
-                      <td className="px-4 py-2 font-medium text-ink">
-                        {subject.name}
-                        {subject.code && <span className="text-xs text-ink-faint ml-2 font-mono">{subject.code}</span>}
-                      </td>
-                      <td className="px-4 py-2 text-ink-muted text-sm">{group?.name || '—'}</td>
-                      <td className="px-4 py-2 text-right text-sm font-mono">{scoreCount}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Recent Scores */}
-      {recentScores && recentScores.length > 0 && (
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-ink">Recent Scores Entered</h2>
-            <Link href="/scores" className="text-xs text-brand-500 hover:underline">View all</Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-200">
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Student</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Subject</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Component</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Score</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentScores.map((score) => {
-                  const learner = score.learner as { first_name: string; last_name: string; admission_number?: string } | null
-                  const subject = score.subject as { name: string } | null
-                  const component = score.component as { name: string } | null
-                  return (
-                    <tr key={score.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
-                      <td className="px-4 py-2">
-                        {learner ? `${learner.last_name} ${learner.first_name}` : '—'}
-                        {learner?.admission_number && (
-                          <span className="text-xs text-ink-faint ml-2 font-mono">{learner.admission_number}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-ink-muted">{subject?.name || '—'}</td>
-                      <td className="px-4 py-2 text-ink-muted">{component?.name || '—'}</td>
-                      <td className="px-4 py-2 text-right font-semibold font-mono">{score.score ?? '—'}</td>
-                      <td className="px-4 py-2 text-right text-xs text-ink-faint">
-                        {score.created_at ? new Date(score.created_at).toLocaleDateString('en-NG') : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <p className="text-xs text-brand-700 leading-relaxed mb-3">
+            Institution accounts get branded PDF report cards with your school logo, teacher signatures, 
+            and principal signatures. Upgrade to Small School plan starting at ₦10,000/year.
+          </p>
+          <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">
+            Upgrade now
+          </Link>
         </div>
       )}
     </div>
