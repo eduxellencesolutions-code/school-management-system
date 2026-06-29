@@ -19,7 +19,6 @@ export default async function TemplatesPage() {
     .eq('organization_id', orgId)
     .order('created_at')
 
-  // Get component counts per template
   const { data: components } = await supabase
     .from('assessment_components')
     .select('id, template_id, name, max_score, sequence')
@@ -79,11 +78,6 @@ export default async function TemplatesPage() {
                       <button
                         type="submit"
                         className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
-                        onClick={e => {
-                          if (!confirm(`Delete "${t.name}"? Subjects using this template will lose their components.`)) {
-                            e.preventDefault()
-                          }
-                        }}
                       >
                         Delete
                       </button>
