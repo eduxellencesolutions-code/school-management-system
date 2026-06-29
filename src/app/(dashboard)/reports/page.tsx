@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
+import ReportGenerator from '@/components/reports/ReportGenerator'
 
 export default async function ReportsPage() {
   const supabase = await createClient()
@@ -15,6 +16,7 @@ export default async function ReportsPage() {
     .single()
 
   const orgId = profile?.organization_id
+  const userRole = profile?.role || 'teacher'
 
   // Check if user is institution (has organization with type 'school' and paid plan)
   const isInstitution = profile?.organization?.type === 'school' && 
@@ -39,6 +41,13 @@ export default async function ReportsPage() {
     .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
     .eq('is_active', true)
     .order('name')
+
+  // Fetch organization details for ReportGenerator
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', orgId ?? '00000000-0000-0000-0000-000000000000')
+    .single()
 
   // Stats
   const totalReports = reports?.length ?? 0
@@ -108,6 +117,14 @@ export default async function ReportsPage() {
           <div className="stat-label">Failed</div>
         </div>
       </div>
+
+      {/* Report Generator Component */}
+      <ReportGenerator 
+        groups={classes || []} 
+        org={org || null} 
+        userId={authUser.id}
+        userRole={userRole}
+      />
 
       {/* Reports List */}
       <div className="card">
