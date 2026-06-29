@@ -21,23 +21,23 @@ export default async function DashboardPage() {
     { data: recentGroups },
   ] = await Promise.all([
     supabase.from('groups').select('*', { count: 'exact', head: true })
-      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id),
+      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+      .eq('is_active', true),
     supabase.from('learners').select('*', { count: 'exact', head: true })
-      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id),
+      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
+      .eq('is_active', true),
     supabase.from('scores').select('*', { count: 'exact', head: true })
       .eq('entered_by', authUser.id),
-    // ✅ Live report count
     supabase.from('reports').select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
       .eq('status', 'completed'),
     supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
-      .eq(orgId ? 'organization_id' : 'instructor_id', orgId ?? authUser.id)
+      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(5),
   ])
 
-  // Check which groups already have completed reports
   const recentGroupIds = (recentGroups ?? []).map(g => g.id)
   const { data: completedReports } = await supabase
     .from('reports')
@@ -49,9 +49,9 @@ export default async function DashboardPage() {
   const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
 
   const stats = [
-    { label: 'Classes',        value: groupCount   ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
-    { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
-    { label: 'Scores entered', value: scoreCount   ?? 0, icon: ClipboardList, href: '/scores',   color: 'text-amber-600',  bg: 'bg-amber-50' },
+    { label: 'Classes',        value: groupCount   ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500', bg: 'bg-brand-50' },
+    { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Scores entered', value: scoreCount   ?? 0, icon: ClipboardList, href: '/scores',   color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: 'Reports ready',  value: reportCount  ?? 0, icon: FileText,      href: '/reports',  color: 'text-purple-600', bg: 'bg-purple-50' },
   ]
 
@@ -74,7 +74,6 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, href, color, bg }) => (
           <Link key={label} href={href} className="stat-card hover:shadow-md transition-shadow group">
@@ -91,7 +90,6 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent classes */}
         <div className="lg:col-span-2 card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
@@ -122,10 +120,7 @@ export default async function DashboardPage() {
                           ✓ Report ready
                         </Link>
                       ) : (
-                        <Link
-                          href={`/reports?class=${g.id}`}
-                          className="btn-primary btn-sm btn"
-                        >
+                        <Link href={`/reports?class=${g.id}`} className="btn-primary btn-sm btn">
                           Generate report
                         </Link>
                       )}
@@ -145,17 +140,16 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick actions */}
         <div className="flex flex-col gap-4">
           <div className="card p-5">
             <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
             <div className="flex flex-col gap-2">
               {[
-                { label: 'Add a class',     href: '/classes/new',           icon: '📚' },
-                { label: 'Enrol students',  href: '/students/new',          icon: '👤' },
-                { label: 'Enter scores',    href: '/scores',                icon: '✏️' },
-                { label: 'View reports',    href: '/reports',               icon: '📄' },
-                { label: 'Add subjects',    href: '/settings/subjects/new', icon: '📖' },
+                { label: 'Add a class',    href: '/classes/new',           icon: '📚' },
+                { label: 'Enrol students', href: '/students/new',          icon: '👤' },
+                { label: 'Enter scores',   href: '/scores',                icon: '✏️' },
+                { label: 'View reports',   href: '/reports',               icon: '📄' },
+                { label: 'Add subjects',   href: '/settings/subjects/new', icon: '📖' },
               ].map((a) => (
                 <Link
                   key={a.href}
