@@ -72,28 +72,25 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     if (error) toast.error('Failed to save score')
   }, [supabase, subjectId, components])
 
-  // FIX: Use a simple timeout-based debounce instead of the utility function
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+  // ✅ FIX: Per-cell debounce with individual timeouts
+  const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({})
+
   const debouncedSave = useCallback((learnerId: string, componentId: string, value: number | null) => {
-    // Clear any existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
+    const key = `${learnerId}-${componentId}`
+    if (timeoutRefs.current[key]) {
+      clearTimeout(timeoutRefs.current[key])
     }
-    
-    // Set a new timeout
-    timeoutRef.current = setTimeout(() => {
+    timeoutRefs.current[key] = setTimeout(() => {
       saveScore(learnerId, componentId, value)
-      timeoutRef.current = null
+      delete timeoutRefs.current[key]
     }, 600)
   }, [saveScore])
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
+      // Cancel ALL pending saves when component unmounts (subject switch)
+      Object.values(timeoutRefs.current).forEach(clearTimeout)
+      timeoutRefs.current = {}
     }
   }, [])
 
