@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
-import { BookOpen, Plus, Users, ClipboardList, Trash2 } from 'lucide-react'
-import { deleteGroup } from './actions'
+import { BookOpen, Plus, Users, ClipboardList } from 'lucide-react'
+import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 
 export default async function ClassesPage() {
   const supabase = await createClient()
@@ -16,7 +15,7 @@ export default async function ClassesPage() {
     .eq('id', authUser.id)
     .single()
 
-  const { data: groups, error: groupsError } = await supabase
+  const { data: groups } = await supabase
     .from('groups')
     .select(`
       id, name, code, type, is_active, created_at,
@@ -29,16 +28,6 @@ export default async function ClassesPage() {
     .eq('organization_id', profile?.organization_id ?? authUser.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
-
-  // TEMPORARY: surface error on screen
-  if (groupsError) {
-    return (
-      <div className="p-8 text-red-600 font-mono text-sm whitespace-pre-wrap">
-        <strong>Groups query error:</strong>{'\n'}
-        {JSON.stringify(groupsError, null, 2)}
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,24 +82,19 @@ export default async function ClassesPage() {
                     </p>
                   )}
                   <div className="flex gap-2 mt-1">
-                    <Link href={`/scores?class=${g.id}`} className="btn-primary btn-sm btn flex-1 justify-center">
+                    <Link
+                      href={`/scores?class=${g.id}`}
+                      className="btn-primary btn-sm btn flex-1 justify-center"
+                    >
                       <ClipboardList size={12} /> Scores
                     </Link>
-                    <Link href={`/classes/${g.id}`} className="btn-secondary btn-sm btn flex-1 justify-center">
+                    <Link
+                      href={`/classes/${g.id}`}
+                      className="btn-secondary btn-sm btn flex-1 justify-center"
+                    >
                       Manage
                     </Link>
-                    <form action={deleteGroup}>
-                      <input type="hidden" name="id" value={g.id} />
-                      <button
-                        type="submit"
-                        className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
-                        onClick={e => {
-                          if (!confirm(`Delete "${g.name}"? This cannot be undone.`)) e.preventDefault()
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </form>
+                    <DeleteGroupButton groupId={g.id} groupName={g.name} />
                   </div>
                 </div>
               </div>
