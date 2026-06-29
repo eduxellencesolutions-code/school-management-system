@@ -4,26 +4,111 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
-import { Download, FileText, Loader2 } from 'lucide-react'
-import { cn, DEFAULT_GRADING, calculatePercentage } from '@/lib/utils'
+import { Download, FileText, Loader2, Eye, X } from 'lucide-react'
+import { cn, DEFAULT_GRADING } from '@/lib/utils'
 import type { Organization } from '@/types'
 
 interface Group { id: string; name: string; code?: string; session?: { name: string } | null; term?: { name: string } | null }
 interface Props { groups: Group[]; org: Organization | null; userId: string }
 
-type ReportType = 'broadsheet' | 'subject_report' | 'class_summary'
+type ReportType = 'broadsheet' | 'class_summary'
+
+interface BroadsheetData {
+  group: Group
+  learners: { id: string; first_name: string; last_name: string; admission_number?: string }[]
+  subjects: { id: string; name: string }[]
+  scoreLookup: Record<string, Record<string, number>>
+  rows: {
+    learner: { id: string; first_name: string; last_name: string; admission_number?: string }
+    subjectTotals: (number | null)[]
+    grandTotal: number
+    pct: number
+    grade: string
+    position: number
+  }[]
+  classAvg: number
+}
 
 export default function ReportGenerator({ groups, org, userId }: Props) {
   const supabase = createClient()
   const [groupId, setGroupId] = useState('')
   const [reportType, setReportType] = useState<ReportType>('broadsheet')
   const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<BroadsheetData | null>(null)
 
-  async function generate() {
+  async function fetchData(): Promise<BroadsheetData | null> {
+    const { data: learners } = await supabase
+      .from('learners')
+      .select('id, first_name, last_name, admission_number')
+      .eq('group_id', groupId)
+      .eq('is_active', true)
+      .order('last_name')
+
+    if (!learners?.length) { toast.error('No students in this class'); return null }
+
+    const { data: subjects } = await supabase
+      .from('subjects')
+      .select('id, name')
+      .eq('group_id', groupId)
+      .eq('is_active', true)
+      .order('name')
+
+    if (!subjects?.length) { toast.error('No subjects in this class'); return null }
+
+    const { data: scores } = await supabase
+      .from('scores')
+      .select('learner_id, subject_id, score')
+      .in('learner_id', learners.map(l => l.id))
+      .in('subject_id', subjects.map(s => s.id))
+
+    // Build score lookup: learner_id → subject_id → total score
+    const scoreLookup: Record<string, Record<string, number>> = {}
+    for (const s of scores ?? []) {
+      if (!scoreLookup[s.learner_id]) scoreLookup[s.learner_id] = {}
+      scoreLookup[s.learner_id][s.subject_id] =
+        (scoreLookup[s.learner_id][s.subject_id] ?? 0) + (s.score ?? 0)
+    }
+
+    // Build rows
+    const rawRows = learners.map(l => {
+      const subjectTotals = subjects.map(s => scoreLookup[l.id]?.[s.id] ?? null)
+      const grandTotal = subjectTotals.reduce((sum, t) => sum + (t ?? 0), 0)
+      const entered = subjectTotals.filter(t => t !== null).length
+      const pct = entered > 0 ? (grandTotal / (entered * 100)) * 100 : 0
+      const gradeObj = DEFAULT_GRADING.find(g => pct >= g.min_score && pct <= g.max_score)
+      return { learner: l, subjectTotals, grandTotal, pct, grade: gradeObj?.grade_letter ?? '-', position: 0 }
+    })
+
+    // Assign positions
+    const sorted = [...rawRows].sort((a, b) => b.grandTotal - a.grandTotal)
+    rawRows.forEach(r => {
+      r.position = sorted.findIndex(x => x.grandTotal === r.grandTotal) + 1
+    })
+
+    const totals = rawRows.map(r => r.grandTotal).filter(t => t > 0)
+    const classAvg = totals.length > 0 ? totals.reduce((a, b) => a + b, 0) / totals.length : 0
+    const group = groups.find(g => g.id === groupId)!
+
+    return { group, learners, subjects, scoreLookup, rows: rawRows, classAvg }
+  }
+
+  async function handlePreview() {
     if (!groupId) { toast.error('Select a class first'); return }
     setLoading(true)
+    try {
+      const data = await fetchData()
+      if (data) setPreview(data)
+    } catch (err) {
+      toast.error('Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    // ✅ Create a pending report record first
+  async function handleDownload() {
+    if (!preview) return
+    setLoading(true)
+
     const { data: profile } = await supabase
       .from('users').select('organization_id').eq('id', userId).single()
 
@@ -32,7 +117,7 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
       .insert({
         organization_id: profile?.organization_id,
         group_id: groupId,
-        type: reportType === 'class_summary' ? 'broadsheet' : reportType,
+        type: reportType,
         status: 'pending',
         filters: {},
         created_by: userId,
@@ -41,265 +126,277 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
       .single()
 
     try {
-      // 1. Fetch learners
-      const { data: learners } = await supabase
-        .from('learners')
-        .select('id, first_name, last_name, admission_number')
-        .eq('group_id', groupId)
-        .eq('is_active', true)
-        .order('last_name')
-
-      if (!learners?.length) {
-        toast.error('No students in this class')
-        setLoading(false)
-        return
-      }
-
-      // 2. Fetch subjects
-      const { data: subjects } = await supabase
-        .from('subjects')
-        .select('id, name')
-        .eq('group_id', groupId)
-        .eq('is_active', true)
-        .order('name')
-
-      if (!subjects?.length) {
-        toast.error('No subjects in this class')
-        setLoading(false)
-        return
-      }
-
-      // 3. Fetch all scores
-      const { data: scores } = await supabase
-        .from('scores')
-        .select('learner_id, subject_id, component_id, score')
-        .in('learner_id', learners.map(l => l.id))
-        .in('subject_id', subjects.map(s => s.id))
-
-      // 4. Fetch components per subject
-      const { data: components } = await supabase
-        .from('assessment_components')
-        .select('id, name, max_score, template_id')
-
-      // 5. Build score lookup
-      type ScoreLookup = Record<string, Record<string, number>>
-      const scoreLookup: ScoreLookup = {}
-      for (const s of scores ?? []) {
-        if (!scoreLookup[s.learner_id]) scoreLookup[s.learner_id] = {}
-        const key = `${s.subject_id}`
-        scoreLookup[s.learner_id][key] = (scoreLookup[s.learner_id][key] ?? 0) + (s.score ?? 0)
-      }
-
-      const group = groups.find(g => g.id === groupId)
-
       if (reportType === 'broadsheet') {
-        await generateBroadsheet({ learners, subjects, scoreLookup, group, org })
-      } else if (reportType === 'class_summary') {
-        await generateSummary({ learners, subjects, scoreLookup, group })
+        downloadBroadsheetExcel(preview, org)
+      } else {
+        downloadSummaryExcel(preview)
       }
 
-      // ✅ Mark report as completed
       if (reportRecord?.id) {
-        await supabase
-          .from('reports')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', reportRecord.id)
+        await supabase.from('reports').update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        }).eq('id', reportRecord.id)
       }
 
       toast.success('Report downloaded!')
     } catch (err) {
-      // ✅ Mark as failed if something went wrong
       if (reportRecord?.id) {
-        await supabase
-          .from('reports')
-          .update({ status: 'failed' })
-          .eq('id', reportRecord.id)
+        await supabase.from('reports').update({ status: 'failed' }).eq('id', reportRecord.id)
       }
-      toast.error('Failed to generate report')
-      console.error(err)
+      toast.error('Download failed')
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <div className="grid lg:grid-cols-3 gap-6">
-      {/* Config panel */}
-      <div className="lg:col-span-1 flex flex-col gap-4">
-        <div className="card p-5 flex flex-col gap-4">
-          <h2 className="font-semibold text-ink text-sm">Report settings</h2>
+  const group = groups.find(g => g.id === groupId)
 
-          <div>
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Controls */}
+      <div className="card p-5">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Class</label>
-            <select className="input" value={groupId} onChange={e => setGroupId(e.target.value)}>
+            <select className="input" value={groupId} onChange={e => { setGroupId(e.target.value); setPreview(null) }}>
               <option value="">Select class…</option>
               {groups.map(g => (
-                <option key={g.id} value={g.id}>
-                  {g.name}{g.code ? ` (${g.code})` : ''}
-                </option>
+                <option key={g.id} value={g.id}>{g.name}{g.code ? ` (${g.code})` : ''}</option>
               ))}
             </select>
           </div>
 
-          <div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">Report type</label>
-            <div className="flex flex-col gap-2">
-              {REPORT_TYPES.map(rt => (
-                <label
-                  key={rt.value}
-                  className={cn(
-                    'flex items-start gap-3 p-3 border rounded cursor-pointer transition-colors',
-                    reportType === rt.value
-                      ? 'border-brand-500 bg-brand-50'
-                      : 'border-surface-200 hover:border-brand-300'
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="report_type"
-                    value={rt.value}
-                    checked={reportType === rt.value}
-                    onChange={() => setReportType(rt.value as ReportType)}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <p className={cn('text-sm font-medium', reportType === rt.value ? 'text-brand-700' : 'text-ink')}>
-                      {rt.label}
-                    </p>
-                    <p className="text-xs text-ink-muted mt-0.5">{rt.description}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
+            <select className="input" value={reportType} onChange={e => { setReportType(e.target.value as ReportType); setPreview(null) }}>
+              <option value="broadsheet">Class Broadsheet</option>
+              <option value="class_summary">Class Summary</option>
+            </select>
           </div>
 
-          <button
-            onClick={generate}
-            disabled={loading || !groupId}
-            className="btn-primary btn w-full justify-center"
-          >
-            {loading
-              ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-              : <><Download size={14} /> Generate & Download</>
-            }
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePreview}
+              disabled={loading || !groupId}
+              className="btn-secondary btn disabled:opacity-50"
+            >
+              {loading && !preview
+                ? <><Loader2 size={14} className="animate-spin" /> Loading…</>
+                : <><Eye size={14} /> Preview</>
+              }
+            </button>
+            {preview && (
+              <button
+                onClick={handleDownload}
+                disabled={loading}
+                className="btn-primary btn disabled:opacity-50"
+              >
+                {loading
+                  ? <><Loader2 size={14} className="animate-spin" /> Downloading…</>
+                  : <><Download size={14} /> Download Excel</>
+                }
+              </button>
+            )}
+          </div>
         </div>
+      </div>
 
-        {!org && (
-          <div className="card p-4 bg-amber-50 border-amber-200">
-            <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>School branding</strong> (logo, motto, signature) is available on Small School plan and above.
-            </p>
+      {/* Preview */}
+      {preview ? (
+        <div className="card overflow-hidden">
+          {/* Preview header */}
+          <div className="card-header flex items-center justify-between bg-surface-50">
+            <div>
+              <p className="font-semibold text-ink text-sm">{preview.group.name} — Broadsheet Preview</p>
+              <p className="text-xs text-ink-muted">
+                {preview.learners.length} students · {preview.subjects.length} subjects · Class avg: {preview.classAvg.toFixed(1)}
+              </p>
+            </div>
+            <button onClick={() => setPreview(null)} className="p-1.5 rounded hover:bg-surface-200 text-ink-muted">
+              <X size={15} />
+            </button>
           </div>
-        )}
-      </div>
 
-      {/* Preview area */}
-      <div className="lg:col-span-2 card p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <FileText size={48} className="text-surface-200 mb-4" />
-        <p className="text-sm font-medium text-ink mb-1">Report preview</p>
-        <p className="text-xs text-ink-muted text-center max-w-xs">
-          Select a class and report type, then click Generate. Your Excel file will download automatically.
-        </p>
-      </div>
+          {/* School header */}
+          <div className="px-6 py-4 text-center border-b border-surface-200">
+            <p className="font-bold text-ink text-base">{org?.name ?? 'School Name'}</p>
+            {org?.motto && <p className="text-xs text-ink-muted italic">{org.motto}</p>}
+            <p className="text-sm font-semibold text-ink mt-1">
+              {preview.group.name}
+              {preview.group.term?.name ? ` — ${preview.group.term.name}` : ''}
+              {preview.group.session?.name ? ` ${preview.group.session.name}` : ''}
+            </p>
+            <p className="text-xs text-ink-muted">RESULT BROADSHEET</p>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-surface-100 border-b border-surface-200">
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider whitespace-nowrap">#</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider whitespace-nowrap">Adm. No</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider whitespace-nowrap min-w-[140px]">Student Name</th>
+                  {preview.subjects.map(s => (
+                    <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">
+                      {s.name}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">Total</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">%</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">Grade</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((row, i) => (
+                  <tr key={row.learner.id} className={cn(
+                    'border-b border-surface-200',
+                    i % 2 === 0 ? 'bg-white' : 'bg-surface-50/50'
+                  )}>
+                    <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
+                    <td className="px-3 py-2 font-mono text-ink-muted">{row.learner.admission_number ?? '—'}</td>
+                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">
+                      {row.learner.last_name} {row.learner.first_name}
+                    </td>
+                    {row.subjectTotals.map((t, j) => (
+                      <td key={j} className="px-3 py-2 text-center font-mono">
+                        {t !== null ? (
+                          <span className={cn(
+                            t >= 70 ? 'text-green-700' :
+                            t >= 50 ? 'text-amber-700' :
+                            t >= 40 ? 'text-orange-600' : 'text-red-600'
+                          )}>
+                            {t}
+                          </span>
+                        ) : (
+                          <span className="text-ink-faint">—</span>
+                        )}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 text-center font-semibold font-mono text-ink">{row.grandTotal}</td>
+                    <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.pct.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={cn(
+                        'font-bold',
+                        row.grade === 'A' ? 'text-green-600' :
+                        row.grade === 'B' ? 'text-blue-600' :
+                        row.grade === 'C' ? 'text-amber-600' :
+                        row.grade === 'D' ? 'text-orange-600' : 'text-red-600'
+                      )}>
+                        {row.grade}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold text-ink">{row.position}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {/* Class average footer */}
+              <tfoot>
+                <tr className="bg-surface-100 border-t-2 border-surface-200 font-semibold">
+                  <td colSpan={3} className="px-3 py-2 text-xs text-ink-muted uppercase">Class Average</td>
+                  {preview.subjects.map(s => {
+                    const vals = preview.rows
+                      .map(r => r.subjectTotals[preview.subjects.indexOf(s)])
+                      .filter((v): v is number => v !== null)
+                    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+                    return (
+                      <td key={s.id} className="px-3 py-2 text-center font-mono text-ink">
+                        {avg !== null ? avg.toFixed(1) : '—'}
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-2 text-center font-mono text-ink">{preview.classAvg.toFixed(1)}</td>
+                  <td colSpan={3} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Download bar */}
+          <div className="px-5 py-3 bg-surface-50 border-t border-surface-200 flex items-center justify-between">
+            <p className="text-xs text-ink-muted">
+              Preview looks correct? Download the Excel file below.
+            </p>
+            <button
+              onClick={handleDownload}
+              disabled={loading}
+              className="btn-primary btn-sm btn"
+            >
+              {loading
+                ? <><Loader2 size={12} className="animate-spin" /> Downloading…</>
+                : <><Download size={12} /> Download Excel</>
+              }
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="card p-12 flex flex-col items-center text-center">
+          <FileText size={40} className="text-surface-200 mb-4" />
+          <p className="text-sm font-medium text-ink mb-1">No preview yet</p>
+          <p className="text-xs text-ink-muted max-w-xs">
+            Select a class and report type above, then click Preview to see the broadsheet before downloading.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-const REPORT_TYPES = [
-  {
-    value: 'broadsheet',
-    label: 'Class Broadsheet',
-    description: 'All students × all subjects with totals, percentages, and positions',
-  },
-  {
-    value: 'class_summary',
-    label: 'Class Summary',
-    description: 'Statistical overview: class average, pass rate, grade distribution',
-  },
-]
+// ─── Excel download functions ──────────────────────────────────────────────────
 
-// ─── Excel Broadsheet ─────────────────────────────────────────────────────────
-
-async function generateBroadsheet({
-  learners, subjects, scoreLookup, group, org,
-}: {
-  learners: { id: string; first_name: string; last_name: string; admission_number?: string }[]
-  subjects: { id: string; name: string }[]
-  scoreLookup: Record<string, Record<string, number>>
-  group?: { name: string; code?: string; session?: { name: string } | null; term?: { name: string } | null } | null
-  org: Organization | null
-}) {
+function downloadBroadsheetExcel(data: BroadsheetData, org: Organization | null) {
+  const { group, subjects, rows } = data
   const wb = XLSX.utils.book_new()
 
   const titleRows: unknown[][] = [
-    [org?.name ?? 'Eduxellence Results', '', '', ...Array(subjects.length + 2).fill('')],
-    [org?.motto ?? '', '', '', ...Array(subjects.length + 2).fill('')],
-    [`${group?.name ?? 'Class'} — ${group?.term?.name ?? ''} ${group?.session?.name ?? ''}`.trim()],
+    [org?.name ?? 'School Name'],
+    [org?.motto ?? ''],
+    [`${group.name} — ${group.term?.name ?? ''} ${group.session?.name ?? ''}`.trim()],
+    ['RESULT BROADSHEET'],
     [],
     ['#', 'Adm. No', 'Student Name', ...subjects.map(s => s.name), 'Total', '%', 'Grade', 'Position'],
   ]
 
-  const studentData = learners.map((l, i) => {
-    const subjectTotals = subjects.map(s => scoreLookup[l.id]?.[s.id] ?? null)
-    const grandTotal = subjectTotals.reduce((sum, t) => sum + (t ?? 0), 0)
-    const enteredSubjects = subjectTotals.filter(t => t !== null).length
-    const avgPct = enteredSubjects > 0 ? (grandTotal / (enteredSubjects * 100)) * 100 : 0
-    const grade = DEFAULT_GRADING.find(g => avgPct >= g.min_score && avgPct <= g.max_score)
+  const dataRows = rows.map((r, i) => [
+    i + 1,
+    r.learner.admission_number ?? '',
+    `${r.learner.last_name} ${r.learner.first_name}`,
+    ...r.subjectTotals.map(t => t ?? ''),
+    r.grandTotal,
+    `${r.pct.toFixed(1)}%`,
+    r.grade,
+    r.position,
+  ])
 
-    return {
-      row: [i + 1, l.admission_number ?? '', `${l.last_name} ${l.first_name}`, ...subjectTotals, grandTotal, `${avgPct.toFixed(1)}%`, grade?.grade_letter ?? '-', ''],
-      grandTotal,
-    }
-  })
-
-  const sorted = [...studentData].sort((a, b) => b.grandTotal - a.grandTotal)
-  studentData.forEach(s => {
-    const pos = sorted.findIndex(x => x.grandTotal === s.grandTotal) + 1
-    s.row[s.row.length - 1] = pos
-  })
-
-  const allRows = [...titleRows, ...studentData.map(s => s.row)]
-  const ws = XLSX.utils.aoa_to_sheet(allRows)
+  const ws = XLSX.utils.aoa_to_sheet([...titleRows, ...dataRows])
   ws['!cols'] = [
     { wch: 4 }, { wch: 12 }, { wch: 24 },
-    ...subjects.map(() => ({ wch: 12 })),
+    ...subjects.map(() => ({ wch: 10 })),
     { wch: 8 }, { wch: 7 }, { wch: 7 }, { wch: 9 },
   ]
   XLSX.utils.book_append_sheet(wb, ws, 'Broadsheet')
-  XLSX.writeFile(wb, `${group?.name ?? 'Class'}_Broadsheet.xlsx`)
+  XLSX.writeFile(wb, `${group.name}_Broadsheet.xlsx`)
 }
 
-async function generateSummary({
-  learners, subjects, scoreLookup, group,
-}: {
-  learners: { id: string; first_name: string; last_name: string }[]
-  subjects: { id: string; name: string }[]
-  scoreLookup: Record<string, Record<string, number>>
-  group?: { name: string } | null
-}) {
+function downloadSummaryExcel(data: BroadsheetData) {
+  const { group, subjects, rows } = data
   const wb = XLSX.utils.book_new()
 
-  const subjectStats = subjects.map(s => {
-    const scores = learners
-      .map(l => scoreLookup[l.id]?.[s.id])
-      .filter((v): v is number => v !== undefined && v !== null)
-    const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0
-    const highest = scores.length > 0 ? Math.max(...scores) : 0
-    const lowest  = scores.length > 0 ? Math.min(...scores) : 0
-    return [s.name, scores.length, avg.toFixed(1), highest, lowest]
+  const subjectStats = subjects.map((s, si) => {
+    const vals = rows.map(r => r.subjectTotals[si]).filter((v): v is number => v !== null)
+    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+    return [s.name, vals.length, avg.toFixed(1), vals.length ? Math.max(...vals) : 0, vals.length ? Math.min(...vals) : 0]
   })
 
   const ws = XLSX.utils.aoa_to_sheet([
-    [`Class Summary — ${group?.name ?? ''}`],
+    [`Class Summary — ${group.name}`],
     [],
     ['Subject', 'Students Scored', 'Average', 'Highest', 'Lowest'],
     ...subjectStats,
   ])
   ws['!cols'] = [{ wch: 24 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }]
   XLSX.utils.book_append_sheet(wb, ws, 'Summary')
-  XLSX.writeFile(wb, `${group?.name ?? 'Class'}_Summary.xlsx`)
+  XLSX.writeFile(wb, `${group.name}_Summary.xlsx`)
 }
