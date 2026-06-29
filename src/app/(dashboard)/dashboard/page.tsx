@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp } from 'lucide-react'
-import GenerateReportButton from '@/components/reports/GenerateReportButton'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -123,12 +122,12 @@ export default async function DashboardPage() {
                           ✓ Report ready
                         </Link>
                       ) : (
-                        <GenerateReportButton
-                          groupId={g.id}
-                          groupName={g.name}
-                          type="broadsheet"
-                          label="Generate report"
-                        />
+                        <Link
+                          href={`/reports?class=${g.id}`}
+                          className="btn-primary btn-sm btn"
+                        >
+                          Generate report
+                        </Link>
                       )}
                     </div>
                   </div>
