@@ -106,6 +106,7 @@ export default async function ScoresPage({ searchParams }: Props) {
           </div>
         ) : (
           <ScoreGrid
+            key={`${selectedGroupId}-${selectedSubjectId}`}
             groupId={selectedGroupId}
             subjectId={selectedSubjectId}
             subject={selectedSubject}
