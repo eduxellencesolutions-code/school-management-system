@@ -6,14 +6,11 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { 
   ArrowLeft, 
-  Download, 
   Loader2, 
   FileText, 
   FileSpreadsheet, 
   FileDown, 
   Users, 
-  Building2, 
-  Signature, 
   CheckCircle,
   AlertCircle,
   Printer
@@ -21,6 +18,9 @@ import {
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
+import { pdf } from '@react-pdf/renderer'
+import { StudentReportCard } from '@/components/reports/StudentReportCard'
+import JSZip from 'jszip'
 
 interface ReportData {
   id: string
@@ -68,7 +68,6 @@ interface LearnerResult {
 
 // Grade calculation function
 function getGrade(percentage: number, gradingSystem?: any[]): { grade: string; remark: string } {
-  // Default grading system if none provided
   const defaultGrades = [
     { min: 70, max: 100, grade: 'A', remark: 'Excellent' },
     { min: 60, max: 69, grade: 'B', remark: 'Very Good' },
@@ -97,8 +96,8 @@ export default function PreviewReportPage() {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState<'csv' | 'excel' | 'pdf' | null>(null)
   const [isInstitution, setIsInstitution] = useState(false)
-  const [userRole, setUserRole] = useState<string>('teacher')
   const [gradingSystem, setGradingSystem] = useState<any[]>([])
+  const [profile, setProfile] = useState<any>(null)
 
   const supabase = createClient()
 
@@ -112,33 +111,29 @@ export default function PreviewReportPage() {
     async function fetchReportData() {
       setLoading(true)
       try {
-        // Get current user
         const { data: userData } = await supabase.auth.getUser()
         if (!userData.user) {
           router.push('/login')
           return
         }
 
-        // Get user profile with organization
-        const { data: profile } = await supabase
+        const { data: profileData } = await supabase
           .from('users')
           .select('*, organization:organizations(*)')
           .eq('id', userData.user.id)
           .single()
 
-        setUserRole(profile?.role || 'teacher')
+        setProfile(profileData)
 
-        // Check if institution (has org with subscription)
-        const isInst = profile?.organization?.type === 'school' && 
-          profile?.organization?.subscription_status === 'active'
+        const isInst = profileData?.organization?.type === 'school' && 
+          profileData?.organization?.subscription_status === 'active'
         setIsInstitution(isInst)
 
-        // Fetch grading system
-        if (profile?.organization_id) {
+        if (profileData?.organization_id) {
           const { data: grades } = await supabase
             .from('grading_systems')
             .select('*')
-            .eq('organization_id', profile.organization_id)
+            .eq('organization_id', profileData.organization_id)
             .order('min_score', { ascending: false })
 
           if (grades && grades.length > 0) {
@@ -151,7 +146,6 @@ export default function PreviewReportPage() {
           }
         }
 
-        // Fetch report details
         const { data: reportData, error: reportError } = await supabase
           .from('reports')
           .select(`
@@ -167,12 +161,10 @@ export default function PreviewReportPage() {
         if (reportError) throw reportError
         setReport(reportData)
 
-        // Fetch learners and scores for this class
         if (reportData.group_id) {
           await fetchLearnerResults(reportData.group_id)
         }
 
-        // Update report status to completed if still processing
         if (reportData.status === 'processing') {
           await supabase
             .from('reports')
@@ -196,7 +188,6 @@ export default function PreviewReportPage() {
 
   async function fetchLearnerResults(groupId: string) {
     try {
-      // Get learners in this class
       const { data: learnersData } = await supabase
         .from('learners')
         .select(`
@@ -214,7 +205,6 @@ export default function PreviewReportPage() {
         return
       }
 
-      // Get subjects for this class
       const { data: subjectsData } = await supabase
         .from('subjects')
         .select('id, name')
@@ -225,7 +215,6 @@ export default function PreviewReportPage() {
       const subjectIds = subjectsData?.map(s => s.id) || []
       const learnerIds = learnersData.map(l => l.id)
 
-      // Get all scores for these learners and subjects
       let scoresData: { learner_id: string; subject_id: string; score: number }[] = []
       if (learnerIds.length > 0 && subjectIds.length > 0) {
         const { data } = await supabase
@@ -237,13 +226,12 @@ export default function PreviewReportPage() {
         scoresData = data || []
       }
 
-      // Build learner result objects
       const results: LearnerResult[] = learnersData.map(learner => {
         const subjectScores: SubjectScore[] = subjectIds.map(subjectId => {
           const subject = subjectsData.find(s => s.id === subjectId)
           const score = scoresData.find(s => s.learner_id === learner.id && s.subject_id === subjectId)
           const total = score?.score || 0
-          const maxScore = 100 // Default max, should come from assessment_components
+          const maxScore = 100
           const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
           const gradeResult = getGrade(percentage, gradingSystem)
 
@@ -276,7 +264,6 @@ export default function PreviewReportPage() {
         }
       })
 
-      // Sort by percentage descending and assign positions
       results.sort((a, b) => b.percentage - a.percentage)
       results.forEach((l, index) => {
         l.position = index + 1
@@ -289,11 +276,9 @@ export default function PreviewReportPage() {
     }
   }
 
-  // Export to CSV
   const handleExportCSV = async () => {
     setExporting('csv')
     try {
-      // Build CSV data
       const headers = ['Position', 'Student', 'Admission Number']
       const subjectNames = learners[0]?.scores.map(s => s.subject_name) || []
       headers.push(...subjectNames)
@@ -326,14 +311,11 @@ export default function PreviewReportPage() {
     }
   }
 
-  // Export to Excel
   const handleExportExcel = async () => {
     setExporting('excel')
     try {
-      // Build workbook
       const wb = XLSX.utils.book_new()
 
-      // Sheet 1: Broadsheet
       const headers = ['Position', 'Student', 'Admission Number']
       const subjectNames = learners[0]?.scores.map(s => s.subject_name) || []
       headers.push(...subjectNames)
@@ -360,7 +342,6 @@ export default function PreviewReportPage() {
       const ws = XLSX.utils.aoa_to_sheet(data)
       XLSX.utils.book_append_sheet(wb, ws, 'Broadsheet')
 
-      // Sheet 2: Summary
       const summaryData = [
         ['Report Summary'],
         ['Class', report?.group?.name || ''],
@@ -395,24 +376,82 @@ export default function PreviewReportPage() {
     }
   }
 
-  // Export to PDF (Institution only)
+  // ✅ UPDATED: PDF Export using @react-pdf/renderer
   const handleExportPDF = async () => {
     if (!isInstitution) {
       toast.error('PDF export is only available for institution accounts')
       return
     }
 
+    if (learners.length === 0) {
+      toast.error('No students to export')
+      return
+    }
+
     setExporting('pdf')
+    const loadingToast = toast.loading(`Generating PDFs for ${learners.length} students...`)
+
     try {
-      toast.loading('Generating PDFs...', { duration: 3000 })
-      
-      // For now, we'll use print-to-PDF as a fallback
-      // In production, use @react-pdf/renderer or similar
-      window.print()
-      toast.success('PDF generation started')
+      const org = profile?.organization
+      const teacherName = profile?.name || 'Teacher'
+      const principalName = org?.name ? `Principal, ${org.name}` : 'Principal'
+
+      // Get term and session - you may want to fetch these from your DB
+      const termName = 'First Term'
+      const sessionName = '2024/2025 Session'
+
+      const pdfBlobs: Blob[] = []
+      const totalStudents = learners.length
+
+      for (let i = 0; i < totalStudents; i++) {
+        const student = learners[i]
+        
+        toast.loading(`Generating PDF ${i + 1}/${totalStudents}...`, { id: loadingToast })
+
+        const pdfDoc = (
+          <StudentReportCard
+            student={student}
+            schoolName={org?.name || 'Eduxellence School'}
+            schoolLogo={org?.logo_url || undefined}
+            schoolMotto={org?.motto || undefined}
+            className={report?.group?.name || 'Class'}
+            termName={termName}
+            sessionName={sessionName}
+            teacherName={teacherName}
+            teacherSignature={profile?.signature_url || undefined}
+            principalName={principalName}
+            principalSignature={org?.signature_url || undefined}
+          />
+        )
+
+        const blob = await pdf(pdfDoc).toBlob()
+        pdfBlobs.push(blob)
+      }
+
+      toast.dismiss(loadingToast)
+
+      if (pdfBlobs.length === 1) {
+        saveAs(pdfBlobs[0], `${learners[0].last_name}_${learners[0].first_name}_report_card.pdf`)
+        toast.success('PDF downloaded successfully')
+      } else {
+        // Create a zip file for multiple PDFs
+        const zip = new JSZip()
+        pdfBlobs.forEach((blob, index) => {
+          const student = learners[index]
+          zip.file(
+            `${student.last_name}_${student.first_name}_report_card.pdf`, 
+            blob
+          )
+        })
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        saveAs(zipBlob, `reports_${report?.group?.name}_${new Date().toISOString().slice(0,10)}.zip`)
+        toast.success(`Downloaded ${pdfBlobs.length} report cards`)
+      }
+
     } catch (error) {
       console.error('Error exporting PDF:', error)
-      toast.error('Failed to export PDF')
+      toast.dismiss(loadingToast)
+      toast.error('Failed to generate PDFs. Please try again.')
     } finally {
       setExporting(null)
     }
