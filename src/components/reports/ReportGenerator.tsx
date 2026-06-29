@@ -22,6 +22,24 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
   async function generate() {
     if (!groupId) { toast.error('Select a class first'); return }
     setLoading(true)
+
+    // ✅ Create a pending report record first
+    const { data: profile } = await supabase
+      .from('users').select('organization_id').eq('id', userId).single()
+
+    const { data: reportRecord } = await supabase
+      .from('reports')
+      .insert({
+        organization_id: profile?.organization_id,
+        group_id: groupId,
+        type: reportType === 'class_summary' ? 'broadsheet' : reportType,
+        status: 'pending',
+        filters: {},
+        created_by: userId,
+      })
+      .select('id')
+      .single()
+
     try {
       // 1. Fetch learners
       const { data: learners } = await supabase
@@ -31,7 +49,11 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
         .eq('is_active', true)
         .order('last_name')
 
-      if (!learners?.length) { toast.error('No students in this class'); setLoading(false); return }
+      if (!learners?.length) {
+        toast.error('No students in this class')
+        setLoading(false)
+        return
+      }
 
       // 2. Fetch subjects
       const { data: subjects } = await supabase
@@ -41,7 +63,11 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
         .eq('is_active', true)
         .order('name')
 
-      if (!subjects?.length) { toast.error('No subjects in this class'); setLoading(false); return }
+      if (!subjects?.length) {
+        toast.error('No subjects in this class')
+        setLoading(false)
+        return
+      }
 
       // 3. Fetch all scores
       const { data: scores } = await supabase
@@ -72,8 +98,26 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
         await generateSummary({ learners, subjects, scoreLookup, group })
       }
 
+      // ✅ Mark report as completed
+      if (reportRecord?.id) {
+        await supabase
+          .from('reports')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', reportRecord.id)
+      }
+
       toast.success('Report downloaded!')
     } catch (err) {
+      // ✅ Mark as failed if something went wrong
+      if (reportRecord?.id) {
+        await supabase
+          .from('reports')
+          .update({ status: 'failed' })
+          .eq('id', reportRecord.id)
+      }
       toast.error('Failed to generate report')
       console.error(err)
     } finally {
@@ -144,11 +188,10 @@ export default function ReportGenerator({ groups, org, userId }: Props) {
           </button>
         </div>
 
-        {/* Branding notice */}
         {!org && (
           <div className="card p-4 bg-amber-50 border-amber-200">
             <p className="text-xs text-amber-800 leading-relaxed">
-              <strong>School branding</strong> (logo, motto, signature) is available on Small School plan and above. Reports currently export without branding.
+              <strong>School branding</strong> (logo, motto, signature) is available on Small School plan and above.
             </p>
           </div>
         )}
@@ -192,18 +235,14 @@ async function generateBroadsheet({
 }) {
   const wb = XLSX.utils.book_new()
 
-  // Title rows
   const titleRows: unknown[][] = [
     [org?.name ?? 'Eduxellence Results', '', '', ...Array(subjects.length + 2).fill('')],
     [org?.motto ?? '', '', '', ...Array(subjects.length + 2).fill('')],
     [`${group?.name ?? 'Class'} — ${group?.term?.name ?? ''} ${group?.session?.name ?? ''}`.trim()],
-    [], // spacer
-    // Header row
+    [],
     ['#', 'Adm. No', 'Student Name', ...subjects.map(s => s.name), 'Total', '%', 'Grade', 'Position'],
   ]
 
-  // Data rows
-  const maxTotal = subjects.length * 100 // placeholder; should use actual max
   const studentData = learners.map((l, i) => {
     const subjectTotals = subjects.map(s => scoreLookup[l.id]?.[s.id] ?? null)
     const grandTotal = subjectTotals.reduce((sum, t) => sum + (t ?? 0), 0)
@@ -217,27 +256,19 @@ async function generateBroadsheet({
     }
   })
 
-  // Assign positions
   const sorted = [...studentData].sort((a, b) => b.grandTotal - a.grandTotal)
   studentData.forEach(s => {
     const pos = sorted.findIndex(x => x.grandTotal === s.grandTotal) + 1
     s.row[s.row.length - 1] = pos
   })
 
-  const allRows = [
-    ...titleRows,
-    ...studentData.map(s => s.row),
-  ]
-
+  const allRows = [...titleRows, ...studentData.map(s => s.row)]
   const ws = XLSX.utils.aoa_to_sheet(allRows)
-
-  // Column widths
   ws['!cols'] = [
     { wch: 4 }, { wch: 12 }, { wch: 24 },
     ...subjects.map(() => ({ wch: 12 })),
     { wch: 8 }, { wch: 7 }, { wch: 7 }, { wch: 9 },
   ]
-
   XLSX.utils.book_append_sheet(wb, ws, 'Broadsheet')
   XLSX.writeFile(wb, `${group?.name ?? 'Class'}_Broadsheet.xlsx`)
 }
