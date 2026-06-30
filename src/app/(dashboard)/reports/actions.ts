@@ -263,6 +263,8 @@ export async function deleteReport(formData: FormData) {
 }
 
 export async function downloadReport(formData: FormData) {
+  'use server'
+  
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -284,8 +286,68 @@ export async function downloadReport(formData: FormData) {
       throw new Error('Report not found')
     }
 
-    // Return report data for the export function
-    return { report, format }
+    // Generate the file content based on format
+    let fileContent = ''
+    let fileName = ''
+    let contentType = ''
+
+    const reportData = report.report_data || {}
+    const learners = reportData.learners || []
+    const subjects = reportData.subjects || []
+
+    if (format === 'csv') {
+      // Generate CSV
+      const headers = ['Student', ...subjects.map((s: any) => s.name), 'Total', 'Avg', '%', 'Grade', 'Position']
+      const rows = learners.map((learner: any) => {
+        const row = [
+          `${learner.last_name} ${learner.first_name}`,
+          ...subjects.map((s: any) => learner.subject_totals?.[s.id] || 0),
+          learner.overall_total || 0,
+          learner.average || 0,
+          learner.percentage || 0,
+          learner.grade || 'F',
+          learner.position || 0
+        ]
+        return row.join(',')
+      })
+      fileContent = [headers.join(','), ...rows].join('\n')
+      fileName = `report_${report.id}.csv`
+      contentType = 'text/csv'
+    } else if (format === 'xls') {
+      // For XLS, we'll use the same as CSV but change extension
+      // In a real implementation, you'd use xlsx library
+      const headers = ['Student', ...subjects.map((s: any) => s.name), 'Total', 'Avg', '%', 'Grade', 'Position']
+      const rows = learners.map((learner: any) => {
+        const row = [
+          `${learner.last_name} ${learner.first_name}`,
+          ...subjects.map((s: any) => learner.subject_totals?.[s.id] || 0),
+          learner.overall_total || 0,
+          learner.average || 0,
+          learner.percentage || 0,
+          learner.grade || 'F',
+          learner.position || 0
+        ]
+        return row.join('\t')
+      })
+      fileContent = [headers.join('\t'), ...rows].join('\n')
+      fileName = `report_${report.id}.xls`
+      contentType = 'application/vnd.ms-excel'
+    } else if (format === 'pdf') {
+      // For PDF, we'll redirect to the view page with print dialog
+      // The view page will handle PDF generation
+      redirect(`/reports/${id}?print=true`)
+    }
+
+    // Return the file as a response
+    // Since we're in a server action, we need to use a different approach
+    // We'll use a response with the file content
+    const response = new Response(fileContent, {
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+      },
+    })
+    return response
   } catch (error) {
     console.error('Error downloading report:', error)
     throw error
