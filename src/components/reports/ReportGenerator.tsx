@@ -49,7 +49,7 @@ interface BroadsheetRow {
     gender?: string
   }
   subjectTotals: (number | null)[]
-  componentScores: Record<string, Record<string, number | null>> // subjectId → componentId → score
+  componentScores: Record<string, Record<string, number | null>>
   grandTotal: number
   pct: number
   grade: string
@@ -68,15 +68,15 @@ interface ReportData {
 
 // PDF options available to institution
 const PDF_OPTIONS = [
-  { key: 'show_admission',  label: 'Admission number',              mandatory: false },
-  { key: 'show_gender',     label: 'Gender',                        mandatory: false },
-  { key: 'show_position',   label: 'Position in class',             mandatory: false },
+  { key: 'show_admission', label: 'Admission number', mandatory: false },
+  { key: 'show_gender', label: 'Gender', mandatory: false },
+  { key: 'show_position', label: 'Position in class', mandatory: false },
   { key: 'show_components', label: 'Component breakdown (CA1, CA2, Exam…)', mandatory: false },
-  { key: 'show_grade',      label: 'Grade',                         mandatory: false },
-  { key: 'show_percentage', label: 'Percentage (%)',                 mandatory: false },
-  { key: 'show_remark',     label: "Teacher's overall remark",      mandatory: false },
-  { key: 'show_term',       label: 'Term and session name',          mandatory: false },
-  { key: 'show_signature',  label: "Teacher & Principal signature",  mandatory: false },
+  { key: 'show_grade', label: 'Grade', mandatory: false },
+  { key: 'show_percentage', label: 'Percentage (%)', mandatory: false },
+  { key: 'show_remark', label: "Teacher's overall remark", mandatory: false },
+  { key: 'show_term', label: 'Term and session name', mandatory: false },
+  { key: 'show_signature', label: "Teacher & Principal signature", mandatory: false },
 ]
 
 type PdfOptions = Record<string, boolean>
