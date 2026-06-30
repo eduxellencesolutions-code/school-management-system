@@ -184,7 +184,7 @@ export default async function SettingsPage() {
                   ))}
               </div>
               <p className="text-xs text-ink-faint mt-3">
-                Contact us to upgrade: <a href="mailto:billing@eduxellence.com" className="text-brand-500 hover:underline">billing@eduxellence.com</a>
+                Contact us to upgrade: <a href="mailto:billing@eduxellence.org" className="text-brand-500 hover:underline">billing@eduxellence.org</a>
               </p>
             </div>
           )}
