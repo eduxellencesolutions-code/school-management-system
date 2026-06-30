@@ -273,7 +273,6 @@ export default async function DashboardPage() {
               <tbody>
                 {subjectStats.map((subject) => {
                   const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                  // ✅ FIXED: group is returned as an array from Supabase
                   const group = (subject.group as any)?.[0] ?? null
                   return (
                     <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
@@ -312,9 +311,9 @@ export default async function DashboardPage() {
               </thead>
               <tbody>
                 {recentScores.map((score) => {
-                  const learner = score.learner as { first_name: string; last_name: string; admission_number?: string } | null
-                  const subject = score.subject as { name: string } | null
-                  const component = score.component as { name: string } | null
+                  const learner = (score.learner as any)?.[0] ?? null
+                  const subject = (score.subject as any)?.[0] ?? null
+                  const component = (score.component as any)?.[0] ?? null
                   return (
                     <tr key={score.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-4 py-2">
