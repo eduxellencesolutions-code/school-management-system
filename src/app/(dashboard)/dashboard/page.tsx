@@ -356,7 +356,7 @@ export default async function DashboardPage() {
                   <th className="text-left px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider sticky left-0 bg-white z-10">
                     Student
                   </th>
-                  {scoreGridData.subjects.map((subj: { id: string; name: string }) => (
+                  {(scoreGridData.subjects || []).map((subj: { id: string; name: string }) => (
                     <th key={subj.id} className="text-center px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
                       {subj.name}
                     </th>
@@ -381,7 +381,7 @@ export default async function DashboardPage() {
                         {`${learner.last_name} ${learner.first_name}`}
                         <span className="text-[10px] text-ink-faint ml-2 font-mono">{learner.admission_number}</span>
                       </td>
-                      {scoreGridData.subjects.map((subj: { id: string; name: string }) => (
+                      {(scoreGridData.subjects || []).map((subj: { id: string; name: string }) => (
                         <td key={subj.id} className="text-center px-3 py-2 font-mono text-sm">
                           {scoreMap.has(subj.id) ? (
                             <span className="font-medium text-ink">{scoreMap.get(subj.id)}</span>
