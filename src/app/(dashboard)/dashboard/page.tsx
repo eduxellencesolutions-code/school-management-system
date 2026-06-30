@@ -274,7 +274,6 @@ export default async function DashboardPage() {
               <tbody>
                 {subjectStats.map((subject) => {
                   const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                  // ✅ FIXED: TypeScript error - group is an array from Supabase, not a single object
                   const group = (subject.group as { name: string }[])?.[0] ?? null
                   return (
                     <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
