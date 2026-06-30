@@ -76,7 +76,7 @@ const PDF_OPTIONS = [
   { key: 'show_percentage', label: 'Percentage (%)', mandatory: false },
   { key: 'show_remark', label: "Teacher's overall remark", mandatory: false },
   { key: 'show_term', label: 'Term and session name', mandatory: false },
-  { key: 'show_signature', label: "Teacher & Principal signature", mandatory: false },
+  { key: 'show_signature', label: "Teacher & Principal signature", mandatory: false }
 ]
 
 type PdfOptions = Record<string, boolean>
@@ -100,7 +100,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     show_percentage: true,
     show_remark: false,
     show_term: true,
-    show_signature: false,
+    show_signature: false
   })
   const [teacherSigUrl, setTeacherSigUrl] = useState<string | null>(null)
   const [principalSigUrl, setPrincipalSigUrl] = useState<string | null>(null)
