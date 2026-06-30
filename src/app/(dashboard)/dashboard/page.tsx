@@ -189,7 +189,6 @@ export default async function DashboardPage() {
                           ✓ Report ready
                         </Link>
                       ) : (
-                        // ✅ FIXED: Changed from /reports to /reports/generate
                         <Link href={`/reports/generate?class=${g.id}`} className="btn-primary btn-sm btn">
                           Generate report
                         </Link>
@@ -274,7 +273,8 @@ export default async function DashboardPage() {
               <tbody>
                 {subjectStats.map((subject) => {
                   const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                  const group = (subject.group as { name: string }[])?.[0] ?? null
+                  // ✅ FIXED: group is returned as an array from Supabase
+                  const group = (subject.group as any)?.[0] ?? null
                   return (
                     <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-4 py-2 font-medium text-ink">
