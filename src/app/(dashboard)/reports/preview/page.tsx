@@ -210,25 +210,55 @@ export default function PreviewReportPage() {
 
       const { data: subjectsData } = await supabase
         .from('subjects')
-        .select('id, name')
+        .select('id, name, template_id')
         .eq('group_id', groupId)
         .eq('is_active', true)
         .order('name')
 
-      // ✅ FIX: Check if subjectsData is null or empty
       if (!subjectsData || subjectsData.length === 0) {
         setLearners([])
         return
       }
 
+      // ✅ Fetch assessment components for each subject's template
+      const templateIds = [...new Set(subjectsData.map(s => s.template_id).filter(Boolean))]
+      let componentsData: { id: string; name: string; max_score: number; template_id: string }[] = []
+      if (templateIds.length > 0) {
+        const { data } = await supabase
+          .from('assessment_components')
+          .select('id, name, max_score, template_id')
+          .in('template_id', templateIds)
+          .order('sequence')
+        componentsData = data || []
+      }
+
+      // ✅ Build a map of component max scores per subject
+      const subjectComponentMap: Record<string, { id: string; name: string; max_score: number }[]> = {}
+      subjectsData.forEach(subject => {
+        const comps = componentsData.filter(c => c.template_id === subject.template_id)
+        subjectComponentMap[subject.id] = comps.map(c => ({
+          id: c.id,
+          name: c.name,
+          max_score: c.max_score
+        }))
+      })
+
+      // ✅ Calculate max possible score per subject
+      const subjectMaxScore: Record<string, number> = {}
+      subjectsData.forEach(subject => {
+        const comps = subjectComponentMap[subject.id] || []
+        subjectMaxScore[subject.id] = comps.reduce((sum, c) => sum + c.max_score, 100) // fallback to 100
+      })
+
       const subjectIds = subjectsData.map(s => s.id)
       const learnerIds = learnersData.map(l => l.id)
 
-      let scoresData: { learner_id: string; subject_id: string; score: number }[] = []
+      // ✅ Fetch scores with component_id
+      let scoresData: { learner_id: string; subject_id: string; component_id: string; score: number }[] = []
       if (learnerIds.length > 0 && subjectIds.length > 0) {
         const { data } = await supabase
           .from('scores')
-          .select('learner_id, subject_id, score')
+          .select('learner_id, subject_id, component_id, score')
           .in('learner_id', learnerIds)
           .in('subject_id', subjectIds)
 
@@ -236,17 +266,18 @@ export default function PreviewReportPage() {
       }
 
       const results: LearnerResult[] = learnersData.map(learner => {
-        const subjectScores: SubjectScore[] = subjectIds.map(subjectId => {
-          const subject = subjectsData.find(s => s.id === subjectId)
-          const score = scoresData.find(s => s.learner_id === learner.id && s.subject_id === subjectId)
-          const total = score?.score || 0
-          const maxScore = 100
+        const learnerScores = scoresData.filter(s => s.learner_id === learner.id)
+
+        const subjectScores: SubjectScore[] = subjectsData.map(subject => {
+          const subjectScoreData = learnerScores.filter(s => s.subject_id === subject.id)
+          const total = subjectScoreData.reduce((sum, s) => sum + (s.score || 0), 0)
+          const maxScore = subjectMaxScore[subject.id] || 100
           const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
           const gradeResult = getGrade(percentage, gradingSystem)
 
           return {
-            subject_id: subjectId,
-            subject_name: subject?.name || 'Unknown',
+            subject_id: subject.id,
+            subject_name: subject.name,
             total,
             max_score: maxScore,
             percentage,
@@ -256,7 +287,7 @@ export default function PreviewReportPage() {
         })
 
         const totalScore = subjectScores.reduce((sum, s) => sum + s.total, 0)
-        const maxPossible = subjectScores.length * 100
+        const maxPossible = subjectsData.reduce((sum, s) => sum + (subjectMaxScore[s.id] || 100), 0)
         const percentage = maxPossible > 0 ? (totalScore / maxPossible) * 100 : 0
         const gradeResult = getGrade(percentage, gradingSystem)
 
