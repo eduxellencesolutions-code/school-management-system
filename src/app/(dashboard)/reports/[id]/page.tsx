@@ -1,335 +1,124 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileSpreadsheet, FileText, Printer } from 'lucide-react'
-import { downloadReport } from '../actions'
+import { ArrowLeft } from 'lucide-react'
+import ReportDownloadButtons from '@/components/reports/ReportDownloadButtons'
+import { deleteReport } from '../actions'
 
-interface Props {
-  params: Promise<{ id: string }>
-}
+interface Props { params: Promise<{ id: string }> }
 
-export default async function ReportViewPage({ params }: Props) {
+export default async function ReportDetailPage({ params }: Props) {
   const { id } = await params
-
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: report, error } = await supabase
     .from('reports')
-    .select(`
-      *,
-      group:groups(id, name, code),
-      term:terms(id, name),
-      template:assessment_templates(id, name)
-    `)
+    .select('*, group:groups(id, name, code), term:terms(id, name)')
     .eq('id', id)
     .single()
 
-  if (error || !report) {
-    console.error('Report fetch error:', error)
-    notFound()
-  }
+  if (error || !report) notFound()
 
-  // Handle different report data structures
-  let reportData = report.report_data as {
-    learners?: any[]
-    subjects?: any[]
-    scores?: any[]
-    components?: any[]
-    generated_at?: string
-    summary?: any
-  } | null
-
-  // If report_data is null or empty, try to build it from the report
-  if (!reportData || !reportData.learners) {
-    // Check if the report has the new structure with nested data
-    if (report.report_data?.learners) {
-      reportData = report.report_data
-    } else {
-      // Try to fetch the data directly
-      const { data: learners } = await supabase
-        .from('learners')
-        .select('id, first_name, last_name, admission_number')
-        .eq('group_id', report.group_id)
-        .eq('is_active', true)
-        .order('last_name')
-
-      const { data: subjects } = await supabase
-        .from('subjects')
-        .select('id, name, code')
-        .eq('group_id', report.group_id)
-        .eq('is_active', true)
-        .order('name')
-
-      const { data: scores } = await supabase
-        .from('scores')
-        .select('learner_id, subject_id, component_id, score')
-        .in('learner_id', learners?.map((l: any) => l.id) || [])
-
-      reportData = {
-        learners: learners || [],
-        subjects: subjects || [],
-        scores: scores || [],
-        generated_at: new Date().toISOString(),
-      }
-    }
-  }
-
-  if (!reportData || !reportData.learners || reportData.learners.length === 0) {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-2 text-sm">
-          <Link href="/reports" className="text-ink-muted hover:text-ink flex items-center gap-1">
-            <ArrowLeft size={13} /> Reports
-          </Link>
-          <span className="text-ink-faint">/</span>
-          <span className="text-ink font-medium">Report</span>
-        </div>
-        <div className="card py-16 text-center">
-          <p className="text-ink-muted">No data available for this report.</p>
-          <Link href="/reports" className="btn-primary btn-sm btn mt-4">
-            Back to Reports
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  // Process the report data
-  const processedData = processReportData(reportData)
-
-  // Calculate summary statistics
-  const summary = {
-    totalStudents: processedData.length,
-    totalSubjects: reportData.subjects?.length || 0,
-    averageScore: processedData.length > 0
-      ? (processedData.reduce((sum: number, row: any) => sum + parseFloat(row.average), 0) / processedData.length).toFixed(1)
-      : '0',
-    highestScore: processedData.length > 0
-      ? Math.max(...processedData.map((row: any) => parseFloat(row.average)))
-      : 0,
-    lowestScore: processedData.length > 0
-      ? Math.min(...processedData.map((row: any) => parseFloat(row.average)))
-      : 0,
-  }
+  const group   = report.group   as { id: string; name: string; code?: string } | null
+  const term    = report.term    as { id: string; name: string } | null
+  const data    = report.report_data ?? {}
+  const learners  = data.learners  ?? []
+  const subjects  = data.subjects  ?? []
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-5xl">
+      <div className="flex items-center gap-2 text-sm">
+        <Link href="/reports" className="text-ink-muted hover:text-ink flex items-center gap-1">
+          <ArrowLeft size={13} /> Reports
+        </Link>
+        <span className="text-ink-faint">/</span>
+        <span className="text-ink font-medium">{group?.name} — {term?.name ?? 'Report'}</span>
+      </div>
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="flex items-center gap-2 text-sm">
-            <Link href="/reports" className="text-ink-muted hover:text-ink flex items-center gap-1">
-              <ArrowLeft size={13} /> Reports
-            </Link>
-            <span className="text-ink-faint">/</span>
-            <span className="text-ink font-medium">{report.group?.name || 'Report'}</span>
-          </div>
-          <h1 className="page-title mt-2">
-            {report.group?.name || 'Report'} - {report.term?.name || 'Current Term'}
-          </h1>
+          <h1 className="page-title">{group?.name}</h1>
           <p className="page-subtitle">
-            Generated: {report.completed_at ? new Date(report.completed_at).toLocaleDateString('en-NG') : new Date(report.created_at).toLocaleDateString('en-NG')}
-            {report.template?.name && ` • Template: ${report.template.name}`}
-            {report.type && ` • Type: ${report.type.replace('_', ' ').toUpperCase()}`}
+            {term?.name ?? ''} · {learners.length} students · {subjects.length} subjects ·
+            Generated {new Date(report.completed_at ?? report.created_at).toLocaleDateString('en-NG')}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <form action={downloadReport}>
-            <input type="hidden" name="id" value={report.id} />
-            <input type="hidden" name="format" value="csv" />
-            <button type="submit" className="btn-secondary btn-sm btn">
-              <FileText size={14} /> CSV
+        <div className="flex gap-2 flex-wrap">
+          {/* Client component handles all downloads */}
+          <ReportDownloadButtons
+            reportId={id}
+            groupName={group?.name ?? 'Report'}
+            termName={term?.name ?? ''}
+            learners={learners}
+            subjects={subjects}
+          />
+          <form action={deleteReport}>
+            <input type="hidden" name="id" value={id} />
+            <button
+              type="submit"
+              className="btn btn-sm border border-red-200 text-red-600 hover:bg-red-50"
+              onClick={e => { if (!confirm('Delete this report?')) e.preventDefault() }}
+            >
+              Delete
             </button>
           </form>
-          <form action={downloadReport}>
-            <input type="hidden" name="id" value={report.id} />
-            <input type="hidden" name="format" value="xls" />
-            <button type="submit" className="btn-secondary btn-sm btn">
-              <FileSpreadsheet size={14} /> XLS
-            </button>
-          </form>
-          <form action={downloadReport}>
-            <input type="hidden" name="id" value={report.id} />
-            <input type="hidden" name="format" value="pdf" />
-            <button type="submit" className="btn-primary btn-sm btn">
-              <Download size={14} /> PDF
-            </button>
-          </form>
-          <button 
-            onClick={() => window.print()} 
-            className="btn-secondary btn-sm btn"
-          >
-            <Printer size={14} /> Print
-          </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="stat-card">
-          <div className="stat-value">{summary.totalStudents}</div>
-          <div className="stat-label">Students</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{summary.totalSubjects}</div>
-          <div className="stat-label">Subjects</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{summary.averageScore}%</div>
-          <div className="stat-label">Class Average</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{summary.highestScore}%</div>
-          <div className="stat-label">Highest Score</div>
-        </div>
-      </div>
-
-      {/* Report Table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-surface-200 bg-surface-50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-ink-muted uppercase tracking-wider">#</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-ink-muted uppercase tracking-wider">Student</th>
-                {reportData.subjects?.map((s: any) => (
-                  <th key={s.id} className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">
-                    {s.name}
-                  </th>
-                ))}
-                <th className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">Total</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">Avg</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">%</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">Grade</th>
-                <th className="px-3 py-3 text-center text-xs font-semibold text-ink-muted uppercase tracking-wider">Position</th>
-              </tr>
-            </thead>
-            <tbody>
-              {processedData.map((row: any, i: number) => (
-                <tr key={row.learnerId} className="border-b border-surface-200 hover:bg-surface-50/50 transition-colors">
-                  <td className="px-4 py-2 text-xs text-ink-muted">{i + 1}</td>
-                  <td className="px-4 py-2">
-                    <div className="font-medium text-ink text-sm">{row.studentName}</div>
-                    {row.admissionNumber && (
-                      <div className="text-[11px] text-ink-faint font-mono">{row.admissionNumber}</div>
-                    )}
-                  </td>
-                  {reportData.subjects?.map((s: any) => (
-                    <td key={s.id} className="px-3 py-2 text-center font-mono text-sm">
-                      {row.subjectScores[s.id] ?? '-'}
-                    </td>
+      {/* Broadsheet table */}
+      {learners.length > 0 ? (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3 bg-surface-50 border-b border-surface-200 text-center">
+            <p className="font-bold text-ink">{group?.name}</p>
+            {term?.name && <p className="text-xs text-ink-muted">{term.name} — Result Broadsheet</p>}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-surface-100 border-b border-surface-200">
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">#</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px]">Student</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">Adm. No</th>
+                  {subjects.map((s: any) => (
+                    <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap">
+                      {s.name}
+                    </th>
                   ))}
-                  <td className="px-3 py-2 text-center font-semibold font-mono text-sm">{row.total}</td>
-                  <td className="px-3 py-2 text-center font-mono text-sm">{row.average}</td>
-                  <td className="px-3 py-2 text-center font-mono text-sm">{row.percentage}%</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      row.grade === 'A' ? 'bg-green-100 text-green-700' :
-                      row.grade === 'B' ? 'bg-blue-100 text-blue-700' :
-                      row.grade === 'C' ? 'bg-amber-100 text-amber-700' :
-                      row.grade === 'D' ? 'bg-orange-100 text-orange-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {row.grade}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center font-semibold text-sm">
-                    {row.position}
-                  </td>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Total</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">%</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Grade</th>
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Pos.</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-surface-50 border-t-2 border-surface-200">
-                <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-ink-muted">
-                  Averages
-                </td>
-                {reportData.subjects?.map((s: any) => {
-                  const vals = processedData
-                    .map((row: any) => row.subjectScores[s.id])
-                    .filter((v: any) => v !== undefined && v !== null)
-                  const avg = vals.length > 0 ? (vals.reduce((a: number, b: number) => a + b, 0) / vals.length) : 0
-                  return (
-                    <td key={s.id} className="px-3 py-2 text-center text-xs font-semibold text-ink font-mono">
-                      {avg > 0 ? avg.toFixed(1) : '-'}
-                    </td>
-                  )
-                })}
-                <td className="px-3 py-2 text-center text-xs font-semibold text-ink font-mono">
-                  {summary.averageScore}%
-                </td>
-                <td colSpan={3} className="px-3 py-2" />
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {learners.map((row: any, i: number) => (
+                  <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
+                    <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
+                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{row.last_name} {row.first_name}</td>
+                    <td className="px-3 py-2 font-mono text-ink-muted">{row.admission_number ?? '—'}</td>
+                    {subjects.map((s: any) => (
+                      <td key={s.id} className="px-3 py-2 text-center font-mono">
+                        {row.subject_totals?.[s.id] ?? '—'}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
+                    <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
+                    <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
+                    <td className="px-3 py-2 text-center font-bold">{row.position}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="text-xs text-ink-faint text-center border-t border-surface-200 pt-4">
-        Report generated on {new Date().toLocaleString('en-NG')}
-        {report.created_by && ` • Generated by: ${report.created_by}`}
-      </div>
+      ) : (
+        <div className="card py-12 text-center text-ink-muted text-sm">
+          No report data available.
+        </div>
+      )}
     </div>
   )
-}
-
-// Helper function to process report data
-function processReportData(data: any) {
-  const learners = data.learners || []
-  const subjects = data.subjects || []
-  const scores = data.scores || []
-
-  const processed = learners.map((learner: any) => {
-    const learnerScores = scores.filter((s: any) => s.learner_id === learner.id)
-    const subjectScores: Record<string, number> = {}
-    let total = 0
-
-    subjects.forEach((subject: any) => {
-      const subjectScore = learnerScores
-        .filter((s: any) => s.subject_id === subject.id)
-        .reduce((sum: number, s: any) => sum + (s.score || 0), 0)
-      subjectScores[subject.id] = subjectScore
-      total += subjectScore
-    })
-
-    // Calculate max possible score
-    const maxPossible = subjects.length > 0 ? subjects.length * 100 : 1
-    const avg = subjects.length > 0 ? (total / subjects.length) : 0
-    const percentage = maxPossible > 0 ? (total / maxPossible) * 100 : 0
-
-    let grade = 'F'
-    if (percentage >= 70) grade = 'A'
-    else if (percentage >= 60) grade = 'B'
-    else if (percentage >= 50) grade = 'C'
-    else if (percentage >= 40) grade = 'D'
-
-    return {
-      learnerId: learner.id,
-      studentName: `${learner.last_name} ${learner.first_name}`,
-      admissionNumber: learner.admission_number,
-      subjectScores,
-      total,
-      average: avg.toFixed(1),
-      percentage: Math.round(percentage * 10) / 10,
-      grade,
-    }
-  })
-
-  // Sort by total descending and assign positions
-  const sorted = [...processed].sort((a, b) => b.total - a.total)
-  sorted.forEach((row, index) => {
-    // Handle ties
-    if (index > 0 && row.total === sorted[index - 1].total) {
-      row.position = sorted[index - 1].position
-    } else {
-      row.position = index + 1
-    }
-  })
-
-  // Sort back to original order
-  const originalOrder = processed.map((row: any) => row.learnerId)
-  return sorted.sort((a, b) => originalOrder.indexOf(a.learnerId) - originalOrder.indexOf(b.learnerId))
 }
