@@ -1,8 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { deleteReport } from '@/app/(dashboard)/reports/actions'
+import toast from 'react-hot-toast'
 
 interface Props {
   reportId: string
@@ -11,24 +13,43 @@ interface Props {
 
 export default function DeleteReportButton({ reportId, reportName }: Props) {
   const router = useRouter()
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
     if (!confirm(`Are you sure you want to delete this report for ${reportName}?`)) {
       return
     }
 
-    const formData = new FormData()
-    formData.append('id', reportId)
-    await deleteReport(formData)
-    router.refresh()
+    setIsDeleting(true)
+    
+    try {
+      const formData = new FormData()
+      formData.append('id', reportId)
+      
+      const result = await deleteReport(formData)
+      
+      if (result?.success === false) {
+        toast.error(result.message || 'Failed to delete report')
+        return
+      }
+      
+      toast.success('Report deleted successfully')
+      router.refresh()
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast.error('Failed to delete report. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
     <button
       onClick={handleDelete}
-      className="btn-sm btn border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1"
+      disabled={isDeleting}
+      className="btn-sm btn border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1 disabled:opacity-50"
     >
-      <Trash2 size={14} /> Delete
+      <Trash2 size={14} /> {isDeleting ? 'Deleting...' : 'Delete'}
     </button>
   )
 }
