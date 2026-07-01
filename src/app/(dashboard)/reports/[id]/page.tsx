@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import ReportDownloadButtons from '@/components/reports/ReportDownloadButtons'
-import { deleteReport } from '../actions'
+import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -55,16 +55,10 @@ export default async function ReportDetailPage({ params }: Props) {
             learners={learners}
             subjects={subjects}
           />
-          <form action={deleteReport}>
-            <input type="hidden" name="id" value={id} />
-            <button
-              type="submit"
-              className="btn btn-sm border border-red-200 text-red-600 hover:bg-red-50"
-              onClick={e => { if (!confirm('Delete this report?')) e.preventDefault() }}
-            >
-              Delete
-            </button>
-          </form>
+          <DeleteReportButton 
+            reportId={id} 
+            reportName={group?.name || 'Report'} 
+          />
         </div>
       </div>
 
