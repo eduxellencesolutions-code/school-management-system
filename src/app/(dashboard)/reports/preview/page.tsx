@@ -215,7 +215,13 @@ export default function PreviewReportPage() {
         .eq('is_active', true)
         .order('name')
 
-      const subjectIds = subjectsData?.map(s => s.id) || []
+      // ✅ FIX: Check if subjectsData is null or empty
+      if (!subjectsData || subjectsData.length === 0) {
+        setLearners([])
+        return
+      }
+
+      const subjectIds = subjectsData.map(s => s.id)
       const learnerIds = learnersData.map(l => l.id)
 
       let scoresData: { learner_id: string; subject_id: string; score: number }[] = []
