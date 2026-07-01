@@ -243,11 +243,13 @@ export default function PreviewReportPage() {
         }))
       })
 
-      // ✅ Calculate max possible score per subject
+      // ✅ Calculate max possible score per subject - FIXED: start reduce at 0, not 100
       const subjectMaxScore: Record<string, number> = {}
       subjectsData.forEach(subject => {
         const comps = subjectComponentMap[subject.id] || []
-        subjectMaxScore[subject.id] = comps.reduce((sum, c) => sum + c.max_score, 100) // fallback to 100
+        subjectMaxScore[subject.id] = comps.length > 0 
+          ? comps.reduce((sum, c) => sum + c.max_score, 0)
+          : 100
       })
 
       const subjectIds = subjectsData.map(s => s.id)
