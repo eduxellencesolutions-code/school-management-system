@@ -192,7 +192,7 @@ export async function deleteReportAction(formData: FormData): Promise<void> {
   redirect('/reports')
 }
 
-// ✅ For client-side calls (returns data)
+// ✅ For client-side calls (returns data) - works for ANY status
 export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = await createClient()
@@ -207,10 +207,10 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
       return { success: false, message: 'Report ID is required' }
     }
 
-    // Check if the report exists and belongs to the user
+    // Check if the report exists - no status restriction
     const { data: existing, error: checkError } = await supabase
       .from('reports')
-      .select('id, created_by')
+      .select('id, created_by, status')
       .eq('id', id)
       .single()
 
@@ -218,12 +218,12 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
       return { success: false, message: 'Report not found' }
     }
 
-    // Check if user owns this report
+    // Check if user owns this report (regardless of status)
     if (existing.created_by !== user.id) {
       return { success: false, message: 'You do not have permission to delete this report' }
     }
 
-    // Delete the report
+    // Delete the report - works for any status (pending, processing, completed, failed)
     const { error: deleteError } = await supabase
       .from('reports')
       .delete()
