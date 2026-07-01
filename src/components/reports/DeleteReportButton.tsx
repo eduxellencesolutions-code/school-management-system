@@ -34,7 +34,8 @@ export default function DeleteReportButton({ reportId, reportName }: Props) {
       }
       
       toast.success('Report deleted successfully')
-      router.refresh()
+      // Force a full page refresh to show updated list
+      window.location.href = '/reports'
     } catch (error) {
       console.error('Delete error:', error)
       toast.error('Failed to delete report. Please try again.')
