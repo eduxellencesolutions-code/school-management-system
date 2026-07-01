@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, XCircle, ArrowRight, Trash2 } from 'lucide-react'
 import ReportGenerator from '@/components/reports/ReportGenerator'
-import { deleteReport } from './actions'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 // ✅ Force Node.js runtime for Supabase compatibility
