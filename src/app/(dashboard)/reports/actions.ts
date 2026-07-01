@@ -173,7 +173,7 @@ export async function markReportReady(reportId: string) {
   revalidatePath('/dashboard')
 }
 
-export async function deleteReport(formData: FormData) {
+export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
