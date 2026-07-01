@@ -173,25 +173,41 @@ export async function markReportReady(reportId: string) {
   revalidatePath('/dashboard')
 }
 
+// ✅ For form actions (returns void, uses redirect)
+export async function deleteReportAction(formData: FormData): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const id = formData.get('id') as string
+  if (!id) {
+    throw new Error('Report ID is required')
+  }
+
+  const { error } = await supabase.from('reports').delete().eq('id', id)
+  if (error) throw error
+
+  revalidatePath('/reports')
+  revalidatePath('/dashboard')
+  redirect('/reports')
+}
+
+// ✅ For client-side calls (returns data)
 export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     
     if (!user) {
-      console.error('No user found')
       return { success: false, message: 'You must be logged in to delete reports' }
     }
 
     const id = formData.get('id') as string
     if (!id) {
-      console.error('No report ID provided')
       return { success: false, message: 'Report ID is required' }
     }
 
-    console.log('Deleting report:', id, 'by user:', user.id)
-
-    // First check if the report exists and belongs to the user
+    // Check if the report exists and belongs to the user
     const { data: existing, error: checkError } = await supabase
       .from('reports')
       .select('id, created_by')
@@ -199,13 +215,11 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
       .single()
 
     if (checkError || !existing) {
-      console.error('Report not found:', checkError)
       return { success: false, message: 'Report not found' }
     }
 
     // Check if user owns this report
     if (existing.created_by !== user.id) {
-      console.error('User does not own this report')
       return { success: false, message: 'You do not have permission to delete this report' }
     }
 
@@ -216,14 +230,12 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
       .eq('id', id)
 
     if (deleteError) {
-      console.error('Delete error:', deleteError)
       return { success: false, message: 'Failed to delete report' }
     }
 
     revalidatePath('/reports')
     revalidatePath('/dashboard')
 
-    console.log('Report deleted successfully:', id)
     return { success: true }
   } catch (error) {
     console.error('Unexpected error in deleteReport:', error)
