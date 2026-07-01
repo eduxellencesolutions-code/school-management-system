@@ -22,6 +22,9 @@ import { pdf } from '@react-pdf/renderer'
 import { StudentReportCard } from '@/components/reports/StudentReportCard'
 import JSZip from 'jszip'
 
+// ✅ Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs'
+
 interface ReportData {
   id: string
   organization_id: string
