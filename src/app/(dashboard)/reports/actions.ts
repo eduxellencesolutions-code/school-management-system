@@ -51,6 +51,7 @@ export async function generateReport(formData: FormData) {
         completed_at:    new Date().toISOString(),
         filters:         { termId, templateId },
         created_by:      user.id,
+        report_data:     reportData,
       })
       .select()
       .single()
@@ -173,18 +174,61 @@ export async function markReportReady(reportId: string) {
 }
 
 export async function deleteReport(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      console.error('No user found')
+      return { success: false, message: 'You must be logged in to delete reports' }
+    }
 
-  const id = formData.get('id') as string
-  if (!id) return
+    const id = formData.get('id') as string
+    if (!id) {
+      console.error('No report ID provided')
+      return { success: false, message: 'Report ID is required' }
+    }
 
-  await supabase.from('reports').delete().eq('id', id)
+    console.log('Deleting report:', id, 'by user:', user.id)
 
-  revalidatePath('/reports')
-  revalidatePath('/dashboard')
-  redirect('/reports')
+    // First check if the report exists and belongs to the user
+    const { data: existing, error: checkError } = await supabase
+      .from('reports')
+      .select('id, created_by')
+      .eq('id', id)
+      .single()
+
+    if (checkError || !existing) {
+      console.error('Report not found:', checkError)
+      return { success: false, message: 'Report not found' }
+    }
+
+    // Check if user owns this report
+    if (existing.created_by !== user.id) {
+      console.error('User does not own this report')
+      return { success: false, message: 'You do not have permission to delete this report' }
+    }
+
+    // Delete the report
+    const { error: deleteError } = await supabase
+      .from('reports')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) {
+      console.error('Delete error:', deleteError)
+      return { success: false, message: 'Failed to delete report' }
+    }
+
+    revalidatePath('/reports')
+    revalidatePath('/dashboard')
+
+    console.log('Report deleted successfully:', id)
+    return { success: true }
+  } catch (error) {
+    console.error('Unexpected error in deleteReport:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'An unexpected error occurred' }
+  }
 }
 
 export async function getReport(id: string) {
