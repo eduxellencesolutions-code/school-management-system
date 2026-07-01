@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
 import ReportGenerator from '@/components/reports/ReportGenerator'
 
+// ✅ Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs'
+
 export default async function ReportsPage() {
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
