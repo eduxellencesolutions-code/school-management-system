@@ -296,4 +296,199 @@ export default function GenerateReportPage() {
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full max-w-md px-3 py-2 border border-surface-200 rounded-lg focus:outline-none focus:
+              className="w-full max-w-md px-3 py-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-sm"
+              disabled={loading}
+            >
+              <option value="">Select a class...</option>
+              {classes.map((cls) => (
+                <option key={cls.id} value={cls.id}>
+                  {cls.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {/* Step 2: Review Scores */}
+      {selectedClass && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+              <FileText size={16} className="text-ink-muted" />
+              Step 2: Review Scores
+            </h2>
+            <div className="flex items-center gap-4 text-xs text-ink-muted">
+              <span className="flex items-center gap-1">
+                <Users size={14} /> {getClassLearnerCount()} students
+              </span>
+              <span className="flex items-center gap-1">
+                <BookOpen size={14} /> {getClassSubjectCount()} subjects
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle size={14} className="text-green-600" /> {getCompletedSubjectCount()} complete
+              </span>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="px-5 py-12 text-center">
+              <Loader2 size={32} className="animate-spin text-brand-500 mx-auto mb-3" />
+              <p className="text-sm text-ink-muted">Loading subjects and scores...</p>
+            </div>
+          ) : subjects.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <FileText size={32} className="text-surface-200 mx-auto mb-3" />
+              <p className="text-sm text-ink-muted mb-2">No subjects found for this class</p>
+              <Link href="/settings/subjects/new" className="btn-primary btn-sm btn">
+                Add subjects
+              </Link>
+            </div>
+          ) : (
+            <>
+              {/* Subject Summary Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-surface-200">
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                        Subject
+                      </th>
+                      <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                        Scores Entered
+                      </th>
+                      <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                        Students with Scores
+                      </th>
+                      <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subjects.map((subject) => (
+                      <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
+                        <td className="px-4 py-2 font-medium text-ink">
+                          {subject.name}
+                          {subject.code && (
+                            <span className="text-xs text-ink-faint ml-2 font-mono">{subject.code}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-center font-mono">{subject.score_count}</td>
+                        <td className="px-4 py-2 text-center font-mono">
+                          {subject.learner_count} / {learners.length}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          {subject.is_complete ? (
+                            <span className="text-xs text-green-600 font-medium flex items-center justify-center gap-1">
+                              <CheckCircle size={12} /> Complete
+                            </span>
+                          ) : subject.score_count > 0 ? (
+                            <span className="text-xs text-amber-600 font-medium flex items-center justify-center gap-1">
+                              <AlertCircle size={12} /> Partial
+                            </span>
+                          ) : (
+                            <span className="text-xs text-ink-faint font-medium flex items-center justify-center gap-1">
+                              <AlertCircle size={12} /> No scores
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Student Score Grid (collapsible preview) */}
+              {learners.length > 0 && subjects.length > 0 && (
+                <div className="px-5 py-3 border-t border-surface-100">
+                  <details className="group">
+                    <summary className="text-sm font-medium text-ink-muted hover:text-ink cursor-pointer flex items-center gap-2">
+                      <Users size={14} />
+                      View student score grid ({learners.length} students × {subjects.length} subjects)
+                      <span className="text-xs text-ink-faint ml-2">(click to expand)</span>
+                    </summary>
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-surface-200">
+                            <th className="text-left px-2 py-1.5 font-semibold text-ink-muted sticky left-0 bg-white z-10">
+                              Student
+                            </th>
+                            {subjects.map((subj) => (
+                              <th key={subj.id} className="text-center px-2 py-1.5 font-semibold text-ink-muted min-w-[50px]">
+                                {subj.code || subj.name.slice(0, 4)}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {learners.map((learner) => {
+                            const scoreMap = new Map()
+                            learner.scores.forEach(s => {
+                              scoreMap.set(s.subject_id, s.score)
+                            })
+                            return (
+                              <tr key={learner.id} className="border-b border-surface-100 hover:bg-surface-50">
+                                <td className="px-2 py-1.5 font-medium text-ink sticky left-0 bg-white whitespace-nowrap">
+                                  {`${learner.last_name} ${learner.first_name.slice(0, 1)}.`}
+                                  <span className="text-[10px] text-ink-faint ml-1 font-mono">{learner.admission_number}</span>
+                                </td>
+                                {subjects.map((subj) => (
+                                  <td key={subj.id} className="text-center px-2 py-1.5 font-mono">
+                                    {scoreMap.has(subj.id) ? (
+                                      <span className="font-medium">{scoreMap.get(subj.id)}</span>
+                                    ) : (
+                                      <span className="text-ink-faint">—</span>
+                                    )}
+                                  </td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Generate Button */}
+          <div className="px-5 py-4 border-t border-surface-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {hasScores ? (
+                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+                  <CheckCircle size={14} /> Scores found for this class
+                </span>
+              ) : (
+                <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                  <AlertCircle size={14} /> No scores found for this class
+                </span>
+              )}
+              <span className="text-xs text-ink-faint">
+                {subjects.filter(s => s.is_complete).length}/{subjects.length} subjects complete
+              </span>
+            </div>
+            <button
+              onClick={handleGenerateReport}
+              disabled={generating || !hasScores || subjects.length === 0}
+              className="btn-primary btn flex items-center gap-2"
+            >
+              {generating ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Generating...
+                </>
+              ) : (
+                <>
+                  <FileText size={16} /> Generate Now
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
