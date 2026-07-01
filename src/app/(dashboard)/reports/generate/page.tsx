@@ -108,7 +108,8 @@ export default function GenerateReportPage() {
           .eq('is_active', true)
           .order('last_name')
 
-        setLearners(learnersData || [])
+        // ✅ FIXED: Map learners to include scores array
+        setLearners((learnersData || []).map((l: any) => ({ ...l, scores: [] })))
 
         // Fetch subjects for this class
         const { data: subjectsData } = await supabase
