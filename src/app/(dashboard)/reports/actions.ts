@@ -74,6 +74,7 @@ async function generateReportData(
   templateId: string,
   supabase: any
 ) {
+  // Fetch learners
   const { data: learners } = await supabase
     .from('learners')
     .select('id, first_name, last_name, admission_number')
@@ -81,6 +82,7 @@ async function generateReportData(
 
   if (!learners?.length) throw new Error('No learners found in this class')
 
+  // Fetch subjects
   const { data: subjects } = await supabase
     .from('subjects')
     .select('id, name, code, template_id')
@@ -88,6 +90,7 @@ async function generateReportData(
 
   if (!subjects?.length) throw new Error('No subjects found for this class')
 
+  // Fetch components
   const { data: components } = await supabase
     .from('assessment_components')
     .select('id, name, max_score, sequence')
@@ -95,7 +98,60 @@ async function generateReportData(
 
   if (!components?.length) throw new Error('No assessment components found for this template')
 
+  // ✅ Fetch grading system from database
+  const { data: gradingSystem } = await supabase
+    .from('grading_systems')
+    .select('*')
+    .order('min_score', { ascending: false })
+
+  // ✅ Use fetched grading system or fallback to default
+  const grades = gradingSystem && gradingSystem.length > 0 
+    ? gradingSystem.map((g: any) => ({
+        min: g.min_score,
+        max: g.max_score,
+        grade: g.grade_letter,
+        remark: g.remark || ''
+      }))
+    : [
+        { min: 70, max: 100, grade: 'A', remark: 'Excellent' },
+        { min: 60, max: 69, grade: 'B', remark: 'Very Good' },
+        { min: 50, max: 59, grade: 'C', remark: 'Good' },
+        { min: 45, max: 49, grade: 'D', remark: 'Fair' },
+        { min: 40, max: 44, grade: 'E', remark: 'Pass' },
+        { min: 0, max: 39, grade: 'F', remark: 'Fail' },
+      ]
+
+  // ✅ Helper function to get grade
+  const getGrade = (percentage: number) => {
+    for (const g of grades) {
+      if (percentage >= g.min && percentage <= g.max) {
+        return { grade: g.grade, remark: g.remark || '' }
+      }
+    }
+    return { grade: 'F', remark: 'Fail' }
+  }
+
+  // ✅ Build a map of component max scores per subject
+  const subjectComponentMap: Record<string, { id: string; name: string; max_score: number }[]> = {}
+  subjects.forEach((subject: any) => {
+    const comps = components.filter((c: any) => c.template_id === subject.template_id)
+    subjectComponentMap[subject.id] = comps.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      max_score: c.max_score
+    }))
+  })
+
+  // ✅ Calculate max possible score per subject
+  const subjectMaxScore: Record<string, number> = {}
+  subjects.forEach((subject: any) => {
+    const comps = subjectComponentMap[subject.id] || []
+    subjectMaxScore[subject.id] = comps.reduce((sum: number, c: any) => sum + c.max_score, 100)
+  })
+
   const learnerIds = learners.map((l: any) => l.id)
+  
+  // ✅ Fetch scores with component_id
   const { data: scores } = await supabase
     .from('scores')
     .select('learner_id, subject_id, component_id, score')
@@ -106,34 +162,59 @@ async function generateReportData(
     const subjectTotals: Record<string, number> = {}
     let overallTotal = 0
 
-    subjects.forEach((subject: any) => {
-      const total = learnerScores
-        .filter((s: any) => s.subject_id === subject.id)
-        .reduce((sum: number, s: any) => sum + (s.score || 0), 0)
+    // ✅ Build detailed subject scores with component breakdown
+    const subjectDetails = subjects.map((subject: any) => {
+      const subjectScoreData = learnerScores.filter((s: any) => s.subject_id === subject.id)
+      const total = subjectScoreData.reduce((sum: number, s: any) => sum + (s.score || 0), 0)
       subjectTotals[subject.id] = total
       overallTotal += total
+
+      // ✅ Build component scores for this subject
+      const componentScores: Record<string, number> = {}
+      subjectScoreData.forEach((s: any) => {
+        const comp = components.find((c: any) => c.id === s.component_id)
+        if (comp) {
+          componentScores[comp.name] = s.score || 0
+        }
+      })
+
+      const maxScore = subjectMaxScore[subject.id] || 100
+      const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
+
+      // ✅ Use database grading system for subject grade
+      const gradeResult = getGrade(percentage)
+
+      return {
+        subject_id: subject.id,
+        subject_name: subject.name,
+        total: total,
+        max_score: maxScore,
+        percentage: Math.round(percentage * 10) / 10,
+        grade: gradeResult.grade,
+        remark: gradeResult.remark,
+        component_scores: componentScores
+      }
     })
 
-    const maxScore  = components.reduce((sum: number, c: any) => sum + c.max_score, 0)
-    const average   = subjects.length > 0 ? overallTotal / subjects.length : 0
+    const maxScore = components.reduce((sum: number, c: any) => sum + c.max_score, 0)
+    const average = subjects.length > 0 ? overallTotal / subjects.length : 0
     const percentage = maxScore > 0 ? (overallTotal / maxScore) * 100 : 0
 
-    let grade = 'F'
-    if (percentage >= 70) grade = 'A'
-    else if (percentage >= 60) grade = 'B'
-    else if (percentage >= 50) grade = 'C'
-    else if (percentage >= 40) grade = 'D'
+    // ✅ Use database grading system for overall grade
+    const overallGradeResult = getGrade(percentage)
 
     return {
       learner_id: learner.id,
       first_name: learner.first_name,
-      last_name:  learner.last_name,
+      last_name: learner.last_name,
       admission_number: learner.admission_number,
       subject_totals: subjectTotals,
-      overall_total:  overallTotal,
-      average:        Math.round(average * 10) / 10,
-      percentage:     Math.round(percentage * 10) / 10,
-      grade,
+      subject_details: subjectDetails, // ✅ NEW: Detailed subject scores with components
+      overall_total: overallTotal,
+      average: Math.round(average * 10) / 10,
+      percentage: Math.round(percentage * 10) / 10,
+      grade: overallGradeResult.grade,
+      remark: overallGradeResult.remark,
       scores: learnerScores,
       position: 0,
     }
@@ -148,13 +229,19 @@ async function generateReportData(
 
   return {
     learners: reportData,
-    subjects,
+    subjects: subjects.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      code: s.code,
+      template_id: s.template_id
+    })),
     components,
+    grading_system: grades, // ✅ Store grading system used
     generated_at: new Date().toISOString(),
     summary: {
-      total_learners:    learners.length,
-      total_subjects:    subjects.length,
-      total_components:  components.length,
+      total_learners: learners.length,
+      total_subjects: subjects.length,
+      total_components: components.length,
       max_possible_score: components.reduce((sum: number, c: any) => sum + c.max_score, 0),
     }
   }
