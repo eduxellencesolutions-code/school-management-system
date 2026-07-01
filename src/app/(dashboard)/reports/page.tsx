@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, XCircle, ArrowRight, Trash2 } from 'lucide-react'
 import ReportGenerator from '@/components/reports/ReportGenerator'
 import { deleteReport } from './actions'
+import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 // ✅ Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs'
@@ -186,21 +187,10 @@ export default async function ReportsPage() {
                     >
                       View
                     </Link>
-                    {/* ✅ DELETE BUTTON */}
-                    <form action={deleteReport}>
-                      <input type="hidden" name="id" value={report.id} />
-                      <button
-                        type="submit"
-                        className="btn-sm btn border border-red-200 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1"
-                        onClick={(e) => {
-                          if (!confirm(`Are you sure you want to delete this report for ${groupName}?`)) {
-                            e.preventDefault()
-                          }
-                        }}
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </form>
+                    <DeleteReportButton 
+                      reportId={report.id} 
+                      reportName={groupName} 
+                    />
                   </div>
                 </div>
               )
