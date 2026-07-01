@@ -26,10 +26,10 @@ export default function DeleteReportButton({ reportId, reportName }: Props) {
       const formData = new FormData()
       formData.append('id', reportId)
       
-      const result = await deleteReport(formData)
+      const result = await deleteReport(formData) as { success: boolean; message?: string }
       
-      if (result?.success === false) {
-        toast.error(result.message || 'Failed to delete report')
+      if (!result?.success) {
+        toast.error(result?.message || 'Failed to delete report')
         return
       }
       
