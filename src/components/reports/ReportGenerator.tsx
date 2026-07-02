@@ -300,25 +300,32 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
 
       // Convert rows to StudentReportCard format
       for (const row of reportData.rows) {
+        // ✅ Build subject scores with proper SubjectScore structure
+        const subjectScores = reportData.subjects.map((subj, idx) => {
+          const total = row.subjectTotals[idx] || 0
+          const maxScore = 100
+          const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
+          const gradeObj = DEFAULT_GRADING.find(g => percentage >= g.min_score && percentage <= g.max_score)
+          
+          // ✅ Proper SubjectScore with subject_id, components, and all required fields
+          return {
+            subject_id: subj.id,
+            subject_name: subj.name,
+            total: total,
+            max_score: maxScore,
+            percentage: percentage,
+            grade: gradeObj?.grade_letter || 'F',
+            remark: gradeObj?.remark || '',
+            components: [] // Empty array to match SubjectScore type
+          }
+        })
+
         const student = {
           id: row.learner.id,
           first_name: row.learner.first_name,
           last_name: row.learner.last_name,
           admission_number: row.learner.admission_number || '',
-          scores: reportData.subjects.map((subj, idx) => {
-            const total = row.subjectTotals[idx] || 0
-            const maxScore = 100
-            const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
-            const gradeObj = DEFAULT_GRADING.find(g => percentage >= g.min_score && percentage <= g.max_score)
-            return {
-              subject_name: subj.name,
-              total: total,
-              max_score: maxScore,
-              percentage: percentage,
-              grade: gradeObj?.grade_letter || 'F',
-              remark: gradeObj?.remark || ''
-            }
-          }),
+          scores: subjectScores,
           total_score: row.grandTotal,
           max_possible: reportData.subjects.length * 100,
           percentage: row.pct,
