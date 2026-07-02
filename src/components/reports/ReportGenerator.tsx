@@ -287,7 +287,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     toast.success('Excel downloaded!')
   }
 
-  // ✅ UPDATED: PDF Export using @react-pdf/renderer (using top-level imports)
+  // ✅ UPDATED: PDF Export with component breakdown
   async function downloadPDF() {
     if (!reportData || !isInstitution) return
     setGeneratingPdf(true)
@@ -297,14 +297,34 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
       const zip = new JSZip()
       const pdfBlobs: Blob[] = []
 
-      // Convert rows to StudentReportCard format
+      // Convert rows to StudentReportCard format with component breakdown
       for (const row of reportData.rows) {
-        // ✅ Build subject scores with proper SubjectScore structure
+        // ✅ Build subject scores with component breakdown
         const subjectScores = reportData.subjects.map((subj, idx) => {
           const total = row.subjectTotals[idx] || 0
-          const maxScore = 100
+          
+          // ✅ Find the subject summary to get component max scores
+          const summary = reportData.subjectSummaries.find(ss => ss.id === subj.id)
+          const comps = summary?.components ?? []
+          
+          // ✅ Calculate max score as sum of all component max scores
+          const maxScore = comps.length > 0 
+            ? comps.reduce((sum, c) => sum + c.max_score, 0)
+            : 100  // fallback to 100 if no components found
+          
           const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
           const gradeObj = DEFAULT_GRADING.find(g => percentage >= g.min_score && percentage <= g.max_score)
+          
+          // ✅ Build component scores for this subject
+          const components = comps.map(c => {
+            const score = row.componentScores[subj.id]?.[c.id] ?? 0
+            return {
+              component_id: c.id,
+              component_name: c.name,
+              score: score,
+              max_score: c.max_score
+            }
+          })
           
           // ✅ Proper SubjectScore with subject_id, components, and all required fields
           return {
@@ -315,9 +335,16 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             percentage: percentage,
             grade: gradeObj?.grade_letter || 'F',
             remark: gradeObj?.remark || '',
-            components: [] // Empty array to match SubjectScore type
+            components: components  // ✅ NOW INCLUDES COMPONENT SCORES
           }
         })
+
+        // ✅ Calculate max_possible as sum of all component max scores
+        const maxPossible = reportData.subjects.reduce((sum, subj) => {
+          const summary = reportData.subjectSummaries.find(ss => ss.id === subj.id)
+          const comps = summary?.components ?? []
+          return sum + (comps.length > 0 ? comps.reduce((s, c) => s + c.max_score, 0) : 100)
+        }, 0)
 
         const student = {
           id: row.learner.id,
@@ -326,7 +353,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
           admission_number: row.learner.admission_number || '',
           scores: subjectScores,
           total_score: row.grandTotal,
-          max_possible: reportData.subjects.length * 100,
+          max_possible: maxPossible,
           percentage: row.pct,
           grade: row.grade,
           position: row.position,
