@@ -690,7 +690,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mt-0.5">Result Broadsheet</p>
           </div>
 
-          {/* ✅ UPDATED: Broadsheet table with CA breakdown and fixed class average */}
+          {/* ✅ UPDATED: Broadsheet table - REMOVED /{c.max_score} from component headers */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -713,7 +713,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Grade</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Pos.</th>
                 </tr>
-                {/* Component sub-header with max scores */}
+                {/* Component sub-header - FIXED: Removed /{c.max_score} */}
                 <tr className="bg-surface-50 border-b border-surface-200">
                   <th colSpan={3} />
                   {reportData.subjects.map(s => {
@@ -724,7 +724,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
                         <div className="flex">
                           {comps.map(c => (
                             <div key={c.id} className="flex-1 px-2 py-1.5 text-center text-[10px] font-semibold text-ink-faint border-r border-surface-200 whitespace-nowrap">
-                              {c.name}<span className="text-ink-faint font-normal">/{c.max_score}</span>
+                              {c.name}
                             </div>
                           ))}
                           <div className="flex-1 px-2 py-1.5 text-center text-[10px] font-semibold text-ink-muted whitespace-nowrap">Total</div>
@@ -819,7 +819,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
                     )
                   })}
                   <td className="px-3 py-2.5 text-center font-mono text-ink border-l border-surface-200">
-                    {reportData.classAvg.toFixed(1)}
+                    {reportData.classAvg.toFixed(1)}%
                   </td>
                   <td colSpan={3} />
                 </tr>
