@@ -71,6 +71,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
   },
+  tableHeaderCellLeft: {
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Bold',
+    color: '#FFFFFF',
+    textAlign: 'left',
+  },
   tableRow: {
     flexDirection: 'row',
     paddingVertical: 4,
@@ -88,6 +94,7 @@ const styles = StyleSheet.create({
   },
   cellSubject: { fontSize: 9, color: dark, fontFamily: 'Helvetica-Bold', textAlign: 'left' },
   cell: { fontSize: 9, color: dark, textAlign: 'center' },
+  cellTotal: { fontSize: 9, color: dark, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
   cellRemark: { fontSize: 8.5, color: muted, textAlign: 'left' },
   // ── Summary ──────────────────────────────────────────────────────
   summary: {
@@ -147,6 +154,7 @@ interface SubjectScore {
 
 interface StudentReportCardProps {
   student: {
+    id?: string
     first_name: string
     last_name: string
     admission_number?: string
@@ -197,7 +205,19 @@ export function StudentReportCard({
 }: StudentReportCardProps) {
 
   // Build columns dynamically based on whether components exist
-  const hasComponents = student.scores.some(s => s.components.length > 0)
+  const hasComponents = student.scores.some(s => s.components && s.components.length > 0)
+  
+  // Collect all unique component names in order
+  const compNames: string[] = []
+  if (hasComponents) {
+    student.scores.forEach(s => {
+      s.components.forEach(c => {
+        if (!compNames.includes(c.component_name)) compNames.push(c.component_name)
+      })
+    })
+  }
+  
+  const compCount = compNames.length
 
   return (
     <Document>
@@ -245,24 +265,17 @@ export function StudentReportCard({
         <View style={styles.table}>
           {/* Table header */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, { width: hasComponents ? '22%' : '35%', textAlign: 'left' }]}>Subject</Text>
+            <Text style={[styles.tableHeaderCellLeft, { width: hasComponents ? '22%' : '32%' }]}>Subject</Text>
             {hasComponents ? (
               <>
-                {/* We'll show up to 3 component columns generically */}
-                {(() => {
-                  // Collect all unique component names in order
-                  const compNames: string[] = []
-                  student.scores.forEach(s => {
-                    s.components.forEach(c => {
-                      if (!compNames.includes(c.component_name)) compNames.push(c.component_name)
-                    })
-                  })
-                  return compNames.map(name => (
-                    <Text key={name} style={[styles.tableHeaderCell, { width: `${Math.floor(52 / compNames.length)}%` }]}>
+                {compNames.map(name => {
+                  const colWidth = `${Math.floor((100 - 22 - 11 - 9 - 7) / compCount)}%`
+                  return (
+                    <Text key={name} style={[styles.tableHeaderCell, { width: colWidth }]}>
                       {name}
                     </Text>
-                  ))
-                })()}
+                  )
+                })}
                 <Text style={[styles.tableHeaderCell, { width: '11%' }]}>Total</Text>
                 <Text style={[styles.tableHeaderCell, { width: '9%' }]}>%</Text>
                 <Text style={[styles.tableHeaderCell, { width: '7%' }]}>Grd</Text>
@@ -273,34 +286,29 @@ export function StudentReportCard({
                 <Text style={[styles.tableHeaderCell, { width: '15%' }]}>Max</Text>
                 <Text style={[styles.tableHeaderCell, { width: '15%' }]}>%</Text>
                 <Text style={[styles.tableHeaderCell, { width: '10%' }]}>Grd</Text>
-                <Text style={[styles.tableHeaderCell, { width: '10%', textAlign: 'left' }]}>Remark</Text>
+                <Text style={[styles.tableHeaderCell, { width: '13%', textAlign: 'left' }]}>Remark</Text>
               </>
             )}
           </View>
 
           {student.scores.map((subject, idx) => {
-            const compNames: string[] = []
-            student.scores.forEach(s => s.components.forEach(c => {
-              if (!compNames.includes(c.component_name)) compNames.push(c.component_name)
-            }))
-            const colWidth = `${Math.floor(52 / compNames.length)}%`
-
             return (
               <View key={subject.subject_id} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-                <Text style={[styles.cellSubject, { width: hasComponents ? '22%' : '35%' }]}>
+                <Text style={[styles.cellSubject, { width: hasComponents ? '22%' : '32%' }]}>
                   {subject.subject_name}
                 </Text>
                 {hasComponents ? (
                   <>
                     {compNames.map(name => {
                       const comp = subject.components.find(c => c.component_name === name)
+                      const colWidth = `${Math.floor((100 - 22 - 11 - 9 - 7) / compCount)}%`
                       return (
                         <Text key={name} style={[styles.cell, { width: colWidth }]}>
-                          {comp ? comp.score : '—'}
+                          {comp && comp.score !== undefined && comp.score !== null ? comp.score : '—'}
                         </Text>
                       )
                     })}
-                    <Text style={[styles.cell, { width: '11%', fontFamily: 'Helvetica-Bold' }]}>
+                    <Text style={[styles.cellTotal, { width: '11%' }]}>
                       {subject.total}
                     </Text>
                     <Text style={[styles.cell, { width: '9%' }]}>
@@ -316,7 +324,7 @@ export function StudentReportCard({
                     <Text style={[styles.cell, { width: '15%' }]}>{subject.max_score}</Text>
                     <Text style={[styles.cell, { width: '15%' }]}>{subject.percentage.toFixed(1)}%</Text>
                     <Text style={[styles.cell, { width: '10%', fontFamily: 'Helvetica-Bold', color: gradeColor(subject.grade) }]}>{subject.grade}</Text>
-                    <Text style={[styles.cellRemark, { width: '10%' }]}>{subject.remark || ''}</Text>
+                    <Text style={[styles.cellRemark, { width: '13%' }]}>{subject.remark || ''}</Text>
                   </>
                 )}
               </View>
