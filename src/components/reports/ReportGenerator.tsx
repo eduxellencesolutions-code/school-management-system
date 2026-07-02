@@ -206,21 +206,37 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     }
   }
 
+  // ✅ UPDATED: generateReport - saves directly as completed
   async function generateReport() {
     if (!reportData) return
     setLoading(true)
 
-    const { data: profile } = await supabase.from('users').select('organization_id').eq('id', userId).single()
-    const { data: rec } = await supabase.from('reports').insert({
-      organization_id: profile?.organization_id,
-      group_id: groupId, type: 'broadsheet', status: 'pending', filters: {}, created_by: userId,
-    }).select('id').single()
+    try {
+      const { data: profile } = await supabase
+        .from('users').select('organization_id').eq('id', userId).single()
 
-    if (rec?.id) {
-      await supabase.from('reports').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', rec.id)
+      const { error } = await supabase.from('reports').insert({
+        organization_id: profile?.organization_id,
+        group_id: groupId,
+        type: 'broadsheet',
+        status: 'completed',          // ← directly completed, no pending step
+        completed_at: new Date().toISOString(),
+        filters: {},
+        created_by: userId,
+      })
+
+      if (error) {
+        console.error('Report save error:', error)
+        toast.error('Report generated but could not be saved')
+      } else {
+        toast.success('Report saved!')
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+      setStep('preview')
     }
-    setLoading(false)
-    setStep('preview')
   }
 
   async function uploadSignature(type: 'teacher' | 'principal', file: File) {
