@@ -142,11 +142,13 @@ async function generateReportData(
     }))
   })
 
-  // ✅ Calculate max possible score per subject
+  // ✅ Calculate max possible score per subject - FIXED: start reduce at 0, not 100
   const subjectMaxScore: Record<string, number> = {}
   subjects.forEach((subject: any) => {
     const comps = subjectComponentMap[subject.id] || []
-    subjectMaxScore[subject.id] = comps.reduce((sum: number, c: any) => sum + c.max_score, 100)
+    subjectMaxScore[subject.id] = comps.length > 0 
+      ? comps.reduce((sum: number, c: any) => sum + c.max_score, 0)
+      : 100
   })
 
   const learnerIds = learners.map((l: any) => l.id)
@@ -209,7 +211,7 @@ async function generateReportData(
       last_name: learner.last_name,
       admission_number: learner.admission_number,
       subject_totals: subjectTotals,
-      subject_details: subjectDetails, // ✅ NEW: Detailed subject scores with components
+      subject_details: subjectDetails,
       overall_total: overallTotal,
       average: Math.round(average * 10) / 10,
       percentage: Math.round(percentage * 10) / 10,
@@ -220,6 +222,7 @@ async function generateReportData(
     }
   })
 
+  // ✅ Calculate positions
   const sorted = [...reportData].sort((a, b) => b.overall_total - a.overall_total)
   sorted.forEach((item, index) => {
     item.position = index > 0 && item.overall_total === sorted[index - 1].overall_total
@@ -227,8 +230,11 @@ async function generateReportData(
       : index + 1
   })
 
+  // ✅ Sort by position before returning
+  const sortedByPosition = [...reportData].sort((a, b) => a.position - b.position)
+
   return {
-    learners: reportData,
+    learners: sortedByPosition,  // ✅ Sorted by position
     subjects: subjects.map((s: any) => ({
       id: s.id,
       name: s.name,
@@ -236,7 +242,7 @@ async function generateReportData(
       template_id: s.template_id
     })),
     components,
-    grading_system: grades, // ✅ Store grading system used
+    grading_system: grades,
     generated_at: new Date().toISOString(),
     summary: {
       total_learners: learners.length,
