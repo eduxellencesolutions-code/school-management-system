@@ -16,13 +16,14 @@ export function getGrade(percentage: number, gradingSystem: GradingSystem[]): Gr
 }
 
 // Default Nigerian grading (used as fallback before custom system is set)
+// ✅ FIXED: Updated max_score values to .99 to handle decimal percentages correctly
 export const DEFAULT_GRADING: GradingSystem[] = [
   { id: '1', organization_id: '', name: 'Default', grade_letter: 'A', min_score: 70, max_score: 100, remark: 'Excellent',   created_at: '' },
-  { id: '2', organization_id: '', name: 'Default', grade_letter: 'B', min_score: 60, max_score: 69,  remark: 'Very Good',   created_at: '' },
-  { id: '3', organization_id: '', name: 'Default', grade_letter: 'C', min_score: 50, max_score: 59,  remark: 'Good',        created_at: '' },
-  { id: '4', organization_id: '', name: 'Default', grade_letter: 'D', min_score: 40, max_score: 49,  remark: 'Pass',        created_at: '' },
-  { id: '5', organization_id: '', name: 'Default', grade_letter: 'E', min_score: 30, max_score: 39,  remark: 'Below Pass',  created_at: '' },
-  { id: '6', organization_id: '', name: 'Default', grade_letter: 'F', min_score: 0,  max_score: 29,  remark: 'Fail',        created_at: '' },
+  { id: '2', organization_id: '', name: 'Default', grade_letter: 'B', min_score: 60, max_score: 69.99,  remark: 'Very Good',   created_at: '' },
+  { id: '3', organization_id: '', name: 'Default', grade_letter: 'C', min_score: 50, max_score: 59.99,  remark: 'Good',        created_at: '' },
+  { id: '4', organization_id: '', name: 'Default', grade_letter: 'D', min_score: 40, max_score: 49.99,  remark: 'Pass',        created_at: '' },
+  { id: '5', organization_id: '', name: 'Default', grade_letter: 'E', min_score: 30, max_score: 39.99,  remark: 'Below Pass',  created_at: '' },
+  { id: '6', organization_id: '', name: 'Default', grade_letter: 'F', min_score: 0,  max_score: 29.99,  remark: 'Fail',        created_at: '' },
 ]
 
 // ─── Score calculations ───────────────────────────────────────────────────────
