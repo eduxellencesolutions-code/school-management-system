@@ -55,13 +55,13 @@ export default async function ReportsPage() {
 
   // Stats
   const totalReports = reports?.length ?? 0
-  const completedReports = reports?.filter(r => r.status === 'completed').length ?? 0
+  const completedReports = reports?.filter(r => r.status === 'ready').length ?? 0
   const processingReports = reports?.filter(r => r.status === 'processing' || r.status === 'pending').length ?? 0
   const failedReports = reports?.filter(r => r.status === 'failed').length ?? 0
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'ready':
         return <CheckCircle size={16} className="text-green-600" />
       case 'processing':
         return <Clock size={16} className="text-amber-600 animate-pulse" />
@@ -74,7 +74,7 @@ export default async function ReportsPage() {
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      completed: 'bg-green-100 text-green-800',
+      ready: 'bg-green-100 text-green-800',
       processing: 'bg-amber-100 text-amber-800',
       failed: 'bg-red-100 text-red-800',
       pending: 'bg-gray-100 text-gray-800',
@@ -110,7 +110,7 @@ export default async function ReportsPage() {
         </div>
         <div className="stat-card border-green-200">
           <div className="stat-value text-green-600">{completedReports}</div>
-          <div className="stat-label">Completed</div>
+          <div className="stat-label">Ready</div>
         </div>
         <div className="stat-card border-amber-200">
           <div className="stat-value text-amber-600">{processingReports}</div>
@@ -171,7 +171,7 @@ export default async function ReportsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {report.status === 'completed' && report.download_url && (
+                    {report.status === 'ready' && report.download_url && (
                       <a
                         href={report.download_url}
                         download
