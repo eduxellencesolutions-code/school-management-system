@@ -1,6 +1,3 @@
-Here's the complete `ReportGenerator.tsx` with the Step 3 broadsheet table replaced:
-
-```tsx
 'use client'
 
 import { useState } from 'react'
