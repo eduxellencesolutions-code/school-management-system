@@ -1,3 +1,6 @@
+Here's the complete `ReportGenerator.tsx` with the Step 3 broadsheet table replaced:
+
+```tsx
 'use client'
 
 import { useState } from 'react'
@@ -690,61 +693,121 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mt-0.5">Result Broadsheet</p>
           </div>
 
-          {/* Broadsheet table */}
+          {/* ✅ UPDATED Broadsheet table with CA breakdown */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-surface-100 border-b border-surface-200">
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider">#</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider sticky left-0 bg-surface-100">#</th>
+                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider sticky left-8 bg-surface-100 min-w-[140px]">Student</th>
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider">Adm. No</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider min-w-[140px]">Student Name</th>
-                  {reportData.subjects.map(s => (
-                    <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center whitespace-nowrap">
-                      {s.name}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Total</th>
+                  {reportData.subjects.map(s => {
+                    const summary = reportData.subjectSummaries.find(ss => ss.id === s.id)
+                    const comps = summary?.components ?? []
+                    return (
+                      <th key={s.id} colSpan={comps.length > 0 ? comps.length + 1 : 2}
+                        className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center border-l border-surface-200 whitespace-nowrap">
+                        {s.name}
+                      </th>
+                    )
+                  })}
+                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center border-l border-surface-200">Grand Total</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">%</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Grade</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Pos.</th>
                 </tr>
+                {/* Component sub-header */}
+                <tr className="bg-surface-50 border-b border-surface-200">
+                  <th colSpan={3} />
+                  {reportData.subjects.map(s => {
+                    const summary = reportData.subjectSummaries.find(ss => ss.id === s.id)
+                    const comps = summary?.components ?? []
+                    return (
+                      <th key={s.id} colSpan={comps.length > 0 ? comps.length + 1 : 2} className="border-l border-surface-200 p-0">
+                        <div className="flex">
+                          {comps.map(c => (
+                            <div key={c.id} className="flex-1 px-2 py-1.5 text-center text-[10px] font-semibold text-ink-faint border-r border-surface-200 whitespace-nowrap">
+                              {c.name}<span className="text-ink-faint font-normal">/{c.max_score}</span>
+                            </div>
+                          ))}
+                          <div className="flex-1 px-2 py-1.5 text-center text-[10px] font-semibold text-ink-muted whitespace-nowrap">Total</div>
+                        </div>
+                      </th>
+                    )
+                  })}
+                  <th colSpan={4} />
+                </tr>
               </thead>
               <tbody>
-                {reportData.rows.map((row, i) => (
-                  <tr key={row.learner.id} className={cn('border-b border-surface-200', i % 2 === 0 ? 'bg-white' : 'bg-surface-50/50')}>
-                    <td className="px-3 py-2.5 text-ink-muted">{i + 1}</td>
-                    <td className="px-3 py-2.5 font-mono text-ink-muted">{row.learner.admission_number ?? '—'}</td>
-                    <td className="px-3 py-2.5 font-medium text-ink whitespace-nowrap">{row.learner.last_name} {row.learner.first_name}</td>
-                    {row.subjectTotals.map((t, j) => (
-                      <td key={j} className="px-3 py-2.5 text-center font-mono">
-                        {t !== null ? (
-                          <span className={cn('font-semibold',
-                            t >= 70 ? 'text-green-700' : t >= 50 ? 'text-amber-700' : t >= 40 ? 'text-orange-600' : 'text-red-600'
-                          )}>{t}</span>
-                        ) : <span className="text-ink-faint">—</span>}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2.5 text-center font-bold font-mono text-ink">{row.grandTotal}</td>
-                    <td className="px-3 py-2.5 text-center font-mono text-ink-muted">{row.pct.toFixed(1)}%</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <span className={cn('font-bold',
-                        row.grade === 'A' ? 'text-green-600' : row.grade === 'B' ? 'text-blue-600' :
-                        row.grade === 'C' ? 'text-amber-600' : row.grade === 'D' ? 'text-orange-600' : 'text-red-600'
-                      )}>{row.grade}</span>
+                {/* Sort by position */}
+                {[...reportData.rows].sort((a, b) => a.position - b.position).map((row, i) => (
+                  <tr key={row.learner.id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
+                    <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit">{i + 1}</td>
+                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit">
+                      {row.learner.last_name} {row.learner.first_name}
                     </td>
-                    <td className="px-3 py-2.5 text-center font-bold text-ink">{row.position}</td>
+                    <td className="px-3 py-2 font-mono text-ink-muted">{row.learner.admission_number ?? '—'}</td>
+                    {reportData.subjects.map((s, si) => {
+                      const summary = reportData.subjectSummaries.find(ss => ss.id === s.id)
+                      const comps = summary?.components ?? []
+                      const subjectTotal = row.subjectTotals[si]
+                      return (
+                        <td key={s.id} colSpan={comps.length > 0 ? comps.length + 1 : 2}
+                          className="p-0 border-l border-surface-200">
+                          <div className="flex">
+                            {comps.map(c => {
+                              const score = row.componentScores[s.id]?.[c.id]
+                              return (
+                                <div key={c.id} className="flex-1 px-2 py-2 text-center font-mono border-r border-surface-100 text-[11px]">
+                                  {score !== null && score !== undefined ? score : '—'}
+                                </div>
+                              )
+                            })}
+                            <div className="flex-1 px-2 py-2 text-center font-mono font-semibold text-[11px]">
+                              {subjectTotal !== null ? (
+                                <span className={
+                                  subjectTotal >= 70 ? 'text-green-700' :
+                                  subjectTotal >= 50 ? 'text-amber-700' :
+                                  subjectTotal >= 40 ? 'text-orange-600' : 'text-red-600'
+                                }>{subjectTotal}</span>
+                              ) : '—'}
+                            </div>
+                          </div>
+                        </td>
+                      )
+                    })}
+                    <td className="px-3 py-2 text-center font-bold font-mono border-l border-surface-200">{row.grandTotal}</td>
+                    <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.pct.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={
+                        row.grade === 'A' ? 'font-bold text-green-600' :
+                        row.grade === 'B' ? 'font-bold text-blue-600' :
+                        row.grade === 'C' ? 'font-bold text-amber-600' :
+                        row.grade === 'D' ? 'font-bold text-orange-600' : 'font-bold text-red-600'
+                      }>{row.grade}</span>
+                    </td>
+                    <td className="px-3 py-2 text-center font-bold text-ink">{row.position}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-surface-100 border-t-2 border-surface-200 font-semibold">
-                  <td colSpan={3} className="px-3 py-2.5 text-xs text-ink-muted uppercase tracking-wider">Class Average</td>
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-ink-muted uppercase">Class Average</td>
                   {reportData.subjects.map((s, si) => {
+                    const summary = reportData.subjectSummaries.find(ss => ss.id === s.id)
+                    const comps = summary?.components ?? []
                     const vals = reportData.rows.map(r => r.subjectTotals[si]).filter((v): v is number => v !== null)
                     const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-                    return <td key={s.id} className="px-3 py-2.5 text-center font-mono text-ink">{avg !== null ? avg.toFixed(1) : '—'}</td>
+                    return (
+                      <td key={s.id} colSpan={comps.length > 0 ? comps.length + 1 : 2}
+                        className="px-3 py-2.5 text-center font-mono text-ink border-l border-surface-200">
+                        {avg !== null ? avg.toFixed(1) : '—'}
+                      </td>
+                    )
                   })}
-                  <td className="px-3 py-2.5 text-center font-mono text-ink">{reportData.classAvg.toFixed(1)}</td>
+                  <td className="px-3 py-2.5 text-center font-mono text-ink border-l border-surface-200">
+                    {reportData.classAvg.toFixed(1)}
+                  </td>
                   <td colSpan={3} />
                 </tr>
               </tfoot>
