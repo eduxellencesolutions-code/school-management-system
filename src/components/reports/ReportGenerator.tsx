@@ -690,7 +690,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mt-0.5">Result Broadsheet</p>
           </div>
 
-          {/* ✅ UPDATED Broadsheet table with CA breakdown */}
+          {/* ✅ UPDATED: Broadsheet table with CA breakdown and fixed class average */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -713,7 +713,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Grade</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase tracking-wider text-center">Pos.</th>
                 </tr>
-                {/* Component sub-header */}
+                {/* Component sub-header with max scores */}
                 <tr className="bg-surface-50 border-b border-surface-200">
                   <th colSpan={3} />
                   {reportData.subjects.map(s => {
@@ -793,12 +793,28 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
                   {reportData.subjects.map((s, si) => {
                     const summary = reportData.subjectSummaries.find(ss => ss.id === s.id)
                     const comps = summary?.components ?? []
-                    const vals = reportData.rows.map(r => r.subjectTotals[si]).filter((v): v is number => v !== null)
-                    const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
                     return (
                       <td key={s.id} colSpan={comps.length > 0 ? comps.length + 1 : 2}
-                        className="px-3 py-2.5 text-center font-mono text-ink border-l border-surface-200">
-                        {avg !== null ? avg.toFixed(1) : '—'}
+                        className="p-0 border-l border-surface-200">
+                        <div className="flex">
+                          {comps.map(c => {
+                            const vals = reportData.rows
+                              .map(r => r.componentScores[s.id]?.[c.id])
+                              .filter((v): v is number => v !== null && v !== undefined)
+                            const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+                            return (
+                              <div key={c.id} className="flex-1 px-2 py-2.5 text-center font-mono text-ink border-r border-surface-100">
+                                {avg !== null ? avg.toFixed(1) : '—'}
+                              </div>
+                            )
+                          })}
+                          <div className="flex-1 px-2 py-2.5 text-center font-mono font-semibold text-ink">
+                            {reportData.rows
+                              .map(r => r.subjectTotals[si])
+                              .filter((v): v is number => v !== null)
+                              .reduce((a, b) => a + b, 0) / reportData.rows.length}
+                          </div>
+                        </div>
                       </td>
                     )
                   })}
