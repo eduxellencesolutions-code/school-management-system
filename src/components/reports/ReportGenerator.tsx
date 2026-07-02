@@ -287,7 +287,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     toast.success('Excel downloaded!')
   }
 
-  // ✅ UPDATED: PDF Export with component breakdown
+  // ✅ UPDATED: PDF Export with component breakdown and pdfOptions
   async function downloadPDF() {
     if (!reportData || !isInstitution) return
     setGeneratingPdf(true)
@@ -351,6 +351,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
           first_name: row.learner.first_name,
           last_name: row.learner.last_name,
           admission_number: row.learner.admission_number || '',
+          gender: row.learner.gender || '',
           scores: subjectScores,
           total_score: row.grandTotal,
           max_possible: maxPossible,
@@ -374,6 +375,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             teacherSignature={teacherSigUrl || undefined}
             principalName="Principal"
             principalSignature={principalSigUrl || undefined}
+            pdfOptions={pdfOptions}  // ✅ PASS PDF OPTIONS
           />
         )
 
