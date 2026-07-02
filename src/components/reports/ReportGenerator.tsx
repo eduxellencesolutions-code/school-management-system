@@ -11,6 +11,11 @@ import {
 } from 'lucide-react'
 import { cn, DEFAULT_GRADING } from '@/lib/utils'
 import type { Organization } from '@/types'
+// ✅ Add imports at the top for PDF generation
+import { pdf } from '@react-pdf/renderer'
+import { StudentReportCard } from '@/components/reports/StudentReportCard'
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver'
 
 interface Group {
   id: string
@@ -282,19 +287,13 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     toast.success('Excel downloaded!')
   }
 
-  // ✅ UPDATED: PDF Export using @react-pdf/renderer (matching Script 1)
+  // ✅ UPDATED: PDF Export using @react-pdf/renderer (using top-level imports)
   async function downloadPDF() {
     if (!reportData || !isInstitution) return
     setGeneratingPdf(true)
     const loadingToast = toast.loading(`Generating PDFs for ${reportData.learners.length} students...`)
 
     try {
-      // Dynamically import @react-pdf/renderer
-      const { pdf } = await import('@react-pdf/renderer')
-      const JSZip = (await import('jszip')).default
-      const { StudentReportCard } = await import('@/components/reports/StudentReportCard')
-      const { saveAs } = await import('file-saver')
-
       const zip = new JSZip()
       const pdfBlobs: Blob[] = []
 
@@ -351,6 +350,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
           />
         )
 
+        // ✅ Use the imported pdf function
         const blob = await pdf(pdfDoc).toBlob()
         pdfBlobs.push(blob)
         zip.file(`${row.learner.last_name}_${row.learner.first_name}_report_card.pdf`, blob)
@@ -368,7 +368,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     } catch (error) {
       console.error('PDF error:', error)
       toast.dismiss(loadingToast)
-      toast.error('Failed to generate PDFs')
+      toast.error('Failed to generate PDFs: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setGeneratingPdf(false)
     }
