@@ -1,6 +1,3 @@
-Here's the updated `dashboard/page.tsx` with only the status filter changed:
-
-```tsx
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -409,4 +406,3 @@ export default async function DashboardPage() {
     </div>
   )
 }
-```
