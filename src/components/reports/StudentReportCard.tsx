@@ -1,197 +1,156 @@
 'use client'
 
-import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 
-// Register fonts (optional - for better appearance)
-Font.register({
-  family: 'Inter',
-  src: 'https://fonts.gstatic.com/s/inter/v12/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7W0Q5nw.woff2'
-})
+const gold = '#C8960C'
+const goldLight = '#F5E6B8'
+const cream = '#FDFAF4'
+const dark = '#0D0D0D'
+const muted = '#6B6456'
+const border = '#E2D9C8'
 
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
+    padding: 36,
     fontFamily: 'Helvetica',
     fontSize: 10,
     backgroundColor: '#FFFFFF',
   },
+  // ── Header ──────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottom: '2px solid #C8960C',
+    borderBottomWidth: 2,
+    borderBottomColor: gold,
     paddingBottom: 12,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  logo: {
-    width: 60,
-    height: 60,
-    marginRight: 12,
-  },
-  schoolName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0D0D0D',
-  },
-  schoolMotto: {
-    fontSize: 9,
-    color: '#6B6456',
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: 'bold',
+  logo: { width: 56, height: 56, marginRight: 12 },
+  headerText: { flex: 1 },
+  schoolName: { fontSize: 17, fontFamily: 'Helvetica-Bold', color: dark },
+  schoolMotto: { fontSize: 8.5, color: muted, marginTop: 2, fontFamily: 'Helvetica-Oblique' },
+  reportTitle: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
     textAlign: 'center',
-    backgroundColor: '#F5E6B8',
-    padding: 6,
+    backgroundColor: goldLight,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     marginBottom: 12,
-    color: '#0D0D0D',
+    color: dark,
+    borderRadius: 3,
   },
-  studentInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    padding: 8,
-    backgroundColor: '#FDFAF4',
+  // ── Student Info ─────────────────────────────────────────────────
+  infoBox: {
+    backgroundColor: cream,
     borderRadius: 4,
-  },
-  studentInfoText: {
-    fontSize: 10,
-    color: '#0D0D0D',
-  },
-  studentInfoLabel: {
-    fontWeight: 'bold',
-    color: '#6B6456',
-  },
-  table: {
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: border,
+    padding: 8,
     marginBottom: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
+  infoItem: { width: '48%' },
+  infoLabel: { fontSize: 8, color: muted, fontFamily: 'Helvetica-Bold', marginBottom: 1 },
+  infoValue: { fontSize: 10, color: dark },
+  // ── Table ────────────────────────────────────────────────────────
+  table: { marginBottom: 12 },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#C8960C',
-    paddingVertical: 6,
+    backgroundColor: gold,
+    paddingVertical: 5,
     paddingHorizontal: 4,
-    borderRadius: 4,
+    borderRadius: 3,
+    marginBottom: 1,
   },
-  tableHeaderText: {
-    fontSize: 9,
-    fontWeight: 'bold',
+  tableHeaderCell: {
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Bold',
     color: '#FFFFFF',
     textAlign: 'center',
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: 5,
+    paddingVertical: 4,
     paddingHorizontal: 4,
-    borderBottom: '1px solid #E2E8F0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE8DC',
   },
-  tableRowAlternate: {
+  tableRowAlt: {
     flexDirection: 'row',
-    paddingVertical: 5,
+    paddingVertical: 4,
     paddingHorizontal: 4,
-    borderBottom: '1px solid #E2E8F0',
-    backgroundColor: '#FDFAF4',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE8DC',
+    backgroundColor: cream,
   },
-  tableCell: {
-    fontSize: 9,
-    textAlign: 'center',
-    color: '#0D0D0D',
-  },
-  tableCellSubject: {
-    fontSize: 9,
-    textAlign: 'left',
-    color: '#0D0D0D',
-    fontWeight: 'bold',
-  },
+  cellSubject: { fontSize: 9, color: dark, fontFamily: 'Helvetica-Bold', textAlign: 'left' },
+  cell: { fontSize: 9, color: dark, textAlign: 'center' },
+  cellRemark: { fontSize: 8.5, color: muted, textAlign: 'left' },
+  // ── Summary ──────────────────────────────────────────────────────
   summary: {
-    marginTop: 12,
-    padding: 10,
-    backgroundColor: '#F5E6B8',
+    backgroundColor: goldLight,
     borderRadius: 4,
+    padding: 10,
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginBottom: 12,
   },
-  summaryItem: {
-    textAlign: 'center',
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0D0D0D',
-  },
-  summaryLabel: {
-    fontSize: 8,
-    color: '#6B6456',
-    marginTop: 2,
-  },
+  summaryItem: { alignItems: 'center' },
+  summaryValue: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: dark },
+  summaryLabel: { fontSize: 7.5, color: muted, marginTop: 2 },
+  // ── Remarks ──────────────────────────────────────────────────────
   remarks: {
-    marginTop: 12,
-    padding: 10,
-    border: '1px solid #C8960C',
+    borderWidth: 1,
+    borderColor: gold,
     borderRadius: 4,
+    padding: 8,
+    marginBottom: 12,
   },
-  remarksTitle: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: '#6B6456',
-    marginBottom: 4,
-  },
-  remarksText: {
-    fontSize: 9,
-    color: '#0D0D0D',
-    lineHeight: 1.5,
-  },
+  remarksLabel: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 3 },
+  remarksText: { fontSize: 9, color: dark, lineHeight: 1.5 },
+  // ── Footer / Signatures ───────────────────────────────────────────
   footer: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTop: '1px solid #E2E8F0',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: border,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  signature: {
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  signatureLine: {
-    width: 100,
-    borderBottom: '1px solid #0D0D0D',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  signatureLabel: {
-    fontSize: 8,
-    color: '#6B6456',
-  },
-  gradeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  gradeA: { backgroundColor: '#DCFCE7', color: '#166534' },
-  gradeB: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
-  gradeC: { backgroundColor: '#FEF3C7', color: '#92400E' },
-  gradeD: { backgroundColor: '#FED7AA', color: '#9A3412' },
-  gradeE: { backgroundColor: '#FDE68A', color: '#78350F' },
-  gradeF: { backgroundColor: '#FEE2E2', color: '#991B1B' },
+  sigBlock: { alignItems: 'center', width: '30%' },
+  sigImage: { width: 80, height: 24, marginBottom: 2, objectFit: 'contain' },
+  sigLine: { width: 100, borderBottomWidth: 1, borderBottomColor: dark, marginBottom: 3 },
+  sigLabel: { fontSize: 7.5, color: muted },
+  sigName: { fontSize: 8, color: dark, marginTop: 2 },
 })
+
+interface ComponentScore {
+  component_id: string
+  component_name: string
+  score: number
+  max_score: number
+}
+
+interface SubjectScore {
+  subject_id: string
+  subject_name: string
+  components: ComponentScore[]
+  total: number
+  max_score: number
+  percentage: number
+  grade: string
+  remark?: string
+}
 
 interface StudentReportCardProps {
   student: {
-    id: string
     first_name: string
     last_name: string
-    admission_number: string
-    scores: {
-      subject_name: string
-      total: number
-      max_score: number
-      percentage: number
-      grade: string
-      remark?: string
-    }[]
+    admission_number?: string
+    scores: SubjectScore[]
     total_score: number
     max_possible: number
     percentage: number
@@ -212,6 +171,17 @@ interface StudentReportCardProps {
   principalSignature?: string
 }
 
+function gradeColor(grade: string): string {
+  switch (grade) {
+    case 'A': return '#166534'
+    case 'B': return '#1E40AF'
+    case 'C': return '#92400E'
+    case 'D': return '#9A3412'
+    case 'E': return '#78350F'
+    default:  return '#991B1B'
+  }
+}
+
 export function StudentReportCard({
   student,
   schoolName,
@@ -225,121 +195,147 @@ export function StudentReportCard({
   principalName,
   principalSignature,
 }: StudentReportCardProps) {
-  const getGradeStyle = (grade: string) => {
-    switch (grade) {
-      case 'A': return styles.gradeA
-      case 'B': return styles.gradeB
-      case 'C': return styles.gradeC
-      case 'D': return styles.gradeD
-      case 'E': return styles.gradeE
-      case 'F': return styles.gradeF
-      default: return styles.gradeF
-    }
-  }
 
-  const subjectColumns = [
-    { key: 'subject', label: 'Subject', width: '30%' },
-    { key: 'score', label: 'Score', width: '12%' },
-    { key: 'max', label: 'Max', width: '12%' },
-    { key: 'percent', label: '%', width: '12%' },
-    { key: 'grade', label: 'Grade', width: '12%' },
-    { key: 'remark', label: 'Remark', width: '22%' },
-  ]
+  // Build columns dynamically based on whether components exist
+  const hasComponents = student.scores.some(s => s.components.length > 0)
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+
         {/* Header */}
         <View style={styles.header}>
-          {schoolLogo && (
-            <Image src={schoolLogo} style={styles.logo} />
-          )}
-          <View>
-            <Text style={styles.schoolName}>{schoolName || 'Eduxellence School'}</Text>
+          {schoolLogo && <Image src={schoolLogo} style={styles.logo} />}
+          <View style={styles.headerText}>
+            <Text style={styles.schoolName}>{schoolName}</Text>
             {schoolMotto && <Text style={styles.schoolMotto}>"{schoolMotto}"</Text>}
           </View>
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>ACADEMIC REPORT CARD</Text>
+        <Text style={styles.reportTitle}>STUDENT RESULT SHEET</Text>
 
-        {/* Student Info */}
-        <View style={styles.studentInfo}>
-          <Text style={styles.studentInfoText}>
-            <Text style={styles.studentInfoLabel}>Name:</Text> {student.last_name} {student.first_name}
-          </Text>
-          <Text style={styles.studentInfoText}>
-            <Text style={styles.studentInfoLabel}>Admission No:</Text> {student.admission_number}
-          </Text>
-          <Text style={styles.studentInfoText}>
-            <Text style={styles.studentInfoLabel}>Class:</Text> {className}
-          </Text>
-          <Text style={styles.studentInfoText}>
-            <Text style={styles.studentInfoLabel}>Term:</Text> {termName} · {sessionName}
-          </Text>
+        {/* Student info */}
+        <View style={styles.infoBox}>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Name</Text>
+            <Text style={styles.infoValue}>{student.last_name} {student.first_name}</Text>
+          </View>
+          {student.admission_number ? (
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Admission No.</Text>
+              <Text style={styles.infoValue}>{student.admission_number}</Text>
+            </View>
+          ) : null}
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Class</Text>
+            <Text style={styles.infoValue}>{className}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Term / Session</Text>
+            <Text style={styles.infoValue}>{termName} · {sessionName}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Position</Text>
+            <Text style={[styles.infoValue, { color: gold, fontFamily: 'Helvetica-Bold' }]}>{student.position}</Text>
+          </View>
         </View>
 
-        {/* Subject Table */}
+        {/* Scores table */}
         <View style={styles.table}>
+          {/* Table header */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[0].width, textAlign: 'left' }]}>
-              Subject
-            </Text>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[1].width }]}>
-              Score
-            </Text>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[2].width }]}>
-              Max
-            </Text>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[3].width }]}>
-              %
-            </Text>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[4].width }]}>
-              Grade
-            </Text>
-            <Text style={[styles.tableHeaderText, { width: subjectColumns[5].width }]}>
-              Remark
-            </Text>
+            <Text style={[styles.tableHeaderCell, { width: hasComponents ? '22%' : '35%', textAlign: 'left' }]}>Subject</Text>
+            {hasComponents ? (
+              <>
+                {/* We'll show up to 3 component columns generically */}
+                {(() => {
+                  // Collect all unique component names in order
+                  const compNames: string[] = []
+                  student.scores.forEach(s => {
+                    s.components.forEach(c => {
+                      if (!compNames.includes(c.component_name)) compNames.push(c.component_name)
+                    })
+                  })
+                  return compNames.map(name => (
+                    <Text key={name} style={[styles.tableHeaderCell, { width: `${Math.floor(52 / compNames.length)}%` }]}>
+                      {name}
+                    </Text>
+                  ))
+                })()}
+                <Text style={[styles.tableHeaderCell, { width: '11%' }]}>Total</Text>
+                <Text style={[styles.tableHeaderCell, { width: '9%' }]}>%</Text>
+                <Text style={[styles.tableHeaderCell, { width: '7%' }]}>Grd</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.tableHeaderCell, { width: '15%' }]}>Score</Text>
+                <Text style={[styles.tableHeaderCell, { width: '15%' }]}>Max</Text>
+                <Text style={[styles.tableHeaderCell, { width: '15%' }]}>%</Text>
+                <Text style={[styles.tableHeaderCell, { width: '10%' }]}>Grd</Text>
+                <Text style={[styles.tableHeaderCell, { width: '10%', textAlign: 'left' }]}>Remark</Text>
+              </>
+            )}
           </View>
 
-          {student.scores.map((subject, index) => (
-            <View key={subject.subject_name} style={index % 2 === 0 ? styles.tableRow : styles.tableRowAlternate}>
-              <Text style={[styles.tableCellSubject, { width: subjectColumns[0].width }]}>
-                {subject.subject_name}
-              </Text>
-              <Text style={[styles.tableCell, { width: subjectColumns[1].width }]}>
-                {subject.total || '-'}
-              </Text>
-              <Text style={[styles.tableCell, { width: subjectColumns[2].width }]}>
-                {subject.max_score}
-              </Text>
-              <Text style={[styles.tableCell, { width: subjectColumns[3].width }]}>
-                {subject.percentage.toFixed(1)}%
-              </Text>
-              <Text style={[styles.tableCell, { width: subjectColumns[4].width }]}>
-                <Text style={[styles.gradeBadge, getGradeStyle(subject.grade)]}>
-                  {subject.grade}
+          {student.scores.map((subject, idx) => {
+            const compNames: string[] = []
+            student.scores.forEach(s => s.components.forEach(c => {
+              if (!compNames.includes(c.component_name)) compNames.push(c.component_name)
+            }))
+            const colWidth = `${Math.floor(52 / compNames.length)}%`
+
+            return (
+              <View key={subject.subject_id} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
+                <Text style={[styles.cellSubject, { width: hasComponents ? '22%' : '35%' }]}>
+                  {subject.subject_name}
                 </Text>
-              </Text>
-              <Text style={[styles.tableCell, { width: subjectColumns[5].width, textAlign: 'left' }]}>
-                {subject.remark || '-'}
-              </Text>
-            </View>
-          ))}
+                {hasComponents ? (
+                  <>
+                    {compNames.map(name => {
+                      const comp = subject.components.find(c => c.component_name === name)
+                      return (
+                        <Text key={name} style={[styles.cell, { width: colWidth }]}>
+                          {comp ? comp.score : '—'}
+                        </Text>
+                      )
+                    })}
+                    <Text style={[styles.cell, { width: '11%', fontFamily: 'Helvetica-Bold' }]}>
+                      {subject.total}
+                    </Text>
+                    <Text style={[styles.cell, { width: '9%' }]}>
+                      {subject.percentage.toFixed(0)}%
+                    </Text>
+                    <Text style={[styles.cell, { width: '7%', fontFamily: 'Helvetica-Bold', color: gradeColor(subject.grade) }]}>
+                      {subject.grade}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.cell, { width: '15%' }]}>{subject.total}</Text>
+                    <Text style={[styles.cell, { width: '15%' }]}>{subject.max_score}</Text>
+                    <Text style={[styles.cell, { width: '15%' }]}>{subject.percentage.toFixed(1)}%</Text>
+                    <Text style={[styles.cell, { width: '10%', fontFamily: 'Helvetica-Bold', color: gradeColor(subject.grade) }]}>{subject.grade}</Text>
+                    <Text style={[styles.cellRemark, { width: '10%' }]}>{subject.remark || ''}</Text>
+                  </>
+                )}
+              </View>
+            )
+          })}
         </View>
 
         {/* Summary */}
         <View style={styles.summary}>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>{student.total_score.toFixed(1)}</Text>
-            <Text style={styles.summaryLabel}>Total Score</Text>
+            <Text style={styles.summaryValue}>{student.total_score}</Text>
+            <Text style={styles.summaryLabel}>Grand Total</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{student.percentage.toFixed(1)}%</Text>
             <Text style={styles.summaryLabel}>Percentage</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: '#C8960C' }]}>{student.grade}</Text>
+            <Text style={[styles.summaryValue, { color: gradeColor(student.grade) }]}>{student.grade}</Text>
             <Text style={styles.summaryLabel}>Grade</Text>
           </View>
           <View style={styles.summaryItem}>
@@ -348,38 +344,41 @@ export function StudentReportCard({
           </View>
         </View>
 
-        {/* Remarks */}
+        {/* Teacher remark */}
         <View style={styles.remarks}>
-          <Text style={styles.remarksTitle}>TEACHER'S REMARK</Text>
+          <Text style={styles.remarksLabel}>CLASS TEACHER'S REMARK</Text>
           <Text style={styles.remarksText}>
             {student.teacher_remark || 'Student shows satisfactory performance. Keep up the good work!'}
           </Text>
-          {student.principal_remark && (
+          {student.principal_remark ? (
             <>
-              <Text style={[styles.remarksTitle, { marginTop: 8 }]}>PRINCIPAL'S REMARK</Text>
+              <Text style={[styles.remarksLabel, { marginTop: 6 }]}>PRINCIPAL'S REMARK</Text>
               <Text style={styles.remarksText}>{student.principal_remark}</Text>
             </>
-          )}
+          ) : null}
         </View>
 
-        {/* Footer / Signatures */}
+        {/* Signatures */}
         <View style={styles.footer}>
-          <View style={styles.signature}>
-            <Text style={styles.signatureLabel}>Teacher's Signature</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>{teacherName || 'Teacher'}</Text>
+          <View style={styles.sigBlock}>
+            <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
+            {teacherSignature ? <Image src={teacherSignature} style={styles.sigImage} /> : null}
+            <View style={styles.sigLine} />
+            <Text style={styles.sigName}>{teacherName}</Text>
           </View>
-          <View style={styles.signature}>
-            <Text style={styles.signatureLabel}>Principal's Signature</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>{principalName || 'Principal'}</Text>
+          <View style={styles.sigBlock}>
+            <Text style={styles.sigLabel}>Principal's Signature</Text>
+            {principalSignature ? <Image src={principalSignature} style={styles.sigImage} /> : null}
+            <View style={styles.sigLine} />
+            <Text style={styles.sigName}>{principalName || 'Principal'}</Text>
           </View>
-          <View style={styles.signature}>
-            <Text style={styles.signatureLabel}>Date</Text>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>{new Date().toLocaleDateString('en-NG')}</Text>
+          <View style={styles.sigBlock}>
+            <Text style={styles.sigLabel}>Date</Text>
+            <View style={[styles.sigLine, { marginTop: 24 }]} />
+            <Text style={styles.sigName}>{new Date().toLocaleDateString('en-NG')}</Text>
           </View>
         </View>
+
       </Page>
     </Document>
   )
