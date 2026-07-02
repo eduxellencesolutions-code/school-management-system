@@ -266,25 +266,6 @@ export async function markReportReady(reportId: string) {
   revalidatePath('/dashboard')
 }
 
-// ✅ For form actions (returns void, uses redirect)
-export async function deleteReportAction(formData: FormData): Promise<void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-
-  const id = formData.get('id') as string
-  if (!id) {
-    throw new Error('Report ID is required')
-  }
-
-  const { error } = await supabase.from('reports').delete().eq('id', id)
-  if (error) throw error
-
-  revalidatePath('/reports')
-  revalidatePath('/dashboard')
-  redirect('/reports')
-}
-
 // ✅ For client-side calls (returns data) - works for ANY status
 export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
