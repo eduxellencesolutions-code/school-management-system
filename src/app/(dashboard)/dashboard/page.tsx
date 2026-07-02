@@ -1,3 +1,6 @@
+Here's the updated `dashboard/page.tsx` with only the status filter changed:
+
+```tsx
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -30,7 +33,7 @@ export default async function DashboardPage() {
       .eq('entered_by', authUser.id),
     supabase.from('reports').select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('status', 'completed'),
+      .eq('status', 'ready'),
     supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
       .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
       .eq('is_active', true)
@@ -43,7 +46,7 @@ export default async function DashboardPage() {
     .from('reports')
     .select('group_id')
     .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-    .eq('status', 'completed')
+    .eq('status', 'ready')
     .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
 
   const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
@@ -406,3 +409,4 @@ export default async function DashboardPage() {
     </div>
   )
 }
+```
