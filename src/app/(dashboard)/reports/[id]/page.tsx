@@ -21,11 +21,11 @@ export default async function ReportDetailPage({ params }: Props) {
 
   if (error || !report) notFound()
 
-  const group   = report.group   as { id: string; name: string; code?: string } | null
-  const term    = report.term    as { id: string; name: string } | null
-  const data    = report.report_data ?? {}
-  const learners  = data.learners  ?? []
-  const subjects  = data.subjects  ?? []
+  const group    = report.group as { id: string; name: string; code?: string } | null
+  const term     = report.term  as { id: string; name: string } | null
+  const data     = report.report_data ?? {}
+  const learners = data.learners ?? []
+  const subjects = data.subjects ?? []
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
@@ -37,7 +37,6 @@ export default async function ReportDetailPage({ params }: Props) {
         <span className="text-ink font-medium">{group?.name} — {term?.name ?? 'Report'}</span>
       </div>
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="page-title">{group?.name}</h1>
@@ -47,7 +46,6 @@ export default async function ReportDetailPage({ params }: Props) {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {/* Client component handles all downloads */}
           <ReportDownloadButtons
             reportId={id}
             groupName={group?.name ?? 'Report'}
@@ -55,14 +53,13 @@ export default async function ReportDetailPage({ params }: Props) {
             learners={learners}
             subjects={subjects}
           />
-          <DeleteReportButton 
-            reportId={id} 
-            reportName={group?.name || 'Report'} 
+          <DeleteReportButton
+            reportId={id}
+            reportName={group?.name ?? 'Report'}
           />
         </div>
       </div>
 
-      {/* Broadsheet table */}
       {learners.length > 0 ? (
         <div className="card overflow-hidden">
           <div className="px-5 py-3 bg-surface-50 border-b border-surface-200 text-center">
