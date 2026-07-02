@@ -282,206 +282,86 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     toast.success('Excel downloaded!')
   }
 
+  // ✅ UPDATED: PDF Export using @react-pdf/renderer (matching Script 1)
   async function downloadPDF() {
     if (!reportData || !isInstitution) return
     setGeneratingPdf(true)
-    toast('Generating PDFs for each student…')
+    const loadingToast = toast.loading(`Generating PDFs for ${reportData.learners.length} students...`)
 
     try {
-      // Dynamically import jsPDF
-      const { jsPDF } = await import('jspdf')
+      // Dynamically import @react-pdf/renderer
+      const { pdf } = await import('@react-pdf/renderer')
       const JSZip = (await import('jszip')).default
+      const { StudentReportCard } = await import('@/components/reports/StudentReportCard')
+      const { saveAs } = await import('file-saver')
+
       const zip = new JSZip()
+      const pdfBlobs: Blob[] = []
 
+      // Convert rows to StudentReportCard format
       for (const row of reportData.rows) {
-        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-        const W = 210, margin = 15
-        let y = margin
-
-        // ── School header ──
-        if (org?.logo_url) {
-          try {
-            doc.addImage(org.logo_url, 'PNG', W / 2 - 12, y, 24, 24)
-            y += 28
-          } catch {}
-        }
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(14)
-        doc.text(org?.name ?? 'School Name', W / 2, y, { align: 'center' })
-        y += 6
-
-        if ((org as any)?.motto) {
-          doc.setFont('helvetica', 'italic')
-          doc.setFontSize(9)
-          doc.text(`"${(org as any).motto}"`, W / 2, y, { align: 'center' })
-          y += 5
-        }
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(11)
-        doc.text('STUDENT RESULT SHEET', W / 2, y, { align: 'center' })
-        y += 5
-
-        if (pdfOptions.show_term && (reportData.group.term?.name || reportData.group.session?.name)) {
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(9)
-          doc.text(
-            [reportData.group.term?.name, reportData.group.session?.name].filter(Boolean).join(' — '),
-            W / 2, y, { align: 'center' }
-          )
-          y += 5
-        }
-
-        // Divider
-        doc.setDrawColor(180)
-        doc.line(margin, y, W - margin, y)
-        y += 6
-
-        // ── Student info ──
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text(`Name: ${row.learner.last_name} ${row.learner.first_name}`, margin, y)
-        y += 5
-
-        const infoLine: string[] = [`Class: ${reportData.group.name}`]
-        if (pdfOptions.show_admission && row.learner.admission_number) {
-          infoLine.push(`Adm. No: ${row.learner.admission_number}`)
-        }
-        if (pdfOptions.show_gender && row.learner.gender) {
-          infoLine.push(`Gender: ${row.learner.gender === 'M' ? 'Male' : row.learner.gender === 'F' ? 'Female' : 'Other'}`)
-        }
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text(infoLine.join('   '), margin, y)
-        y += 7
-
-        // ── Scores table ──
-        const colWidths = pdfOptions.show_components
-          ? [50, 15, 15, 15, 15, 10, 8]
-          : [60, 20, 10, 10]
-        const tableHeaders = pdfOptions.show_components
-          ? ['Subject', 'CA 1', 'CA 2', 'Exam', 'Total', '%', 'Grd']
-          : ['Subject', 'Score', '%', 'Grd']
-
-        // Header row
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(8)
-        doc.setFillColor(240, 240, 240)
-        doc.rect(margin, y, W - margin * 2, 6, 'F')
-        let x = margin + 2
-        tableHeaders.forEach((h, i) => {
-          doc.text(h, x, y + 4)
-          x += colWidths[i]
-        })
-        y += 6
-
-        // Data rows
-        doc.setFont('helvetica', 'normal')
-        reportData.subjects.forEach((subj, si) => {
-          const total = row.subjectTotals[si]
-          const pct = total !== null ? (total / 100) * 100 : null
-          const gradeObj = pct !== null ? DEFAULT_GRADING.find(g => pct >= g.min_score && pct <= g.max_score) : null
-
-          if (si % 2 === 0) {
-            doc.setFillColor(250, 250, 250)
-            doc.rect(margin, y, W - margin * 2, 6, 'F')
-          }
-
-          x = margin + 2
-          doc.text(subj.name, x, y + 4); x += colWidths[0]
-
-          if (pdfOptions.show_components) {
-            const summary = reportData.subjectSummaries.find(s => s.id === subj.id)
-            const comps = summary?.components ?? []
-            // CA1, CA2, Exam
-            ;[0, 1, 2].forEach((ci, idx) => {
-              const comp = comps[ci]
-              const score = comp ? (row.componentScores[subj.id]?.[comp.id] ?? '—') : '—'
-              doc.text(String(score), x, y + 4); x += colWidths[idx + 1]
-            })
-            doc.text(total !== null ? String(total) : '—', x, y + 4); x += colWidths[4]
-            if (pdfOptions.show_percentage) {
-              doc.text(pct !== null ? `${pct.toFixed(0)}%` : '—', x, y + 4)
+        const student = {
+          id: row.learner.id,
+          first_name: row.learner.first_name,
+          last_name: row.learner.last_name,
+          admission_number: row.learner.admission_number || '',
+          scores: reportData.subjects.map((subj, idx) => {
+            const total = row.subjectTotals[idx] || 0
+            const maxScore = 100
+            const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
+            const gradeObj = DEFAULT_GRADING.find(g => percentage >= g.min_score && percentage <= g.max_score)
+            return {
+              subject_name: subj.name,
+              total: total,
+              max_score: maxScore,
+              percentage: percentage,
+              grade: gradeObj?.grade_letter || 'F',
+              remark: gradeObj?.remark || ''
             }
-            x += colWidths[5]
-            if (pdfOptions.show_grade) {
-              doc.text(gradeObj?.grade_letter ?? '—', x, y + 4)
-            }
-          } else {
-            doc.text(total !== null ? String(total) : '—', x, y + 4); x += colWidths[1]
-            if (pdfOptions.show_percentage) doc.text(pct !== null ? `${pct.toFixed(0)}%` : '—', x, y + 4)
-            x += colWidths[2]
-            if (pdfOptions.show_grade) doc.text(gradeObj?.grade_letter ?? '—', x, y + 4)
-          }
-
-          doc.setDrawColor(220)
-          doc.line(margin, y + 6, W - margin, y + 6)
-          y += 6
-        })
-
-        y += 4
-
-        // ── Summary row ──
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setFillColor(230, 240, 255)
-        doc.rect(margin, y, W - margin * 2, 7, 'F')
-        doc.text(`Total: ${row.grandTotal}`, margin + 2, y + 5)
-        if (pdfOptions.show_percentage) doc.text(`Overall: ${row.pct.toFixed(1)}%`, margin + 40, y + 5)
-        if (pdfOptions.show_grade) doc.text(`Grade: ${row.grade}`, margin + 80, y + 5)
-        if (pdfOptions.show_position) doc.text(`Position: ${row.position} of ${reportData.learners.length}`, margin + 115, y + 5)
-        y += 12
-
-        // ── Remark ──
-        if (pdfOptions.show_remark) {
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(9)
-          doc.text("Teacher's Remark:", margin, y)
-          y += 5
-          doc.setDrawColor(200)
-          doc.line(margin, y, W - margin, y)
-          y += 8
+          }),
+          total_score: row.grandTotal,
+          max_possible: reportData.subjects.length * 100,
+          percentage: row.pct,
+          grade: row.grade,
+          position: row.position,
+          teacher_remark: '',
+          principal_remark: ''
         }
 
-        // ── Signatures ──
-        if (pdfOptions.show_signature) {
-          y = Math.max(y, 240)
-          const sigY = y
+        const pdfDoc = (
+          <StudentReportCard
+            student={student}
+            schoolName={org?.name || 'Eduxellence School'}
+            schoolLogo={org?.logo_url || undefined}
+            schoolMotto={org?.motto || undefined}
+            className={reportData.group.name}
+            termName={reportData.group.term?.name || 'First Term'}
+            sessionName={reportData.group.session?.name || '2024/2025 Session'}
+            teacherName="Teacher"
+            teacherSignature={teacherSigUrl || undefined}
+            principalName="Principal"
+            principalSignature={principalSigUrl || undefined}
+          />
+        )
 
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(8)
-
-          if (teacherSigUrl) {
-            try { doc.addImage(teacherSigUrl, 'PNG', margin, sigY - 12, 40, 12) } catch {}
-          }
-          doc.line(margin, sigY, margin + 55, sigY)
-          doc.text("Class Teacher's Signature", margin, sigY + 4)
-
-          if (principalSigUrl) {
-            try { doc.addImage(principalSigUrl, 'PNG', W - margin - 55, sigY - 12, 40, 12) } catch {}
-          }
-          doc.line(W - margin - 55, sigY, W - margin, sigY)
-          doc.text("Principal's Signature", W - margin - 55, sigY + 4)
-        }
-
-        // Add to zip
-        const pdfBytes = doc.output('arraybuffer')
-        const filename = `${row.learner.last_name}_${row.learner.first_name}.pdf`
-        zip.file(filename, pdfBytes)
+        const blob = await pdf(pdfDoc).toBlob()
+        pdfBlobs.push(blob)
+        zip.file(`${row.learner.last_name}_${row.learner.first_name}_report_card.pdf`, blob)
       }
 
-      // Download zip
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
-      const url = URL.createObjectURL(zipBlob)
-      const a = document.createElement('a'); a.href = url
-      a.download = `${reportData.group.name}_ResultCards.zip`; a.click()
-      URL.revokeObjectURL(url)
-      toast.success(`${reportData.rows.length} PDFs downloaded as ZIP`)
-    } catch (err) {
-      console.error(err)
-      toast.error('PDF generation failed')
+      toast.dismiss(loadingToast)
+
+      if (pdfBlobs.length === 1) {
+        saveAs(pdfBlobs[0], `${reportData.rows[0].learner.last_name}_${reportData.rows[0].learner.first_name}_report_card.pdf`)
+      } else {
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        saveAs(zipBlob, `${reportData.group.name}_ResultCards.zip`)
+      }
+      toast.success(`Downloaded ${pdfBlobs.length} report cards`)
+    } catch (error) {
+      console.error('PDF error:', error)
+      toast.dismiss(loadingToast)
+      toast.error('Failed to generate PDFs')
     } finally {
       setGeneratingPdf(false)
     }
