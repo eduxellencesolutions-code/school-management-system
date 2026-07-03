@@ -39,11 +39,12 @@ export default function SubjectManager({ groupId, subjects, templates }: Props) 
     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
 
     const { error } = await supabase.from('subjects').insert({
-      organization_id: profile?.organization_id,
+      organization_id: profile?.organization_id ?? null,
       group_id: groupId,
       name: name.trim(),
       code: code.trim() || null,
       template_id: templateId || null,
+      instructor_id: profile?.organization_id ? null : user!.id,
       is_active: true,
     })
 
