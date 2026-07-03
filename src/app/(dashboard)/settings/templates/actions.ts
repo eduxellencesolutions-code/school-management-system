@@ -24,17 +24,17 @@ export async function createTemplate(formData: FormData) {
   if (!name?.trim()) return
 
   // If setting as default, unset others
-  if (isDefault) {
+  if (isDefault && profile?.organization_id) {
     await supabase
       .from('assessment_templates')
       .update({ is_default: false })
-      .eq('organization_id', profile?.organization_id)
+      .eq('organization_id', profile.organization_id)
   }
 
   const { data: template, error } = await supabase
     .from('assessment_templates')
     .insert({
-      organization_id: profile?.organization_id,
+      organization_id: profile?.organization_id ?? null,
       name: name.trim(),
       description: description?.trim() || null,
       is_default: isDefault,
