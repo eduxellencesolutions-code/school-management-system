@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Papa from 'papaparse'
@@ -42,7 +42,7 @@ export default function ImportStudentsPage() {
   const [importResults, setImportResults] = useState<{ success: number; failed: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
-  useState(() => {
+  useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -175,7 +175,7 @@ export default function ImportStudentsPage() {
 
     for (const batch of batches) {
       const inserts = batch.map(r => ({
-        organization_id:  profile?.organization_id,
+        organization_id:  profile?.organization_id ?? null,
         group_id:         selectedGroup,
         first_name:       r.first_name.trim(),
         last_name:        r.last_name.trim(),
@@ -192,7 +192,7 @@ export default function ImportStudentsPage() {
 
       const { error, data } = await supabase
         .from('learners')
-        .upsert(inserts, { onConflict: 'organization_id,admission_number', ignoreDuplicates: true })
+        .insert(inserts)
         .select()
 
       if (error) { failed += batch.length } else { success += data?.length ?? batch.length }
