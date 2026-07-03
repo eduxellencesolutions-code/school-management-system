@@ -10,26 +10,32 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 
 const schema = z.object({
-  name:          z.string().min(2, 'Enter your full name'),
-  email:         z.string().email('Enter a valid email'),
-  password:      z.string().min(8, 'Password must be at least 8 characters'),
-  account_type:  z.enum(['individual', 'organization']),
-  org_name:      z.string().optional(),
-  org_type:      z.enum(['school', 'university', 'centre']).optional(),
+  name:         z.string().min(2, 'Enter your full name'),
+  email:        z.string().email('Enter a valid email'),
+  password:     z.string().min(8, 'Password must be at least 8 characters'),
+  account_type: z.enum(['individual', 'organization']),
+  org_name:     z.string().optional(),
+  org_type:     z.enum(['school', 'university', 'centre']).optional(),
+}).refine(data => {
+  if (data.account_type === 'organization' && !data.org_name?.trim()) {
+    return false
+  }
+  return true
+}, {
+  message: 'School name is required',
+  path: ['org_name'],
 })
+
 type FormData = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
-  // ✅ FIX: Remove this line — will create inside onSubmit
-  // const supabase = createClient()
-  
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
 
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { account_type: 'individual' },
+    defaultValues: { account_type: 'individual', org_type: 'school' },
   })
 
   const accountType = watch('account_type')
@@ -37,70 +43,50 @@ export default function SignupPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      // ✅ FIX: Create Supabase client HERE (only runs in browser)
       const supabase = createClient()
-      
-      if (!data.email || !data.password) {
-        throw new Error('Email and password are required')
+
+      // ── Build metadata — trigger reads this to create org + set role ──
+      const metadata: Record<string, string> = {
+        name: data.name.trim(),
+        role: data.account_type === 'organization' ? 'admin' : 'teacher',
       }
 
-      // ✅ FIX: REMOVED emailRedirectTo entirely
+      if (data.account_type === 'organization' && data.org_name) {
+        // Trigger will create the org and link it to the user automatically
+        metadata.organization_name = data.org_name.trim()
+        metadata.organization_type = data.org_type ?? 'school'
+      }
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
         password: data.password,
-        options: {
-          data: { 
-            name: data.name?.trim() || '',
-            role: data.account_type === 'organization' ? 'admin' : 'teacher' 
-          },
-          // emailRedirectTo: REMOVED to fix Invalid value error
-        },
+        options: { data: metadata },
       })
-      if (authError) {
-        console.error('Auth error:', authError)
-        throw new Error(authError.message || 'Authentication failed')
-      }
-      if (!authData.user) throw new Error('Signup failed')
 
-      if (data.account_type === 'organization' && data.org_name) {
-        const { data: org, error: orgError } = await supabase
-          .from('organizations')
-          .insert({
-            name: data.org_name.trim(),
-            type: data.org_type ?? 'school',
-            subscription_plan: 'free',
-            subscription_status: 'active',
-          })
-          .select()
-          .single()
-        if (orgError) {
-          console.error('Org creation error:', orgError)
-          throw new Error('Failed to create organization: ' + orgError.message)
-        }
+      if (authError) throw new Error(authError.message)
+      if (!authData.user) throw new Error('Signup failed — please try again')
 
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ organization_id: org.id, role: 'admin' })
-          .eq('id', authData.user.id)
-        
-        if (updateError) {
-          console.error('User update error:', updateError)
-        }
-
-        try {
-          const { error: gradeError } = await supabase.from('grading_systems').insert(
-            DEFAULT_GRADES.map(g => ({
-              ...g, organization_id: org.id,
-            }))
-          )
-          if (gradeError) console.warn('Grading system seed failed:', gradeError)
-        } catch (gradeErr) {
-          console.warn('Grading seed error:', gradeErr)
-        }
+      // Check if email confirmation is required
+      if (authData.session === null && authData.user.identities?.length === 0) {
+        toast.error('An account with this email already exists.')
+        return
       }
 
-      toast.success('Account created! Please check your email to confirm.')
+      if (authData.session === null) {
+        // Email confirmation required
+        toast.success('Account created! Check your email to confirm before logging in.')
+        router.push('/login?msg=confirm_email')
+        return
+      }
+
+      // Session created immediately (email confirmation disabled)
+      toast.success(
+        data.account_type === 'organization'
+          ? `Welcome! Your school "${data.org_name}" has been set up.`
+          : 'Account created! Welcome to Eduxellence.'
+      )
       router.push('/dashboard')
+
     } catch (err: unknown) {
       console.error('Signup error:', err)
       toast.error(err instanceof Error ? err.message : 'Signup failed')
@@ -118,15 +104,17 @@ export default function SignupPage() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+
+        {/* ── STEP 1 ── */}
         {step === 1 && (
           <>
             <div>
               <label className="block text-sm font-medium text-ink mb-2">I am signing up as</label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { value: 'individual', label: '👤 Individual Teacher' },
+                  { value: 'individual',   label: '👤 Individual Teacher' },
                   { value: 'organization', label: '🏫 School / Institution' },
-                ].map((opt) => (
+                ].map(opt => (
                   <label
                     key={opt.value}
                     className={`flex items-center justify-center gap-2 p-3 border rounded cursor-pointer text-sm font-medium transition-colors
@@ -161,41 +149,52 @@ export default function SignupPage() {
             </div>
 
             {accountType === 'organization' ? (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={async () => {
                   const valid = await trigger(['name', 'email', 'password', 'account_type'])
                   if (valid) setStep(2)
-                }} 
+                }}
                 className="btn-primary btn mt-2"
               >
                 Next: Set up your school →
               </button>
             ) : (
-              <button type="submit" disabled={loading} className="btn-primary btn mt-2">
-                {loading ? 'Creating account…' : 'Create free account'}
-              </button>
+              <>
+                <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
+                  Individual teachers get <strong>1 class, up to 30 students</strong>, and Excel/CSV exports free.
+                </div>
+                <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+                  {loading ? 'Creating account…' : 'Create free account'}
+                </button>
+              </>
             )}
           </>
         )}
 
+        {/* ── STEP 2: INSTITUTION DETAILS ── */}
         {step === 2 && (
           <>
             <div className="flex items-center gap-2 mb-2">
               <button type="button" onClick={() => setStep(1)} className="text-ink-muted hover:text-ink text-sm">
                 ← Back
               </button>
-              <span className="text-sm text-ink-muted">School details</span>
+              <span className="text-sm font-medium text-ink">School details</span>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">School / Institution name</label>
-              <input type="text" placeholder="Greenfield Academy" className="input" {...register('org_name')} />
+              <label className="block text-sm font-medium text-ink mb-1">School / Institution name *</label>
+              <input
+                type="text"
+                placeholder="Greenfield Academy"
+                className="input"
+                {...register('org_name')}
+              />
               {errors.org_name && <p className="text-xs text-red-500 mt-1">{errors.org_name.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Type</label>
+              <label className="block text-sm font-medium text-ink mb-1">Institution type</label>
               <select className="input" {...register('org_type')}>
                 <option value="school">School (Nursery / Primary / Secondary)</option>
                 <option value="university">University / Polytechnic / College</option>
@@ -203,13 +202,23 @@ export default function SignupPage() {
               </select>
             </div>
 
+            <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">
+              <p className="font-semibold mb-1">What you get as admin:</p>
+              <ul className="flex flex-col gap-0.5 list-disc list-inside">
+                <li>Create and manage all classes</li>
+                <li>Invite teachers to your school</li>
+                <li>Set school logo, motto & signatures</li>
+                <li>Generate branded PDF report cards</li>
+                <li>View all scores and reports</li>
+              </ul>
+            </div>
+
             <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
-              Your school starts on the <strong>Free plan</strong> — 1 class, 30 students, Excel export.
-              You can upgrade anytime from Settings.
+              Starts on <strong>Small School plan</strong>. Upgrade anytime from Settings.
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary btn mt-2">
-              {loading ? 'Creating account…' : 'Create school account'}
+              {loading ? 'Setting up your school…' : 'Create school account'}
             </button>
           </>
         )}
@@ -217,12 +226,3 @@ export default function SignupPage() {
     </div>
   )
 }
-
-const DEFAULT_GRADES = [
-  { name: 'Default', grade_letter: 'A', min_score: 70, max_score: 100, remark: 'Excellent',  points: 4.0 },
-  { name: 'Default', grade_letter: 'B', min_score: 60, max_score: 69,  remark: 'Very Good',  points: 3.0 },
-  { name: 'Default', grade_letter: 'C', min_score: 50, max_score: 59,  remark: 'Good',       points: 2.0 },
-  { name: 'Default', grade_letter: 'D', min_score: 40, max_score: 49,  remark: 'Pass',       points: 1.0 },
-  { name: 'Default', grade_letter: 'E', min_score: 30, max_score: 39,  remark: 'Below Pass', points: 0.5 },
-  { name: 'Default', grade_letter: 'F', min_score: 0,  max_score: 29,  remark: 'Fail',       points: 0.0 },
-]
