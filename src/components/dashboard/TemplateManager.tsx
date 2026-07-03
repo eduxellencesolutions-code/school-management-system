@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -46,7 +46,7 @@ export default function TemplateManager({ orgId, templates }: Props) {
     setLoading(true)
     const { data: tmpl, error: tErr } = await supabase
       .from('assessment_templates')
-      .insert({ organization_id: orgId, name: tName.trim(), description: tDesc.trim() || null, is_default: templates.length === 0 })
+      .insert({ organization_id: orgId || null, name: tName.trim(), description: tDesc.trim() || null, is_default: templates.length === 0 })
       .select().single()
 
     if (tErr || !tmpl) { toast.error('Failed to create template'); setLoading(false); return }
