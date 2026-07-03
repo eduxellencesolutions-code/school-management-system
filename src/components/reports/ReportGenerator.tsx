@@ -206,7 +206,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     }
   }
 
-  // ✅ UPDATED: generateReport - saves directly as completed
+  // ✅ UPDATED: generateReport - saves directly as 'ready'
   async function generateReport() {
     if (!reportData) return
     setLoading(true)
@@ -219,7 +219,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
         organization_id: profile?.organization_id,
         group_id: groupId,
         type: 'broadsheet',
-        status: 'completed',          // ← directly completed, no pending step
+        status: 'ready',          // ← changed from 'completed' to 'ready'
         completed_at: new Date().toISOString(),
         filters: {},
         created_by: userId,
