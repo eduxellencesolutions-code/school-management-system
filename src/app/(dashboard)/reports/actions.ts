@@ -47,7 +47,7 @@ export async function generateReport(formData: FormData) {
         organization_id: profile.organization_id,
         group_id:        groupId,
         type,
-        status:          'completed',
+        status:          'ready',          // ← was 'completed'
         completed_at:    new Date().toISOString(),
         filters:         { termId, templateId },
         created_by:      user.id,
@@ -259,7 +259,7 @@ export async function markReportReady(reportId: string) {
   if (!user) throw new Error('Unauthorized')
 
   await supabase.from('reports')
-    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .update({ status: 'ready', completed_at: new Date().toISOString() })  // ← was 'completed'
     .eq('id', reportId)
 
   revalidatePath('/reports')
