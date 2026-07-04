@@ -428,6 +428,7 @@ export default function PreviewReportPage() {
 
         const pdfDoc = (
           <StudentReportCard
+            mode={isInstitution ? 'institution' : 'individual'}
             student={student}
             schoolName={org?.name || 'Eduxellence School'}
             schoolLogo={org?.logo_url || undefined}
