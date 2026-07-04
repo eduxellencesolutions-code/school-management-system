@@ -18,11 +18,21 @@ export default async function DashboardPage() {
     const q = supabase.from('groups').select('*', { count: 'exact', head: true }).eq('is_active', true)
     return orgId ? q.eq('organization_id', orgId) : q.eq('instructor_id', authUser.id)
   }
-  const learnersBaseQuery = () => {
+
+  const learnersBaseQuery = async () => {
     const q = supabase.from('learners').select('*', { count: 'exact', head: true }).eq('is_active', true)
-    return orgId ? q.eq('organization_id', orgId) : q.in('group_id',
-      supabase.from('groups').select('id').eq('instructor_id', authUser.id).eq('is_active', true)
-    )
+    if (orgId) {
+      return q.eq('organization_id', orgId)
+    } else {
+      // For solo teachers, first get their group IDs then filter learners
+      const { data: groupIds } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('instructor_id', authUser.id)
+        .eq('is_active', true)
+      const ids = groupIds?.map(g => g.id) ?? []
+      return ids.length > 0 ? q.in('group_id', ids) : supabase.from('learners').select('*', { count: 'exact', head: true }).eq('id', 'none')
+    }
   }
 
   const [
@@ -62,14 +72,27 @@ export default async function DashboardPage() {
   const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
 
   // Subject breakdown
-  const subjectStatsQuery = orgId
-    ? supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
+  const subjectStatsQuery = async () => {
+    if (orgId) {
+      return supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
         .eq('organization_id', orgId).eq('is_active', true).order('name').limit(10)
-    : supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
-        .in('group_id', supabase.from('groups').select('id').eq('instructor_id', authUser.id))
+    } else {
+      const { data: groupIds } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('instructor_id', authUser.id)
+        .eq('is_active', true)
+      const ids = groupIds?.map(g => g.id) ?? []
+      if (ids.length === 0) {
+        return { data: [] }
+      }
+      return supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
+        .in('group_id', ids)
         .eq('is_active', true).order('name').limit(10)
+    }
+  }
 
-  const { data: subjectStats } = await subjectStatsQuery
+  const { data: subjectStats } = await subjectStatsQuery()
 
   // Recent scores
   const { data: recentScores } = await supabase
