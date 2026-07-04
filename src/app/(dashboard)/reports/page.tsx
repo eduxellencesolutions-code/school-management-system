@@ -31,13 +31,30 @@ export default async function ReportsPage() {
         .eq('created_by', authUser.id).order('created_at', { ascending: false })
   )
 
-  // Fetch classes
+  // Fetch classes - fix the nested relations
   const { data: classes } = await (orgId
-    ? supabase.from('groups').select('id, name, session:academic_sessions(name), term:terms(name)')
+    ? supabase.from('groups').select(`
+        id, 
+        name, 
+        session:academic_sessions!inner(name),
+        term:terms!inner(name)
+      `)
         .eq('organization_id', orgId).eq('is_active', true).order('name')
-    : supabase.from('groups').select('id, name, session:academic_sessions(name), term:terms(name)')
+    : supabase.from('groups').select(`
+        id, 
+        name, 
+        session:academic_sessions!inner(name),
+        term:terms!inner(name)
+      `)
         .eq('instructor_id', authUser.id).eq('is_active', true).order('name')
   )
+
+  // Transform the data to extract the first item from arrays
+  const transformedClasses = (classes || []).map((cls: any) => ({
+    ...cls,
+    session: Array.isArray(cls.session) ? cls.session[0] : cls.session,
+    term: Array.isArray(cls.term) ? cls.term[0] : cls.term,
+  }))
 
   // Fetch org for ReportGenerator
   const { data: org } = orgId
@@ -84,7 +101,7 @@ export default async function ReportsPage() {
         <div className="stat-card border-red-200"><div className="stat-value text-red-600">{failedReports}</div><div className="stat-label">Failed</div></div>
       </div>
 
-      <ReportGenerator groups={classes || []} org={org || null} userId={authUser.id} userRole={userRole} />
+      <ReportGenerator groups={transformedClasses || []} org={org || null} userId={authUser.id} userRole={userRole} />
 
       <div className="card">
         <div className="card-header">
