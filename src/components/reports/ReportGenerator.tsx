@@ -14,7 +14,6 @@ import type { Organization } from '@/types'
 // ✅ Add imports at the top for PDF generation
 import { pdf } from '@react-pdf/renderer'
 import { StudentReportCard } from '@/components/reports/StudentReportCard'
-import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 
 interface Group {
@@ -310,6 +309,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
     const loadingToast = toast.loading(`Generating PDFs for ${reportData.learners.length} students...`)
 
     try {
+      const JSZip = (await import('jszip')).default
       const zip = new JSZip()
       const pdfBlobs: Blob[] = []
 
