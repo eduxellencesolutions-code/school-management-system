@@ -21,9 +21,12 @@ export async function createTemplate(formData: FormData) {
   const componentScores = formData.getAll('component_max_score') as string[]
   const componentPasses = formData.getAll('component_pass_mark') as string[]
 
-  if (!name?.trim()) return
+  if (!name?.trim()) {
+    console.error('Template name is required')
+    return
+  }
 
-  // If setting as default, unset others
+  // If setting as default, unset others (only for institutions)
   if (isDefault && profile?.organization_id) {
     await supabase
       .from('assessment_templates')
@@ -47,14 +50,21 @@ export async function createTemplate(formData: FormData) {
     insertData.instructor_id = user.id
   }
 
+  console.log('Creating template with data:', insertData) // Debug log
+
   const { data: template, error } = await supabase
     .from('assessment_templates')
     .insert(insertData)
     .select('id')
     .single()
 
-  if (error || !template) {
+  if (error) {
     console.error('Template creation error:', error)
+    return
+  }
+
+  if (!template) {
+    console.error('No template returned')
     return
   }
 
@@ -73,7 +83,10 @@ export async function createTemplate(formData: FormData) {
     .filter(c => c.name)
 
   if (components.length > 0) {
-    const { error: compError } = await supabase.from('assessment_components').insert(components)
+    const { error: compError } = await supabase
+      .from('assessment_components')
+      .insert(components)
+
     if (compError) {
       console.error('Component creation error:', compError)
       // Rollback: delete the template if components fail
