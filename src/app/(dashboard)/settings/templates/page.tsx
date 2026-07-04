@@ -13,11 +13,21 @@ export default async function TemplatesPage() {
     .from('users').select('organization_id').eq('id', user.id).single()
   const orgId = profile?.organization_id
 
-  const { data: templates } = await supabase
+  // Build query based on user type
+  let query = supabase
     .from('assessment_templates')
     .select('id, name, description, is_default, created_at')
-    .eq('organization_id', orgId)
     .order('created_at')
+
+  if (orgId) {
+    // Institution user: filter by organization_id
+    query = query.eq('organization_id', orgId)
+  } else {
+    // Individual teacher: filter by instructor_id
+    query = query.eq('instructor_id', user.id)
+  }
+
+  const { data: templates } = await query
 
   const { data: components } = await supabase
     .from('assessment_components')
