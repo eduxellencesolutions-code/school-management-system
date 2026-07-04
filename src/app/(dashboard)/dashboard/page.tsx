@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react'
+import { getTeacherDashboardData } from '@/lib/teacher-utils'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -9,22 +10,39 @@ export default async function DashboardPage() {
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase
-    .from('users').select('*').eq('id', authUser.id).single()
+    .from('users').select('*, organization:organizations(*)').eq('id', authUser.id).single()
 
   const orgId = user?.organization_id
+  const userRole = user?.role || 'teacher'
 
-  // ── Build queries that handle both solo teacher and institution ──
-  const groupsBaseQuery = () => {
-    const q = supabase.from('groups').select('*', { count: 'exact', head: true }).eq('is_active', true)
-    return orgId ? q.eq('organization_id', orgId) : q.eq('instructor_id', authUser.id)
-  }
+  // ── Determine user type ──
+  const isSoloTeacher = !orgId
+  const isInstitutionAdmin = orgId && (userRole === 'admin' || userRole === 'school_admin')
+  const isInstitutionTeacher = orgId && userRole === 'teacher'
 
-  const learnersBaseQuery = async () => {
-    const q = supabase.from('learners').select('*', { count: 'exact', head: true }).eq('is_active', true)
-    if (orgId) {
-      return q.eq('organization_id', orgId)
-    } else {
-      // For solo teachers, first get their group IDs then filter learners
+  let groupCount = 0
+  let learnerCount = 0
+  let scoreCount = 0
+  let reportCount = 0
+  let recentGroups: any[] = []
+  let completedGroupIds = new Set()
+  let subjectStats: any[] = []
+  let recentScores: any[] = []
+  let firstClass: any = null
+  let scoreGridData: any = null
+  let assignedClasses: any[] = []
+  let assignedSubjects: any[] = []
+
+  // ── SOLO TEACHER ──
+  if (isSoloTeacher) {
+    // Solo teacher - use existing logic with instructor_id
+    const groupsBaseQuery = () => {
+      const q = supabase.from('groups').select('*', { count: 'exact', head: true }).eq('is_active', true)
+      return q.eq('instructor_id', authUser.id)
+    }
+
+    const learnersBaseQuery = async () => {
+      const q = supabase.from('learners').select('*', { count: 'exact', head: true }).eq('is_active', true)
       const { data: groupIds } = await supabase
         .from('groups')
         .select('id')
@@ -33,94 +51,241 @@ export default async function DashboardPage() {
       const ids = groupIds?.map(g => g.id) ?? []
       return ids.length > 0 ? q.in('group_id', ids) : supabase.from('learners').select('*', { count: 'exact', head: true }).eq('id', 'none')
     }
-  }
 
-  const [
-    { count: groupCount },
-    { count: learnerCount },
-    { count: scoreCount },
-    { count: reportCount },
-    { data: recentGroups },
-  ] = await Promise.all([
-    groupsBaseQuery(),
-    learnersBaseQuery(),
-    supabase.from('scores').select('*', { count: 'exact', head: true }).eq('entered_by', authUser.id),
-    orgId
-      ? supabase.from('reports').select('*', { count: 'exact', head: true })
-          .eq('organization_id', orgId).eq('status', 'ready')
-      : supabase.from('reports').select('*', { count: 'exact', head: true })
-          .eq('created_by', authUser.id).eq('status', 'ready'),
-    orgId
-      ? supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
-          .eq('organization_id', orgId).eq('is_active', true)
-          .order('created_at', { ascending: false }).limit(5)
-      : supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
-          .eq('instructor_id', authUser.id).eq('is_active', true)
-          .order('created_at', { ascending: false }).limit(5),
-  ])
+    const [
+      { count: gCount },
+      { count: lCount },
+      { count: sCount },
+      { count: rCount },
+      { data: recent },
+    ] = await Promise.all([
+      groupsBaseQuery(),
+      learnersBaseQuery(),
+      supabase.from('scores').select('*', { count: 'exact', head: true }).eq('entered_by', authUser.id),
+      supabase.from('reports').select('*', { count: 'exact', head: true })
+        .eq('created_by', authUser.id).eq('status', 'ready'),
+      supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
+        .eq('instructor_id', authUser.id).eq('is_active', true)
+        .order('created_at', { ascending: false }).limit(5),
+    ])
 
-  const recentGroupIds = (recentGroups ?? []).map(g => g.id)
-  const { data: completedReports } = await (orgId
-    ? supabase.from('reports').select('group_id')
-        .eq('organization_id', orgId).eq('status', 'ready')
-        .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
-    : supabase.from('reports').select('group_id')
-        .eq('created_by', authUser.id).eq('status', 'ready')
-        .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
-  )
+    groupCount = gCount || 0
+    learnerCount = lCount || 0
+    scoreCount = sCount || 0
+    reportCount = rCount || 0
+    recentGroups = recent || []
 
-  const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
+    const recentGroupIds = (recentGroups ?? []).map(g => g.id)
+    const { data: completed } = await supabase
+      .from('reports').select('group_id')
+      .eq('created_by', authUser.id).eq('status', 'ready')
+      .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
+    completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
 
-  // Subject breakdown
-  const subjectStatsQuery = async () => {
-    if (orgId) {
-      return supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
-        .eq('organization_id', orgId).eq('is_active', true).order('name').limit(10)
-    } else {
-      const { data: groupIds } = await supabase
-        .from('groups')
-        .select('id')
-        .eq('instructor_id', authUser.id)
-        .eq('is_active', true)
-      const ids = groupIds?.map(g => g.id) ?? []
-      if (ids.length === 0) {
-        return { data: [] }
-      }
-      return supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
+    // Subject breakdown for solo teacher
+    const { data: groupIds } = await supabase
+      .from('groups')
+      .select('id')
+      .eq('instructor_id', authUser.id)
+      .eq('is_active', true)
+    const ids = groupIds?.map(g => g.id) ?? []
+    if (ids.length > 0) {
+      const { data: subjects } = await supabase
+        .from('subjects')
+        .select('id, name, code, group:groups(name), score_count:scores(count)')
         .in('group_id', ids)
         .eq('is_active', true).order('name').limit(10)
+      subjectStats = subjects || []
+    }
+
+    // Recent scores
+    const { data: scores } = await supabase
+      .from('scores')
+      .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
+      .eq('entered_by', authUser.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    recentScores = scores || []
+
+    // First class for score grid
+    const { data: first } = await supabase
+      .from('groups').select('id, name')
+      .eq('instructor_id', authUser.id).eq('is_active', true).limit(1).maybeSingle()
+    firstClass = first
+
+    if (firstClass) {
+      const { data: learners } = await supabase
+        .from('learners')
+        .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('last_name')
+
+      const { data: subjects } = await supabase
+        .from('subjects').select('id, name')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('name')
+
+      scoreGridData = { learners, subjects }
     }
   }
 
-  const { data: subjectStats } = await subjectStatsQuery()
+  // ── INSTITUTION ADMIN ──
+  else if (isInstitutionAdmin) {
+    // Admin sees everything in the organization
+    const [
+      { count: gCount },
+      { count: lCount },
+      { count: sCount },
+      { count: rCount },
+      { data: recent },
+    ] = await Promise.all([
+      supabase.from('groups').select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId).eq('is_active', true),
+      supabase.from('learners').select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId).eq('is_active', true),
+      supabase.from('scores').select('*', { count: 'exact', head: true })
+        .eq('entered_by', authUser.id),
+      supabase.from('reports').select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId).eq('status', 'ready'),
+      supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
+        .eq('organization_id', orgId).eq('is_active', true)
+        .order('created_at', { ascending: false }).limit(5),
+    ])
 
-  // Recent scores
-  const { data: recentScores } = await supabase
-    .from('scores')
-    .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
-    .eq('entered_by', authUser.id)
-    .order('created_at', { ascending: false })
-    .limit(10)
+    groupCount = gCount || 0
+    learnerCount = lCount || 0
+    scoreCount = sCount || 0
+    reportCount = rCount || 0
+    recentGroups = recent || []
 
-  // First class for score grid
-  const firstClassQuery = orgId
-    ? supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).limit(1).maybeSingle()
-    : supabase.from('groups').select('id, name').eq('instructor_id', authUser.id).eq('is_active', true).limit(1).maybeSingle()
+    const recentGroupIds = (recentGroups ?? []).map(g => g.id)
+    const { data: completed } = await supabase
+      .from('reports').select('group_id')
+      .eq('organization_id', orgId).eq('status', 'ready')
+      .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
+    completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
 
-  const { data: firstClass } = await firstClassQuery
-
-  let scoreGridData = null
-  if (firstClass) {
-    const { data: learners } = await supabase
-      .from('learners')
-      .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
-      .eq('group_id', firstClass.id).eq('is_active', true).order('last_name')
-
+    // Subject breakdown for admin
     const { data: subjects } = await supabase
-      .from('subjects').select('id, name')
-      .eq('group_id', firstClass.id).eq('is_active', true).order('name')
+      .from('subjects')
+      .select('id, name, code, group:groups(name), score_count:scores(count)')
+      .eq('organization_id', orgId).eq('is_active', true).order('name').limit(10)
+    subjectStats = subjects || []
 
-    scoreGridData = { learners, subjects }
+    // Recent scores
+    const { data: scores } = await supabase
+      .from('scores')
+      .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
+      .eq('entered_by', authUser.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    recentScores = scores || []
+
+    // First class for score grid
+    const { data: first } = await supabase
+      .from('groups').select('id, name')
+      .eq('organization_id', orgId).eq('is_active', true).limit(1).maybeSingle()
+    firstClass = first
+
+    if (firstClass) {
+      const { data: learners } = await supabase
+        .from('learners')
+        .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('last_name')
+
+      const { data: subjects } = await supabase
+        .from('subjects').select('id, name')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('name')
+
+      scoreGridData = { learners, subjects }
+    }
+  }
+
+  // ── INSTITUTION TEACHER ──
+  else if (isInstitutionTeacher) {
+    // Teacher in an institution - use teacher_assignments
+    const teacherData = await getTeacherDashboardData(authUser.id)
+    
+    assignedClasses = teacherData.classes || []
+    assignedSubjects = teacherData.subjects || []
+    
+    groupCount = assignedClasses.length
+    learnerCount = 0
+    scoreCount = 0
+    reportCount = 0
+    
+    // Get learners count from assigned classes
+    if (assignedClasses.length > 0) {
+      const classIds = assignedClasses.map(c => c.id)
+      const { count: lCount } = await supabase
+        .from('learners')
+        .select('*', { count: 'exact', head: true })
+        .in('group_id', classIds)
+        .eq('is_active', true)
+      learnerCount = lCount || 0
+    }
+
+    // Get scores count
+    const { count: sCount } = await supabase
+      .from('scores')
+      .select('*', { count: 'exact', head: true })
+      .eq('entered_by', authUser.id)
+    scoreCount = sCount || 0
+
+    // Get reports count
+    const { count: rCount } = await supabase
+      .from('reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('created_by', authUser.id)
+      .eq('status', 'ready')
+    reportCount = rCount || 0
+
+    // Recent groups (classes)
+    recentGroups = assignedClasses.slice(0, 5)
+
+    // Get report status for recent groups
+    if (recentGroups.length > 0) {
+      const recentGroupIds = recentGroups.map(g => g.id)
+      const { data: completed } = await supabase
+        .from('reports').select('group_id')
+        .eq('created_by', authUser.id).eq('status', 'ready')
+        .in('group_id', recentGroupIds)
+      completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
+    }
+
+    // Subject breakdown for institution teacher
+    if (assignedSubjects.length > 0) {
+      const subjectIds = assignedSubjects.map(s => s.id)
+      const { data: subjects } = await supabase
+        .from('subjects')
+        .select('id, name, code, group:groups(name), score_count:scores(count)')
+        .in('id', subjectIds)
+        .eq('is_active', true).order('name').limit(10)
+      subjectStats = subjects || []
+    }
+
+    // Recent scores
+    const { data: scores } = await supabase
+      .from('scores')
+      .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
+      .eq('entered_by', authUser.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    recentScores = scores || []
+
+    // First class for score grid
+    if (assignedClasses.length > 0) {
+      firstClass = assignedClasses[0]
+      
+      const { data: learners } = await supabase
+        .from('learners')
+        .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('last_name')
+
+      const { data: subjects } = await supabase
+        .from('subjects').select('id, name')
+        .eq('group_id', firstClass.id).eq('is_active', true).order('name')
+
+      scoreGridData = { learners, subjects }
+    }
   }
 
   const stats = [
@@ -137,14 +302,37 @@ export default async function DashboardPage() {
     return 'Good evening'
   })()
 
+  // Determine role display
+  let roleDisplay = ''
+  if (isSoloTeacher) roleDisplay = 'Solo Teacher'
+  else if (isInstitutionAdmin) roleDisplay = 'School Admin'
+  else if (isInstitutionTeacher) {
+    const context = await (async () => {
+      const supabaseClient = await createClient()
+      const { data: assignments } = await supabaseClient
+        .from('teacher_assignments')
+        .select('role')
+        .eq('teacher_id', authUser.id)
+        .eq('is_active', true)
+      return assignments
+    })()
+    const isClassTeacher = context?.some(a => a.role === 'class_teacher')
+    roleDisplay = isClassTeacher ? 'Class Teacher' : 'Subject Teacher'
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
-          <p className="page-subtitle">Here's what's happening with your classes today.</p>
+          <p className="page-subtitle">
+            {roleDisplay} • Here's what's happening with your classes today.
+            {isInstitutionTeacher && assignedSubjects.length > 0 && ` You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}.`}
+          </p>
         </div>
-        <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
+        {(isSoloTeacher || isInstitutionAdmin) && (
+          <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -198,8 +386,12 @@ export default async function DashboardPage() {
             ) : (
               <div className="px-5 py-10 text-center">
                 <BookOpen size={32} className="text-surface-200 mx-auto mb-3" />
-                <p className="text-sm text-ink-muted mb-3">No classes yet</p>
-                <Link href="/classes/new" className="btn-primary btn-sm btn">Create your first class</Link>
+                <p className="text-sm text-ink-muted mb-3">
+                  {isInstitutionTeacher ? 'No classes assigned to you yet' : 'No classes yet'}
+                </p>
+                {(isSoloTeacher || isInstitutionAdmin) && (
+                  <Link href="/classes/new" className="btn-primary btn-sm btn">Create your first class</Link>
+                )}
               </div>
             )}
           </div>
@@ -210,11 +402,11 @@ export default async function DashboardPage() {
             <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
             <div className="flex flex-col gap-2">
               {[
-                { label: 'Add a class',    href: '/classes/new',           icon: '📚' },
-                { label: 'Enrol students', href: '/students/new',          icon: '👤' },
-                { label: 'Enter scores',   href: '/scores',                icon: '✏️' },
-                { label: 'View reports',   href: '/reports',               icon: '📄' },
-                { label: 'Add subjects',   href: '/settings/subjects/new', icon: '📖' },
+                ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add a class', href: '/classes/new', icon: '📚' }] : []),
+                { label: 'Enrol students', href: '/students/new', icon: '👤' },
+                { label: 'Enter scores', href: '/scores', icon: '✏️' },
+                { label: 'View reports', href: '/reports', icon: '📄' },
+                ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add subjects', href: '/settings/subjects/new', icon: '📖' }] : []),
               ].map((a) => (
                 <Link key={a.href} href={a.href}
                   className="flex items-center gap-3 px-3 py-2.5 rounded border border-surface-200 hover:border-brand-300 hover:bg-brand-50 transition-colors text-sm text-ink group">
@@ -226,7 +418,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {!orgId && (
+          {isSoloTeacher && (
             <div className="card p-5 bg-brand-50 border-brand-200">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={15} className="text-brand-600" />
@@ -247,7 +439,9 @@ export default async function DashboardPage() {
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
               <BarChart3 size={16} className="text-ink-muted" /> Subject Breakdown
             </h2>
-            <Link href="/settings/subjects" className="text-xs text-brand-500 hover:underline">Manage subjects</Link>
+            {(isSoloTeacher || isInstitutionAdmin) && (
+              <Link href="/settings/subjects" className="text-xs text-brand-500 hover:underline">Manage subjects</Link>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
