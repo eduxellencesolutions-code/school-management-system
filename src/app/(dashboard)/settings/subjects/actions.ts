@@ -1,5 +1,4 @@
 'use server'
-
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -20,12 +19,14 @@ export async function createSubject(formData: FormData) {
   if (!name || !groupId) return
 
   await supabase.from('subjects').insert({
-    organization_id: profile?.organization_id,
-    group_id:    groupId,
+    organization_id: profile?.organization_id ?? null,
+    group_id:        groupId,
     name,
-    code:        code || null,
-    template_id: templateId || null,
-    is_active:   true,
+    code:            code || null,
+    template_id:     templateId || null,
+    // For solo teachers, store instructor_id for RLS
+    instructor_id:   profile?.organization_id ? null : user.id,
+    is_active:       true,
   })
 
   revalidatePath('/settings/subjects')
@@ -62,10 +63,7 @@ export async function deleteSubject(formData: FormData) {
   const supabase = await createClient()
   const id = formData.get('id') as string
   if (!id) return
-
-  // Soft delete — keep scores intact
   await supabase.from('subjects').update({ is_active: false }).eq('id', id)
-
   revalidatePath('/settings/subjects')
   redirect('/settings/subjects')
 }
