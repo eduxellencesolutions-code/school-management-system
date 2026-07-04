@@ -13,6 +13,18 @@ export default async function DashboardPage() {
 
   const orgId = user?.organization_id
 
+  // ── Build queries that handle both solo teacher and institution ──
+  const groupsBaseQuery = () => {
+    const q = supabase.from('groups').select('*', { count: 'exact', head: true }).eq('is_active', true)
+    return orgId ? q.eq('organization_id', orgId) : q.eq('instructor_id', authUser.id)
+  }
+  const learnersBaseQuery = () => {
+    const q = supabase.from('learners').select('*', { count: 'exact', head: true }).eq('is_active', true)
+    return orgId ? q.eq('organization_id', orgId) : q.in('group_id',
+      supabase.from('groups').select('id').eq('instructor_id', authUser.id).eq('is_active', true)
+    )
+  }
+
   const [
     { count: groupCount },
     { count: learnerCount },
@@ -20,98 +32,70 @@ export default async function DashboardPage() {
     { count: reportCount },
     { data: recentGroups },
   ] = await Promise.all([
-    supabase.from('groups').select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true),
-    supabase.from('learners').select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true),
-    supabase.from('scores').select('*', { count: 'exact', head: true })
-      .eq('entered_by', authUser.id),
-    supabase.from('reports').select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('status', 'ready'),
-    supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
-      .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(5),
+    groupsBaseQuery(),
+    learnersBaseQuery(),
+    supabase.from('scores').select('*', { count: 'exact', head: true }).eq('entered_by', authUser.id),
+    orgId
+      ? supabase.from('reports').select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId).eq('status', 'ready')
+      : supabase.from('reports').select('*', { count: 'exact', head: true })
+          .eq('created_by', authUser.id).eq('status', 'ready'),
+    orgId
+      ? supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
+          .eq('organization_id', orgId).eq('is_active', true)
+          .order('created_at', { ascending: false }).limit(5)
+      : supabase.from('groups').select('id, name, created_at, learner_count:learners(count)')
+          .eq('instructor_id', authUser.id).eq('is_active', true)
+          .order('created_at', { ascending: false }).limit(5),
   ])
 
   const recentGroupIds = (recentGroups ?? []).map(g => g.id)
-  const { data: completedReports } = await supabase
-    .from('reports')
-    .select('group_id')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-    .eq('status', 'ready')
-    .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
+  const { data: completedReports } = await (orgId
+    ? supabase.from('reports').select('group_id')
+        .eq('organization_id', orgId).eq('status', 'ready')
+        .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
+    : supabase.from('reports').select('group_id')
+        .eq('created_by', authUser.id).eq('status', 'ready')
+        .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
+  )
 
   const completedGroupIds = new Set((completedReports ?? []).map(r => r.group_id))
 
-  // ✅ Fetch subject breakdown for the dashboard
-  const { data: subjectStats } = await supabase
-    .from('subjects')
-    .select(`
-      id,
-      name,
-      code,
-      group:groups(name),
-      score_count:scores(count)
-    `)
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-    .eq('is_active', true)
-    .order('name')
-    .limit(10)
+  // Subject breakdown
+  const subjectStatsQuery = orgId
+    ? supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
+        .eq('organization_id', orgId).eq('is_active', true).order('name').limit(10)
+    : supabase.from('subjects').select('id, name, code, group:groups(name), score_count:scores(count)')
+        .in('group_id', supabase.from('groups').select('id').eq('instructor_id', authUser.id))
+        .eq('is_active', true).order('name').limit(10)
 
-  // ✅ Fetch recent scores for the dashboard
+  const { data: subjectStats } = await subjectStatsQuery
+
+  // Recent scores
   const { data: recentScores } = await supabase
     .from('scores')
-    .select(`
-      id,
-      score,
-      created_at,
-      learner:learners(first_name, last_name, admission_number),
-      subject:subjects(name),
-      component:assessment_components(name)
-    `)
+    .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
     .eq('entered_by', authUser.id)
     .order('created_at', { ascending: false })
     .limit(10)
 
-  // ✅ NEW: Fetch first class for score grid
-  const { data: firstClass } = await supabase
-    .from('groups')
-    .select('id, name')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
+  // First class for score grid
+  const firstClassQuery = orgId
+    ? supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).limit(1).maybeSingle()
+    : supabase.from('groups').select('id, name').eq('instructor_id', authUser.id).eq('is_active', true).limit(1).maybeSingle()
 
-  // ✅ NEW: Fetch score grid data if a class exists
+  const { data: firstClass } = await firstClassQuery
+
   let scoreGridData = null
   if (firstClass) {
     const { data: learners } = await supabase
       .from('learners')
-      .select(`
-        id,
-        first_name,
-        last_name,
-        admission_number,
-        scores:score!inner(
-          subject_id,
-          score
-        )
-      `)
-      .eq('group_id', firstClass.id)
-      .eq('is_active', true)
-      .order('last_name')
+      .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
+      .eq('group_id', firstClass.id).eq('is_active', true).order('last_name')
 
     const { data: subjects } = await supabase
-      .from('subjects')
-      .select('id, name')
-      .eq('group_id', firstClass.id)
-      .eq('is_active', true)
-      .order('name')
+      .from('subjects').select('id, name')
+      .eq('group_id', firstClass.id).eq('is_active', true).order('name')
 
     scoreGridData = { learners, subjects }
   }
@@ -137,9 +121,7 @@ export default async function DashboardPage() {
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
           <p className="page-subtitle">Here's what's happening with your classes today.</p>
         </div>
-        <Link href="/classes/new" className="btn-primary btn">
-          + New Class
-        </Link>
+        <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -158,7 +140,6 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent Classes */}
         <div className="lg:col-span-2 card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
@@ -181,17 +162,11 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Link href={`/scores?class=${g.id}`} className="btn-secondary btn-sm btn">
-                        Enter scores
-                      </Link>
+                      <Link href={`/scores?class=${g.id}`} className="btn-secondary btn-sm btn">Enter scores</Link>
                       {hasReport ? (
-                        <Link href="/reports" className="btn-sm btn border border-green-200 text-green-600 hover:bg-green-50">
-                          ✓ Report ready
-                        </Link>
+                        <Link href="/reports" className="btn-sm btn border border-green-200 text-green-600 hover:bg-green-50">✓ Report ready</Link>
                       ) : (
-                        <Link href={`/reports/generate?class=${g.id}`} className="btn-primary btn-sm btn">
-                          Generate report
-                        </Link>
+                        <Link href={`/reports/generate?class=${g.id}`} className="btn-primary btn-sm btn">Generate report</Link>
                       )}
                     </div>
                   </div>
@@ -201,15 +176,12 @@ export default async function DashboardPage() {
               <div className="px-5 py-10 text-center">
                 <BookOpen size={32} className="text-surface-200 mx-auto mb-3" />
                 <p className="text-sm text-ink-muted mb-3">No classes yet</p>
-                <Link href="/classes/new" className="btn-primary btn-sm btn">
-                  Create your first class
-                </Link>
+                <Link href="/classes/new" className="btn-primary btn-sm btn">Create your first class</Link>
               </div>
             )}
           </div>
         </div>
 
-        {/* Quick Actions */}
         <div className="flex flex-col gap-4">
           <div className="card p-5">
             <h2 className="font-semibold text-sm text-ink mb-4">Quick actions</h2>
@@ -221,11 +193,8 @@ export default async function DashboardPage() {
                 { label: 'View reports',   href: '/reports',               icon: '📄' },
                 { label: 'Add subjects',   href: '/settings/subjects/new', icon: '📖' },
               ].map((a) => (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded border border-surface-200 hover:border-brand-300 hover:bg-brand-50 transition-colors text-sm text-ink group"
-                >
+                <Link key={a.href} href={a.href}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded border border-surface-200 hover:border-brand-300 hover:bg-brand-50 transition-colors text-sm text-ink group">
                   <span>{a.icon}</span>
                   <span className="font-medium">{a.label}</span>
                   <ArrowRight size={13} className="ml-auto text-ink-faint group-hover:text-brand-500 transition-colors" />
@@ -234,7 +203,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {user?.organization_id === null && (
+          {!orgId && (
             <div className="card p-5 bg-brand-50 border-brand-200">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={15} className="text-brand-600" />
@@ -243,21 +212,17 @@ export default async function DashboardPage() {
               <p className="text-xs text-brand-700 leading-relaxed mb-3">
                 Upgrade to Teacher plan for unlimited classes, PDF reports, and AI remarks — just ₦1,000/term.
               </p>
-              <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">
-                Upgrade now
-              </Link>
+              <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">Upgrade now</Link>
             </div>
           )}
         </div>
       </div>
 
-      {/* Subject Breakdown */}
       {subjectStats && subjectStats.length > 0 && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-              <BarChart3 size={16} className="text-ink-muted" />
-              Subject Breakdown
+              <BarChart3 size={16} className="text-ink-muted" /> Subject Breakdown
             </h2>
             <Link href="/settings/subjects" className="text-xs text-brand-500 hover:underline">Manage subjects</Link>
           </div>
@@ -273,7 +238,7 @@ export default async function DashboardPage() {
               <tbody>
                 {subjectStats.map((subject) => {
                   const scoreCount = (subject.score_count as unknown as { count: number }[])?.[0]?.count ?? 0
-                  const group = (subject.group as any)?.[0] ?? null
+                  const group = (subject.group as unknown as { name: string }[])?.[0] ?? null
                   return (
                     <tr key={subject.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-4 py-2 font-medium text-ink">
@@ -291,7 +256,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Recent Scores */}
       {recentScores && recentScores.length > 0 && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
@@ -311,16 +275,14 @@ export default async function DashboardPage() {
               </thead>
               <tbody>
                 {recentScores.map((score) => {
-                  const learner = (score.learner as any)?.[0] ?? null
-                  const subject = (score.subject as any)?.[0] ?? null
-                  const component = (score.component as any)?.[0] ?? null
+                  const learner = (score.learner as unknown as { first_name: string; last_name: string; admission_number?: string }[])?.[0] ?? null
+                  const subject = (score.subject as unknown as { name: string }[])?.[0] ?? null
+                  const component = (score.component as unknown as { name: string }[])?.[0] ?? null
                   return (
                     <tr key={score.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-4 py-2">
                         {learner ? `${learner.last_name} ${learner.first_name}` : '—'}
-                        {learner?.admission_number && (
-                          <span className="text-xs text-ink-faint ml-2 font-mono">{learner.admission_number}</span>
-                        )}
+                        {learner?.admission_number && <span className="text-xs text-ink-faint ml-2 font-mono">{learner.admission_number}</span>}
                       </td>
                       <td className="px-4 py-2 text-ink-muted">{subject?.name || '—'}</td>
                       <td className="px-4 py-2 text-ink-muted">{component?.name || '—'}</td>
@@ -337,44 +299,28 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ✅ NEW: Per-Student Score Grid */}
       {scoreGridData && scoreGridData.learners && scoreGridData.learners.length > 0 && scoreGridData.subjects && scoreGridData.subjects.length > 0 && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-              <Users size={16} className="text-ink-muted" />
-              Score Grid: {firstClass?.name || 'Class'}
+              <Users size={16} className="text-ink-muted" /> Score Grid: {firstClass?.name || 'Class'}
             </h2>
-            <Link href={`/scores?class=${firstClass?.id}`} className="text-xs text-brand-500 hover:underline">
-              Enter scores
-            </Link>
+            <Link href={`/scores?class=${firstClass?.id}`} className="text-xs text-brand-500 hover:underline">Enter scores</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-200">
-                  <th className="text-left px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider sticky left-0 bg-white z-10">
-                    Student
-                  </th>
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider sticky left-0 bg-white z-10">Student</th>
                   {(scoreGridData.subjects || []).map((subj: { id: string; name: string }) => (
-                    <th key={subj.id} className="text-center px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">
-                      {subj.name}
-                    </th>
+                    <th key={subj.id} className="text-center px-3 py-2 text-xs font-semibold text-ink-muted uppercase tracking-wider">{subj.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {scoreGridData.learners.map((learner: { 
-                  id: string; 
-                  first_name: string; 
-                  last_name: string; 
-                  admission_number: string; 
-                  scores: { subject_id: string; score: number }[] 
-                }) => {
+                {scoreGridData.learners.map((learner: { id: string; first_name: string; last_name: string; admission_number: string; scores: { subject_id: string; score: number }[] }) => {
                   const scoreMap = new Map()
-                  learner.scores.forEach((s: { subject_id: string; score: number }) => {
-                    scoreMap.set(s.subject_id, s.score)
-                  })
+                  learner.scores?.forEach((s: { subject_id: string; score: number }) => scoreMap.set(s.subject_id, s.score))
                   return (
                     <tr key={learner.id} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-3 py-2 font-medium text-ink sticky left-0 bg-white whitespace-nowrap text-xs">
@@ -383,11 +329,7 @@ export default async function DashboardPage() {
                       </td>
                       {(scoreGridData.subjects || []).map((subj: { id: string; name: string }) => (
                         <td key={subj.id} className="text-center px-3 py-2 font-mono text-sm">
-                          {scoreMap.has(subj.id) ? (
-                            <span className="font-medium text-ink">{scoreMap.get(subj.id)}</span>
-                          ) : (
-                            <span className="text-ink-faint">—</span>
-                          )}
+                          {scoreMap.has(subj.id) ? <span className="font-medium text-ink">{scoreMap.get(subj.id)}</span> : <span className="text-ink-faint">—</span>}
                         </td>
                       ))}
                     </tr>
