@@ -10,9 +10,14 @@ export default async function TeachersPage() {
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id').eq('id', authUser.id).single()
+    .from('users').select('organization_id, role').eq('id', authUser.id).single()
 
-  // Get all teachers
+  // Only institutions can access this page
+  if (!profile?.organization_id) {
+    redirect('/dashboard')
+  }
+
+  // Get all teachers in the organization
   const { data: teachers } = await supabase
     .from('users')
     .select(`
