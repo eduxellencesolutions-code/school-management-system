@@ -20,7 +20,6 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { pdf } from '@react-pdf/renderer'
 import { StudentReportCard } from '@/components/reports/StudentReportCard'
-import JSZip from 'jszip'
 import { cn } from '@/lib/utils'
 
 export const runtime = 'nodejs'
@@ -419,6 +418,7 @@ export default function PreviewReportPage() {
     const loadingToast = toast.loading(`Generating PDFs for ${learners.length} students...`)
 
     try {
+      const JSZip = (await import('jszip')).default
       const org = profile?.organization
       const pdfBlobs: Blob[] = []
 
