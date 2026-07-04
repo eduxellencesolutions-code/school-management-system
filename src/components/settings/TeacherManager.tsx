@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Upload, User, BookOpen, Users, Crown } from 'lucide-react'
+import { Plus, Trash2, Upload, Download, User, BookOpen, Users, Crown, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Teacher {
@@ -17,8 +17,8 @@ interface Assignment {
   class_id: string | null
   subject_id: string | null
   role: string
-  groups: { name: string } | null
-  subjects: { name: string } | null
+  groups: { id: string; name: string } | null
+  subjects: { id: string; name: string } | null
 }
 
 interface Props {
@@ -34,6 +34,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
   const [selectedSubject, setSelectedSubject] = useState<string>('')
   const [role, setRole] = useState<string>('subject_teacher')
   const [uploading, setUploading] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
 
   // Get subjects for a specific class
   const getClassSubjects = (classId: string) => {
@@ -54,16 +55,41 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       return toast.error('Subject teacher must be assigned to a subject')
     }
 
-    const formData = new FormData()
-    formData.append('teacher_id', selectedTeacher)
-    formData.append('class_id', selectedClass || '')
-    formData.append('subject_id', selectedSubject || '')
-    formData.append('role', role)
+    try {
+      const formData = new FormData()
+      formData.append('teacher_id', selectedTeacher)
+      formData.append('class_id', selectedClass || '')
+      formData.append('subject_id', selectedSubject || '')
+      formData.append('role', role)
 
-    const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers/actions')
-    await assignTeacher(formData)
-    toast.success('Teacher assigned successfully!')
-    setIsAdding(false)
+      const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers/actions')
+      await assignTeacher(formData)
+      toast.success('Teacher assigned successfully!')
+      setIsAdding(false)
+      // Reset form
+      setSelectedTeacher('')
+      setSelectedClass('')
+      setSelectedSubject('')
+      setRole('subject_teacher')
+    } catch (error) {
+      toast.error('Failed to assign teacher')
+      console.error(error)
+    }
+  }
+
+  async function handleRemoveAssignment(assignmentId: string) {
+    if (!confirm('Remove this assignment?')) return
+
+    try {
+      const formData = new FormData()
+      formData.append('assignment_id', assignmentId)
+      const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers/actions')
+      await removeAssignment(formData)
+      toast.success('Assignment removed')
+    } catch (error) {
+      toast.error('Failed to remove assignment')
+      console.error(error)
+    }
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -71,42 +97,98 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
     if (!file) return
 
     setUploading(true)
-    const formData = new FormData()
-    formData.append('file', file)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
 
-    const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers/actions')
-    await uploadTeachers(formData)
-    toast.success('Teachers uploaded successfully!')
+      const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers/actions')
+      await uploadTeachers(formData)
+      toast.success('Teachers uploaded successfully!')
+      setShowUpload(false)
+    } catch (error) {
+      toast.error('Failed to upload teachers')
+      console.error(error)
+    }
     setUploading(false)
+  }
+
+  async function handleDownloadTemplate() {
+    try {
+      const response = await fetch('/api/teachers/template')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'teachers_template.csv'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('Template downloaded')
+    } catch (error) {
+      toast.error('Failed to download template')
+      console.error(error)
+    }
   }
 
   return (
     <div className="card">
-      <div className="card-header flex items-center justify-between">
-        <h2 className="font-semibold text-sm text-ink">Teacher Management</h2>
-        <div className="flex gap-2">
-          <label className="btn-secondary btn-sm btn cursor-pointer">
-            <Upload size={13} />
-            Upload CSV
-            <input
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleFileUpload}
-              disabled={uploading}
-            />
-          </label>
+      <div className="card-header flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="font-semibold text-sm text-ink">All Teachers</h2>
+          <p className="text-xs text-ink-muted">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={handleDownloadTemplate}
+            className="btn-secondary btn-sm btn"
+          >
+            <Download size={13} /> Template
+          </button>
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className="btn-secondary btn-sm btn"
+          >
+            <Upload size={13} /> Upload CSV
+          </button>
           <button onClick={() => setIsAdding(true)} className="btn-primary btn-sm btn">
             <Plus size={13} /> Assign Teacher
           </button>
         </div>
       </div>
 
+      {/* CSV Upload Section */}
+      {showUpload && (
+        <div className="border-b border-surface-200 p-5 bg-surface-50">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-ink">Upload Teachers from CSV</h3>
+            <button onClick={() => setShowUpload(false)} className="text-ink-faint hover:text-ink">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="btn-primary btn-sm btn cursor-pointer">
+              {uploading ? 'Uploading...' : 'Choose CSV File'}
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+            </label>
+            <span className="text-xs text-ink-muted">
+              Max 500 teachers at once. Download template for format.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Assignment Form */}
       {isAdding && (
         <div className="border-b border-surface-200 p-5 bg-brand-50">
           <h3 className="text-sm font-semibold text-brand-700 mb-3">Assign Teacher to Class or Subject</h3>
-          <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <label className="block text-xs font-medium text-ink mb-1">Teacher *</label>
               <select
@@ -145,7 +227,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                 value={selectedClass}
                 onChange={e => {
                   setSelectedClass(e.target.value)
-                  // Clear subject if class changes and it doesn't belong to this class
+                  // Clear subject if class changes
                   if (selectedSubject) {
                     const classSubjects = getClassSubjects(e.target.value)
                     if (!classSubjects.find(s => s.id === selectedSubject)) {
@@ -195,11 +277,17 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
               )}
             </div>
 
-            <div className="flex gap-2 md:col-span-4">
-              <button type="submit" className="btn-primary btn-sm btn">Assign Teacher</button>
+            <div className="flex items-end gap-2">
+              <button type="submit" className="btn-primary btn-sm btn w-full">Assign</button>
               <button
                 type="button"
-                onClick={() => setIsAdding(false)}
+                onClick={() => {
+                  setIsAdding(false)
+                  setSelectedTeacher('')
+                  setSelectedClass('')
+                  setSelectedSubject('')
+                  setRole('subject_teacher')
+                }}
                 className="btn-secondary btn-sm btn"
               >
                 Cancel
@@ -212,8 +300,12 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       {/* Teacher List */}
       <div className="divide-y divide-surface-200">
         {teachers.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-ink-muted">
-            No teachers added yet. Upload a CSV or add manually.
+          <div className="px-5 py-12 text-center">
+            <User size={40} className="text-surface-200 mx-auto mb-3" />
+            <p className="text-sm text-ink-muted mb-2">No teachers added yet</p>
+            <p className="text-xs text-ink-faint">
+              Upload a CSV file or assign teachers manually
+            </p>
           </div>
         ) : (
           teachers.map(teacher => {
@@ -222,16 +314,16 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
             const subjectAssignments = teacher.teacher_assignments?.filter(a => a.role === 'subject_teacher') || []
             
             return (
-              <div key={teacher.id} className="px-5 py-4">
+              <div key={teacher.id} className="px-5 py-4 hover:bg-surface-50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded bg-brand-50 text-brand-600 text-xs font-bold flex items-center justify-center">
+                  <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
                     {teacher.name.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-ink">{teacher.name}</p>
-                    <p className="text-xs text-ink-muted">{teacher.email}</p>
+                    <p className="text-xs text-ink-muted truncate">{teacher.email}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {classTeacherAssignment && (
                       <span className="badge badge-amber text-[10px] flex items-center gap-1">
                         <Crown size={10} /> Class Teacher
@@ -248,7 +340,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
 
                 {/* Assignments */}
                 {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 && (
-                  <div className="ml-11 flex flex-wrap gap-2">
+                  <div className="ml-13 flex flex-wrap gap-2">
                     {teacher.teacher_assignments.map(assignment => (
                       <div
                         key={assignment.id}
@@ -277,12 +369,9 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                           <span className="text-[10px] text-amber-600 font-medium ml-1">(Class Teacher)</span>
                         )}
                         <button
-                          onClick={async () => {
-                            const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers/actions')
-                            await removeAssignment(assignment.id)
-                            toast.success('Assignment removed')
-                          }}
+                          onClick={() => handleRemoveAssignment(assignment.id)}
                           className="ml-1 p-0.5 text-ink-faint hover:text-red-500 transition-colors"
+                          title="Remove assignment"
                         >
                           <Trash2 size={11} />
                         </button>
