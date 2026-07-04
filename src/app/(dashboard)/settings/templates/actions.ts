@@ -31,19 +31,32 @@ export async function createTemplate(formData: FormData) {
       .eq('organization_id', profile.organization_id)
   }
 
+  // Build the insert data based on user type
+  const insertData: any = {
+    name: name.trim(),
+    description: description?.trim() || null,
+    is_default: isDefault,
+    metadata: {},
+  }
+
+  // If user belongs to an organization, use organization_id
+  // Otherwise, use instructor_id for individual teachers
+  if (profile?.organization_id) {
+    insertData.organization_id = profile.organization_id
+  } else {
+    insertData.instructor_id = user.id
+  }
+
   const { data: template, error } = await supabase
     .from('assessment_templates')
-    .insert({
-      organization_id: profile?.organization_id ?? null,
-      name: name.trim(),
-      description: description?.trim() || null,
-      is_default: isDefault,
-      metadata: {},
-    })
+    .insert(insertData)
     .select('id')
     .single()
 
-  if (error || !template) return
+  if (error || !template) {
+    console.error('Template creation error:', error)
+    return
+  }
 
   // Insert components
   const components = componentNames
@@ -60,7 +73,13 @@ export async function createTemplate(formData: FormData) {
     .filter(c => c.name)
 
   if (components.length > 0) {
-    await supabase.from('assessment_components').insert(components)
+    const { error: compError } = await supabase.from('assessment_components').insert(components)
+    if (compError) {
+      console.error('Component creation error:', compError)
+      // Rollback: delete the template if components fail
+      await supabase.from('assessment_templates').delete().eq('id', template.id)
+      return
+    }
   }
 
   revalidatePath('/settings/templates')
@@ -86,11 +105,11 @@ export async function updateTemplate(formData: FormData) {
 
   if (!name?.trim() || !id) return
 
-  if (isDefault) {
+  if (isDefault && profile?.organization_id) {
     await supabase
       .from('assessment_templates')
       .update({ is_default: false })
-      .eq('organization_id', profile?.organization_id)
+      .eq('organization_id', profile.organization_id)
   }
 
   await supabase
