@@ -15,7 +15,7 @@ export default async function ClassesPage() {
     .eq('id', authUser.id)
     .single()
 
-  const { data: groups } = await supabase
+  const groupsQuery = supabase
     .from('groups')
     .select(`
       id, name, code, type, is_active, created_at,
@@ -25,9 +25,16 @@ export default async function ClassesPage() {
       learner_count:learners(count),
       subject_count:subjects(count)
     `)
-    .eq('organization_id', profile?.organization_id ?? authUser.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
+
+  if (profile?.organization_id) {
+    groupsQuery.eq('organization_id', profile.organization_id)
+  } else {
+    groupsQuery.eq('instructor_id', authUser.id)
+  }
+
+  const { data: groups } = await groupsQuery
 
   return (
     <div className="flex flex-col gap-6">
