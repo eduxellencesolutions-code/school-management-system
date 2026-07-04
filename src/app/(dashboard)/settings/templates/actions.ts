@@ -5,29 +5,39 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 export async function createTemplate(formData: FormData) {
+  console.log('=== CREATE TEMPLATE STARTED ===')
+  
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  if (!user) {
+    console.log('No user found, redirecting to login')
+    redirect('/login')
+  }
+  console.log('User ID:', user.id)
 
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
+  console.log('Profile:', profile)
 
   const name = formData.get('name') as string
   const description = formData.get('description') as string
   const isDefault = formData.get('is_default') === 'on'
+  console.log('Form data - name:', name, 'isDefault:', isDefault)
 
   // Parse components from form
   const componentNames  = formData.getAll('component_name') as string[]
   const componentScores = formData.getAll('component_max_score') as string[]
   const componentPasses = formData.getAll('component_pass_mark') as string[]
+  console.log('Components - names:', componentNames, 'scores:', componentScores)
 
   if (!name?.trim()) {
-    console.error('Template name is required')
+    console.log('Template name is empty, returning')
     return
   }
 
-  // If setting as default, unset others (only for institutions)
+  // If setting as default, unset others
   if (isDefault && profile?.organization_id) {
+    console.log('Unsetting other defaults for organization:', profile.organization_id)
     await supabase
       .from('assessment_templates')
       .update({ is_default: false })
@@ -46,11 +56,13 @@ export async function createTemplate(formData: FormData) {
   // Otherwise, use instructor_id for individual teachers
   if (profile?.organization_id) {
     insertData.organization_id = profile.organization_id
+    console.log('Inserting for institution with organization_id:', profile.organization_id)
   } else {
     insertData.instructor_id = user.id
+    console.log('Inserting for individual teacher with instructor_id:', user.id)
   }
 
-  console.log('Creating template with data:', insertData) // Debug log
+  console.log('Final insert data:', insertData)
 
   const { data: template, error } = await supabase
     .from('assessment_templates')
@@ -64,9 +76,11 @@ export async function createTemplate(formData: FormData) {
   }
 
   if (!template) {
-    console.error('No template returned')
+    console.error('No template returned from insert')
     return
   }
+
+  console.log('Template created with ID:', template.id)
 
   // Insert components
   const components = componentNames
@@ -82,19 +96,21 @@ export async function createTemplate(formData: FormData) {
     }))
     .filter(c => c.name)
 
-  if (components.length > 0) {
-    const { error: compError } = await supabase
-      .from('assessment_components')
-      .insert(components)
+  console.log('Components to insert:', components)
 
+  if (components.length > 0) {
+    const { error: compError } = await supabase.from('assessment_components').insert(components)
     if (compError) {
       console.error('Component creation error:', compError)
       // Rollback: delete the template if components fail
       await supabase.from('assessment_templates').delete().eq('id', template.id)
+      console.log('Rolled back: deleted template due to component error')
       return
     }
+    console.log('Components inserted successfully')
   }
 
+  console.log('=== CREATE TEMPLATE COMPLETED SUCCESSFULLY ===')
   revalidatePath('/settings/templates')
   redirect('/settings/templates')
 }
