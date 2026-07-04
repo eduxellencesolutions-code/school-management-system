@@ -26,9 +26,9 @@ async function checkInstitutionAccess() {
 
 // Get all teachers in an organization
 export async function getTeachers() {
-  const { user, profile } = await checkInstitutionAccess()
-
+  const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
+
   const { data: teachers } = await supabase
     .from('users')
     .select(`
@@ -51,7 +51,7 @@ export async function getTeachers() {
 
 // Assign teacher to class/subject
 export async function assignTeacher(formData: FormData) {
-  const { user, profile } = await checkInstitutionAccess()
+  const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
 
   const teacherId = formData.get('teacher_id') as string
