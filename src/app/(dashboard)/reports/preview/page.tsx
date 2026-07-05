@@ -422,6 +422,10 @@ export default function PreviewReportPage() {
       const org = profile?.organization
       const pdfBlobs: Blob[] = []
 
+      // Determine term and session from report data or use defaults
+      const termName = report?.group?.term?.name || 'First Term'
+      const sessionName = report?.group?.session?.name || '2024/2025 Session'
+
       for (let i = 0; i < learners.length; i++) {
         const student = learners[i]
         toast.loading(`Generating PDF ${i + 1}/${learners.length}...`, { id: loadingToast })
@@ -434,12 +438,23 @@ export default function PreviewReportPage() {
             schoolLogo={org?.logo_url || undefined}
             schoolMotto={org?.motto || undefined}
             className={report?.group?.name || 'Class'}
-            termName="First Term"
-            sessionName="2024/2025 Session"
+            termName={termName}
+            sessionName={sessionName}
             teacherName={profile?.name || 'Teacher'}
             teacherSignature={profile?.signature_url || undefined}
             principalName={org?.name ? `Principal, ${org.name}` : 'Principal'}
             principalSignature={org?.signature_url || undefined}
+            options={{
+              show_admission: true,
+              show_gender: false,
+              show_position: true,
+              show_components: true,
+              show_grade: true,
+              show_percentage: true,
+              show_remark: true,
+              show_term: true,
+              show_signature: true,
+            }}
           />
         )
 
