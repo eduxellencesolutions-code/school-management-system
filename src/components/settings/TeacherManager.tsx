@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Plus, Trash2, Upload, Download, User, BookOpen, Users, Crown, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,7 +22,6 @@ interface Assignment {
   subjects: { id: string; name: string } | { id: string; name: string }[] | null
 }
 
-// ✅ FIXED: Allow null for group
 interface Props {
   teachers: Teacher[]
   classes: { id: string; name: string }[]
@@ -152,8 +152,13 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
           >
             <Upload size={13} /> Upload CSV
           </button>
-          <button onClick={() => setIsAdding(true)} className="btn-primary btn-sm btn">
-            <Plus size={13} /> Assign Teacher
+          {/* ✅ ADD TEACHER BUTTON */}
+          <Link href="/settings/teachers/new" className="btn-primary btn-sm btn">
+            <Plus size={13} /> Add Teacher
+          </Link>
+          {/* ✅ ASSIGN TEACHER BUTTON - Toggles inline form */}
+          <button onClick={() => setIsAdding(!isAdding)} className="btn-primary btn-sm btn">
+            <Plus size={13} /> {isAdding ? 'Cancel' : 'Assign Teacher'}
           </button>
         </div>
       </div>
@@ -343,7 +348,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                 {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 && (
                   <div className="ml-13 flex flex-wrap gap-2">
                     {teacher.teacher_assignments.map(assignment => {
-                      // ✅ FIXED: Handle both single object and array cases
+                      // Handle both single object and array cases
                       const getGroupName = () => {
                         if (!assignment.groups) return null
                         const g = Array.isArray(assignment.groups) ? assignment.groups[0] : assignment.groups
