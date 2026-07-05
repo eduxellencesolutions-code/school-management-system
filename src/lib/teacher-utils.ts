@@ -73,6 +73,13 @@ export async function getTeacherContext(teacherId: string): Promise<TeacherConte
     .map(a => a.subject_id)
     .filter(id => id !== null) as string[]
 
+  // ✅ Transform assignments to handle array cases from Supabase
+  const transformedAssignments: TeacherAssignment[] = assignments.map(a => ({
+    ...a,
+    groups: Array.isArray(a.groups) ? (a.groups[0] ?? null) : a.groups,
+    subjects: Array.isArray(a.subjects) ? (a.subjects[0] ?? null) : a.subjects,
+  }))
+
   return {
     teacherId,
     isClassTeacher: !!classTeacherOf,
@@ -81,7 +88,7 @@ export async function getTeacherContext(teacherId: string): Promise<TeacherConte
     assignedSubjectIds,
     classTeacherOf,
     subjectTeacherOf,
-    allAssignments: assignments as TeacherAssignment[]
+    allAssignments: transformedAssignments
   }
 }
 
