@@ -125,7 +125,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       // Class teacher assignment
       if (formData.isClassTeacher && formData.classTeacherOf) {
         assignments.push({
-          teacher_id: authData.user.id,
+          teacher_id: authData.user!.id,
           class_id: formData.classTeacherOf,
           role: 'class_teacher',
         })
@@ -135,7 +135,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       formData.selectedSubjects.forEach(subjectId => {
         const subject = subjects.find(s => s.id === subjectId)
         assignments.push({
-          teacher_id: authData.user.id,
+          teacher_id: authData.user!.id,
           class_id: subject?.group_id || undefined,
           subject_id: subjectId,
           role: 'subject_teacher',
