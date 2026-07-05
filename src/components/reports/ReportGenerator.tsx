@@ -380,6 +380,7 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
 
         const pdfDoc = (
           <StudentReportCard
+            mode={isInstitution ? 'institution' : 'individual'}
             student={student}
             schoolName={org?.name || 'Eduxellence School'}
             schoolLogo={org?.logo_url || undefined}
@@ -391,7 +392,18 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             teacherSignature={teacherSigUrl || undefined}
             principalName="Principal"
             principalSignature={principalSigUrl || undefined}
-            pdfOptions={pdfOptions}  // ✅ PASS PDF OPTIONS
+            pdfOptions={pdfOptions}
+            options={{
+              show_admission: true,
+              show_gender: false,
+              show_position: true,
+              show_components: true,
+              show_grade: true,
+              show_percentage: true,
+              show_remark: true,
+              show_term: true,
+              show_signature: true,
+            }}
           />
         )
 
