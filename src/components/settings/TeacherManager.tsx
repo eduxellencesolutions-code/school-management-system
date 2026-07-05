@@ -21,10 +21,11 @@ interface Assignment {
   subjects: { id: string; name: string } | { id: string; name: string }[] | null
 }
 
+// ✅ FIXED: Allow null for group
 interface Props {
   teachers: Teacher[]
   classes: { id: string; name: string }[]
-  subjects: { id: string; name: string; group_id: string; group?: { name: string } | null }[]
+  subjects: { id: string; name: string; group_id: string; group: { name: string } | null }[]
 }
 
 export default function TeacherManager({ teachers, classes, subjects }: Props) {
