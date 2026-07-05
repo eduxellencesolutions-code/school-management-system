@@ -82,17 +82,18 @@ export default async function TeachersPage() {
     .eq('is_active', true)
     .order('name')
 
-  // ✅ Transform subjects to handle array case
+  // ✅ Transform subjects to handle array case - use a new variable for the extracted group
   const transformedSubjects = (subjects || []).map(subject => {
-    let group = subject.group
-    if (Array.isArray(group) && group.length > 0) {
-      group = group[0]
-    } else if (Array.isArray(group) && group.length === 0) {
-      group = null
+    // Use a different variable name to avoid type conflicts
+    let groupData = subject.group
+    if (Array.isArray(groupData) && groupData.length > 0) {
+      groupData = groupData[0]
+    } else if (Array.isArray(groupData) && groupData.length === 0) {
+      groupData = null
     }
     return {
       ...subject,
-      group
+      group: groupData
     }
   })
 
