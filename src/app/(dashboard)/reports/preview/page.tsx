@@ -33,7 +33,11 @@ interface ReportData {
   download_url: string | null
   created_at: string
   completed_at: string | null
-  group?: { name: string }
+  group?: {
+    name: string
+    term?: { name: string } | null
+    session?: { name: string } | null
+  }
   learner?: { first_name: string; last_name: string }
   created_by_user?: { name: string }
   organization?: { name: string; logo_url: string | null; motto: string | null }
@@ -154,9 +158,10 @@ export default function PreviewReportPage() {
         }
       }
 
+      // ✅ UPDATED: Fetch report with term and session data
       const { data: reportData, error: reportError } = await supabase
         .from('reports')
-        .select(`*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name), organization:organizations(name, logo_url, motto)`)
+        .select(`*, group:groups(name, session:academic_sessions(name), term:terms(name)), learner:learners(first_name, last_name), created_by_user:users(name), organization:organizations(name, logo_url, motto)`)
         .eq('id', reportId!)
         .single()
 
@@ -422,7 +427,7 @@ export default function PreviewReportPage() {
       const org = profile?.organization
       const pdfBlobs: Blob[] = []
 
-      // Determine term and session from report data or use defaults
+      // Now term and session are properly typed from the report data
       const termName = report?.group?.term?.name || 'First Term'
       const sessionName = report?.group?.session?.name || '2024/2025 Session'
 
