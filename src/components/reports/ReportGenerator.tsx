@@ -392,7 +392,6 @@ export default function ReportGenerator({ groups, org, userId, userRole }: Props
             teacherSignature={teacherSigUrl || undefined}
             principalName="Principal"
             principalSignature={principalSigUrl || undefined}
-            pdfOptions={pdfOptions}
             options={{
               show_admission: true,
               show_gender: false,
