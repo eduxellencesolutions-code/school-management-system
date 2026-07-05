@@ -17,8 +17,8 @@ interface Assignment {
   class_id: string | null
   subject_id: string | null
   role: string
-  groups: { id: string; name: string } | null
-  subjects: { id: string; name: string } | null
+  groups: { id: string; name: string } | { id: string; name: string }[] | null
+  subjects: { id: string; name: string } | { id: string; name: string }[] | null
 }
 
 interface Props {
@@ -62,7 +62,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       formData.append('subject_id', selectedSubject || '')
       formData.append('role', role)
 
-      const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers/actions')
+      const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers')
       await assignTeacher(formData)
       toast.success('Teacher assigned successfully!')
       setIsAdding(false)
@@ -83,7 +83,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
     try {
       const formData = new FormData()
       formData.append('assignment_id', assignmentId)
-      const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers/actions')
+      const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers')
       await removeAssignment(formData)
       toast.success('Assignment removed')
     } catch (error) {
@@ -101,7 +101,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       const formData = new FormData()
       formData.append('file', file)
 
-      const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers/actions')
+      const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers')
       await uploadTeachers(formData)
       toast.success('Teachers uploaded successfully!')
       setShowUpload(false)
@@ -341,42 +341,60 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                 {/* Assignments */}
                 {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 && (
                   <div className="ml-13 flex flex-wrap gap-2">
-                    {teacher.teacher_assignments.map(assignment => (
-                      <div
-                        key={assignment.id}
-                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs border ${
-                          assignment.role === 'class_teacher' 
-                            ? 'bg-amber-50 border-amber-200' 
-                            : 'bg-surface-50 border-surface-200'
-                        }`}
-                      >
-                        {assignment.role === 'class_teacher' && (
-                          <Crown size={12} className="text-amber-500" />
-                        )}
-                        {assignment.role === 'subject_teacher' && (
-                          <BookOpen size={12} className="text-green-500" />
-                        )}
-                        {assignment.groups?.name && (
-                          <span className="font-medium">{assignment.groups.name}</span>
-                        )}
-                        {assignment.groups?.name && assignment.subjects?.name && (
-                          <span className="text-ink-faint">·</span>
-                        )}
-                        {assignment.subjects?.name && (
-                          <span>{assignment.subjects.name}</span>
-                        )}
-                        {assignment.role === 'class_teacher' && (
-                          <span className="text-[10px] text-amber-600 font-medium ml-1">(Class Teacher)</span>
-                        )}
-                        <button
-                          onClick={() => handleRemoveAssignment(assignment.id)}
-                          className="ml-1 p-0.5 text-ink-faint hover:text-red-500 transition-colors"
-                          title="Remove assignment"
+                    {teacher.teacher_assignments.map(assignment => {
+                      // ✅ FIXED: Handle both single object and array cases
+                      const getGroupName = () => {
+                        if (!assignment.groups) return null
+                        const g = Array.isArray(assignment.groups) ? assignment.groups[0] : assignment.groups
+                        return g?.name || null
+                      }
+                      
+                      const getSubjectName = () => {
+                        if (!assignment.subjects) return null
+                        const s = Array.isArray(assignment.subjects) ? assignment.subjects[0] : assignment.subjects
+                        return s?.name || null
+                      }
+
+                      const groupName = getGroupName()
+                      const subjectName = getSubjectName()
+
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs border ${
+                            assignment.role === 'class_teacher' 
+                              ? 'bg-amber-50 border-amber-200' 
+                              : 'bg-surface-50 border-surface-200'
+                          }`}
                         >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    ))}
+                          {assignment.role === 'class_teacher' && (
+                            <Crown size={12} className="text-amber-500" />
+                          )}
+                          {assignment.role === 'subject_teacher' && (
+                            <BookOpen size={12} className="text-green-500" />
+                          )}
+                          {groupName && (
+                            <span className="font-medium">{groupName}</span>
+                          )}
+                          {groupName && subjectName && (
+                            <span className="text-ink-faint">·</span>
+                          )}
+                          {subjectName && (
+                            <span>{subjectName}</span>
+                          )}
+                          {assignment.role === 'class_teacher' && (
+                            <span className="text-[10px] text-amber-600 font-medium ml-1">(Class Teacher)</span>
+                          )}
+                          <button
+                            onClick={() => handleRemoveAssignment(assignment.id)}
+                            className="ml-1 p-0.5 text-ink-faint hover:text-red-500 transition-colors"
+                            title="Remove assignment"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
