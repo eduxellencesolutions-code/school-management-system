@@ -17,7 +17,7 @@ export default async function TeachersPage() {
     redirect('/dashboard')
   }
 
-  // Get all teachers in the organization
+  // Get all teachers in the organization with their assignments
   const { data: teachers } = await supabase
     .from('users')
     .select(`
@@ -34,6 +34,34 @@ export default async function TeachersPage() {
     .eq('organization_id', profile?.organization_id)
     .neq('role', 'admin')
     .order('name')
+
+  // ✅ Transform the data to handle array cases from Supabase
+  const transformedTeachers = (teachers || []).map(teacher => ({
+    ...teacher,
+    teacher_assignments: (teacher.teacher_assignments || []).map((assignment: any) => {
+      // Handle groups - Supabase returns array, extract first item
+      let groups = assignment.groups
+      if (Array.isArray(groups) && groups.length > 0) {
+        groups = groups[0]
+      } else if (Array.isArray(groups) && groups.length === 0) {
+        groups = null
+      }
+      
+      // Handle subjects - Supabase returns array, extract first item
+      let subjects = assignment.subjects
+      if (Array.isArray(subjects) && subjects.length > 0) {
+        subjects = subjects[0]
+      } else if (Array.isArray(subjects) && subjects.length === 0) {
+        subjects = null
+      }
+      
+      return {
+        ...assignment,
+        groups,
+        subjects
+      }
+    })
+  }))
 
   // Get all classes
   const { data: classes } = await supabase
@@ -53,6 +81,20 @@ export default async function TeachersPage() {
     .eq('organization_id', profile?.organization_id)
     .eq('is_active', true)
     .order('name')
+
+  // ✅ Transform subjects to handle array case
+  const transformedSubjects = (subjects || []).map(subject => {
+    let group = subject.group
+    if (Array.isArray(group) && group.length > 0) {
+      group = group[0]
+    } else if (Array.isArray(group) && group.length === 0) {
+      group = null
+    }
+    return {
+      ...subject,
+      group
+    }
+  })
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
@@ -77,9 +119,9 @@ export default async function TeachersPage() {
       </div>
 
       <TeacherManager 
-        teachers={teachers || []} 
+        teachers={transformedTeachers || []} 
         classes={classes || []} 
-        subjects={subjects || []} 
+        subjects={transformedSubjects || []} 
       />
     </div>
   )
