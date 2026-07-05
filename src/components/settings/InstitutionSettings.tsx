@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette } from 'lucide-react'
+import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette, PenTool } from 'lucide-react'
 
 interface Organization {
   id: string
