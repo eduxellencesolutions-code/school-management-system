@@ -122,10 +122,16 @@ export async function getTeacherDashboardData(teacherId: string) {
 
   const { data: subjects } = await subjectsQuery.order('name')
 
+  // ✅ Transform subjects to handle array case from Supabase
+  const transformedSubjects = (subjects || []).map(s => ({
+    ...s,
+    group: Array.isArray(s.group) ? (s.group[0] ?? null) : (s.group || null)
+  }))
+
   return {
     context,
     classes: classes || [],
-    subjects: subjects || []
+    subjects: transformedSubjects
   }
 }
 
@@ -192,7 +198,7 @@ export async function getTeacherSubjectStudents(teacherId: string) {
   const supabase = await createClient()
   
   // Get all class IDs where this teacher teaches
-  const classIds = context.assignedClassIds
+  const classIds = [...context.assignedClassIds]
   
   // If they're a class teacher, include their class
   if (context.classTeacherOf && !classIds.includes(context.classTeacherOf)) {
