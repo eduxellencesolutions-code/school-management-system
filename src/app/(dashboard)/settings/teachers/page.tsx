@@ -22,7 +22,7 @@ export default async function TeachersPage() {
     redirect('/dashboard')
   }
 
-  // Get all teachers in the organization with their assignments
+  // ✅ FIXED: Explicitly filter for teacher role
   const { data: teachers } = await supabase
     .from('users')
     .select(`
@@ -37,8 +37,12 @@ export default async function TeachersPage() {
       )
     `)
     .eq('organization_id', profile?.organization_id)
-    .neq('role', 'admin')
+    .eq('role', 'teacher')  // ✅ Changed from .neq('role', 'admin') to .eq('role', 'teacher')
     .order('name')
+
+  // ✅ Add debug log
+  console.log('👨‍🏫 Teachers fetched:', teachers?.length)
+  console.log('👨‍🏫 Teachers names:', teachers?.map(t => t.name))
 
   // ✅ Transform the data to handle array cases from Supabase
   const transformedTeachers = (teachers || []).map(teacher => ({
@@ -87,9 +91,8 @@ export default async function TeachersPage() {
     .eq('is_active', true)
     .order('name')
 
-  // ✅ Transform subjects to handle array case - use a separate extracted variable
+  // ✅ Transform subjects to handle array case
   const transformedSubjects = (subjects || []).map(subject => {
-    // Use a separate variable for the extracted value
     const groupArray = subject.group
     const extractedGroup = Array.isArray(groupArray) && groupArray.length > 0 
       ? groupArray[0] 
