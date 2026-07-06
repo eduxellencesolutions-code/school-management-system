@@ -35,7 +35,13 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
       <div className="card p-2">
         <nav className="flex flex-col gap-0.5">
           {items.map((item) => {
-            const isActive = pathname === item.href
+            // Check if the current path matches this item's href
+            // For '/settings', match exactly
+            // For other paths, check if pathname starts with the href
+            const isActive = item.href === '/settings' 
+              ? pathname === '/settings' 
+              : pathname?.startsWith(item.href + '/') || pathname === item.href
+            
             return (
               <Link
                 key={item.href}
