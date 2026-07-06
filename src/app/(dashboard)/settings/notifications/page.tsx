@@ -46,6 +46,31 @@ interface NotificationPreferenceGroup {
   }[]
 }
 
+// ✅ FIXED: Return type matches NotificationPreference with temporary IDs
+const getDefaultPreferences = (userId: string): NotificationPreference[] => {
+  const now = new Date().toISOString()
+  const defaults = [
+    // Account & Security
+    { id: `temp_${Date.now()}_1`, user_id: userId, type: 'account_security', channel: 'email' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_2`, user_id: userId, type: 'password_changed', channel: 'both' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_3`, user_id: userId, type: 'login_alert', channel: 'email' as const, enabled: true, created_at: now, updated_at: now },
+    
+    // Results & Reports
+    { id: `temp_${Date.now()}_4`, user_id: userId, type: 'result_published', channel: 'both' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_5`, user_id: userId, type: 'report_ready', channel: 'in_app' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_6`, user_id: userId, type: 'score_entered', channel: 'in_app' as const, enabled: false, created_at: now, updated_at: now },
+    
+    // Teacher Management (admin only)
+    { id: `temp_${Date.now()}_7`, user_id: userId, type: 'teacher_assigned', channel: 'email' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_8`, user_id: userId, type: 'class_update', channel: 'in_app' as const, enabled: true, created_at: now, updated_at: now },
+    
+    // System & Updates
+    { id: `temp_${Date.now()}_9`, user_id: userId, type: 'system_update', channel: 'email' as const, enabled: true, created_at: now, updated_at: now },
+    { id: `temp_${Date.now()}_10`, user_id: userId, type: 'maintenance_alert', channel: 'email' as const, enabled: true, created_at: now, updated_at: now },
+  ]
+  return defaults
+}
+
 export default function NotificationsPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -78,7 +103,7 @@ export default function NotificationsPage() {
         const defaultPrefs = getDefaultPreferences(user.id)
         const { data: newPrefs, error: insertError } = await supabase
           .from('notification_preferences')
-          .insert(defaultPrefs)
+          .insert(defaultPrefs.map(({ id, ...rest }) => rest))
           .select()
 
         if (insertError) throw insertError
@@ -97,28 +122,6 @@ export default function NotificationsPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const getDefaultPreferences = (userId: string): Omit<NotificationPreference, 'id' | 'created_at' | 'updated_at'>[] => {
-    return [
-      // Account & Security
-      { user_id: userId, type: 'account_security', channel: 'email', enabled: true },
-      { user_id: userId, type: 'password_changed', channel: 'both', enabled: true },
-      { user_id: userId, type: 'login_alert', channel: 'email', enabled: true },
-      
-      // Results & Reports
-      { user_id: userId, type: 'result_published', channel: 'both', enabled: true },
-      { user_id: userId, type: 'report_ready', channel: 'in_app', enabled: true },
-      { user_id: userId, type: 'score_entered', channel: 'in_app', enabled: false },
-      
-      // Teacher Management (admin only)
-      { user_id: userId, type: 'teacher_assigned', channel: 'email', enabled: true },
-      { user_id: userId, type: 'class_update', channel: 'in_app', enabled: true },
-      
-      // System & Updates
-      { user_id: userId, type: 'system_update', channel: 'email', enabled: true },
-      { user_id: userId, type: 'maintenance_alert', channel: 'email', enabled: true },
-    ]
   }
 
   const handleTogglePreference = (index: number, field: 'enabled' | 'channel', value: any) => {
@@ -142,7 +145,7 @@ export default function NotificationsPage() {
 
       // Update each preference
       for (const pref of preferences) {
-        if (pref.id) {
+        if (pref.id && !pref.id.startsWith('temp_')) {
           const { error } = await supabase
             .from('notification_preferences')
             .update({
@@ -180,8 +183,8 @@ export default function NotificationsPage() {
           user_id: user.id,
           title: 'Notification settings updated',
           message: 'Your notification preferences have been saved successfully.',
-          type: 'info',
-          read: false,
+          notification_type: 'info',
+          is_read: false,
           created_at: new Date().toISOString(),
         })
     } catch (error) {
