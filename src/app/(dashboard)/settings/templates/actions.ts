@@ -53,14 +53,12 @@ export async function createTemplate(formData: FormData) {
   }
 
   // If user belongs to an organization, use organization_id
-  // Otherwise, use instructor_id for individual teachers
+  // Solo teachers: organization_id stays null, RLS allows it via auth.uid()
   if (profile?.organization_id) {
     insertData.organization_id = profile.organization_id
     console.log('Inserting for institution with organization_id:', profile.organization_id)
-  } else {
-    insertData.instructor_id = user.id
-    console.log('Inserting for individual teacher with instructor_id:', user.id)
   }
+  // ✅ instructor_id line removed - solo teachers just have organization_id = null
 
   console.log('Final insert data:', insertData)
 
