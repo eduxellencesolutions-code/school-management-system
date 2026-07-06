@@ -25,8 +25,9 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
       { label: 'Teachers', href: '/settings/teachers', icon: Users },
       { label: 'Templates', href: '/settings/templates', icon: FileText },
       { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
+      // ✅ Billing points to settings page with anchor
+      { label: 'Billing', href: '/settings#billing', icon: CreditCard },
     ] : []),
-    { label: 'Billing', href: '/settings/billing', icon: CreditCard },
     { label: 'Logout', href: '/logout', icon: LogOut },
   ]
 
@@ -36,11 +37,9 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
         <nav className="flex flex-col gap-0.5">
           {items.map((item) => {
             // Check if the current path matches this item's href
-            // For '/settings', match exactly
-            // For other paths, check if pathname starts with the href
             const isActive = item.href === '/settings' 
               ? pathname === '/settings' 
-              : pathname?.startsWith(item.href + '/') || pathname === item.href
+              : pathname?.startsWith(item.href.split('#')[0] + '/') || pathname === item.href.split('#')[0]
             
             return (
               <Link
