@@ -210,7 +210,11 @@ export default function NotificationsPage() {
       }
     }))
     setHasChanges(true)
-    toast.info('Preferences reset. Click Save to apply changes.')
+    // ✅ FIXED: Use toast() with icon instead of toast.info()
+    toast('Preferences reset. Click Save to apply changes.', {
+      icon: 'ℹ️',
+      duration: 5000,
+    })
   }
 
   // Group preferences by category
