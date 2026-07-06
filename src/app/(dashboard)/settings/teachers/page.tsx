@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, UserPlus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import TeacherManager from '@/components/settings/TeacherManager'
 
 export default async function TeachersPage() {
@@ -14,6 +14,11 @@ export default async function TeachersPage() {
 
   // Only institutions can access this page
   if (!profile?.organization_id) {
+    redirect('/dashboard')
+  }
+
+  // Check if user is admin (only admins can manage teachers)
+  if (profile?.role !== 'admin' && profile?.role !== 'school_admin') {
     redirect('/dashboard')
   }
 
@@ -98,14 +103,6 @@ export default async function TeachersPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
-      <div className="flex items-center gap-2 text-sm">
-        <Link href="/settings" className="text-ink-muted hover:text-ink flex items-center gap-1">
-          <ArrowLeft size={13} /> Settings
-        </Link>
-        <span className="text-ink-faint">/</span>
-        <span className="text-ink font-medium">Teachers</span>
-      </div>
-
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="page-title">Teacher Management</h1>
