@@ -65,11 +65,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     pass_mark: organization?.report_card_settings?.pass_mark || 40,
   })
 
-  const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logo_url || null)
-  const [principalSigFile, setPrincipalSigFile] = useState<File | null>(null)
   const [principalSigPreview, setPrincipalSigPreview] = useState<string | null>(organization?.principal_signature_url || null)
-  const [teacherSigFile, setTeacherSigFile] = useState<File | null>(null)
   const [teacherSigPreview, setTeacherSigPreview] = useState<string | null>(organization?.teacher_signature_url || null)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -84,22 +81,38 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     if (!file) return
 
     setUploading(true)
+    const loadingToast = toast.loading(`Uploading ${type === 'logo' ? 'logo' : 'signature'}...`)
+
     try {
       const fileExt = file.name.split('.').pop()
-      const fileName = `${userId}/${type}_${Date.now()}.${fileExt}`
-      const filePath = `institutions/${organization.id}/${fileName}`
+      const fileName = `${type}_${Date.now()}.${fileExt}`
+      const filePath = `${organization.id}/${fileName}`
+
+      console.log('Uploading to path:', filePath)
 
       // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('institution-assets')
-        .upload(filePath, file)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        toast.dismiss(loadingToast)
+        toast.error('Upload failed: ' + uploadError.message)
+        return
+      }
+
+      console.log('Upload successful:', uploadData)
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('institution-assets')
         .getPublicUrl(filePath)
+
+      console.log('Public URL:', publicUrl)
 
       // Update organization
       const updateData: any = {}
@@ -119,13 +132,20 @@ export default function InstitutionSettings({ organization, userId }: Props) {
         .update(updateData)
         .eq('id', organization.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Update error:', updateError)
+        toast.dismiss(loadingToast)
+        toast.error('Failed to save URL: ' + updateError.message)
+        return
+      }
 
+      toast.dismiss(loadingToast)
       toast.success(`${type === 'logo' ? 'Logo' : 'Signature'} uploaded successfully!`)
       router.refresh()
     } catch (error) {
       console.error('Upload error:', error)
-      toast.error('Failed to upload file')
+      toast.dismiss(loadingToast)
+      toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setUploading(false)
     }
@@ -346,8 +366,9 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) {
-                    setLogoFile(file)
-                    setLogoPreview(URL.createObjectURL(file))
+                    // Show preview immediately
+                    const previewUrl = URL.createObjectURL(file)
+                    setLogoPreview(previewUrl)
                     handleFileUpload(file, 'logo')
                   }
                 }}
@@ -394,8 +415,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        setPrincipalSigFile(file)
-                        setPrincipalSigPreview(URL.createObjectURL(file))
+                        const previewUrl = URL.createObjectURL(file)
+                        setPrincipalSigPreview(previewUrl)
                         handleFileUpload(file, 'principal_sig')
                       }
                     }}
@@ -435,8 +456,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        setTeacherSigFile(file)
-                        setTeacherSigPreview(URL.createObjectURL(file))
+                        const previewUrl = URL.createObjectURL(file)
+                        setTeacherSigPreview(previewUrl)
                         handleFileUpload(file, 'teacher_sig')
                       }
                     }}
