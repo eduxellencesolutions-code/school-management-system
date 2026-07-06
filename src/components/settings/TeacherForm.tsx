@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, Upload, Save, ArrowLeft } from 'lucide-react'
+import { User, Mail, Phone, Upload, Save, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 
 interface Props {
@@ -20,6 +20,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
   const [uploadingSig, setUploadingSig] = useState(false)
   const [sigPreview, setSigPreview] = useState<string | null>(null)
   const [sigUrl, setSigUrl] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -79,8 +80,16 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
-      toast.error('Name, email and password are required')
+    
+    // ✅ Name is required
+    if (!formData.name.trim()) {
+      toast.error('Teacher name is required')
+      return
+    }
+    
+    // ✅ Password is required (admin sets it)
+    if (!formData.password.trim()) {
+      toast.error('Please set a temporary password')
       return
     }
     if (formData.password.length < 8) {
@@ -90,34 +99,59 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
     setLoading(true)
     try {
-      // Sign up the teacher via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email.trim(),
-        password: formData.password,
-        options: {
-          data: {
+      let userId = ''
+      
+      // ✅ Email is optional - if provided, create auth user; if not, create user directly
+      if (formData.email.trim()) {
+        // Create user with email (institutional user)
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email.trim(),
+          password: formData.password,
+          options: {
+            data: {
+              name: formData.name.trim(),
+              role: formData.role,
+              organization_id: orgId,
+            },
+          },
+        })
+
+        if (authError) throw new Error(authError.message)
+        if (!authData.user) throw new Error('Failed to create user')
+        userId = authData.user.id
+
+        // Update the user row with signature and phone
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            phone: formData.phone || null,
+            signature_url: sigUrl || null,
+            organization_id: orgId,
+            role: formData.role,
+          })
+          .eq('id', userId)
+
+        if (updateError) console.error('User update error:', updateError)
+      } else {
+        // ✅ Create user without email (direct insert into users table)
+        const { data: newUser, error: userError } = await supabase
+          .from('users')
+          .insert({
             name: formData.name.trim(),
+            email: null,
+            phone: formData.phone || null,
             role: formData.role,
             organization_id: orgId,
-          },
-        },
-      })
+            signature_url: sigUrl || null,
+            is_active: true,
+          })
+          .select('id')
+          .single()
 
-      if (authError) throw new Error(authError.message)
-      if (!authData.user) throw new Error('Failed to create user')
-
-      // Update the user row with signature and phone
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          phone: formData.phone || null,
-          signature_url: sigUrl || null,
-          organization_id: orgId,
-          role: formData.role,
-        })
-        .eq('id', authData.user.id)
-
-      if (updateError) console.error('User update error:', updateError)
+        if (userError) throw new Error(userError.message)
+        userId = newUser.id
+        toast.info('Teacher created without email. They can log in using their name and password if enabled.')
+      }
 
       // Create teacher assignments
       const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string }[] = []
@@ -125,7 +159,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       // Class teacher assignment
       if (formData.isClassTeacher && formData.classTeacherOf) {
         assignments.push({
-          teacher_id: authData.user!.id,
+          teacher_id: userId,
           class_id: formData.classTeacherOf,
           role: 'class_teacher',
         })
@@ -135,7 +169,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       formData.selectedSubjects.forEach(subjectId => {
         const subject = subjects.find(s => s.id === subjectId)
         assignments.push({
-          teacher_id: authData.user!.id,
+          teacher_id: userId,
           class_id: subject?.group_id || undefined,
           subject_id: subjectId,
           role: 'subject_teacher',
@@ -182,13 +216,14 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink mb-1">Email address *</label>
+            <label className="block text-xs font-medium text-ink mb-1">Email address <span className="text-ink-faint">(optional)</span></label>
             <input name="email" type="email" value={formData.email} onChange={handleChange}
-              className="input" placeholder="teacher@school.com" required />
+              className="input" placeholder="teacher@school.com" />
+            <p className="text-xs text-ink-faint mt-1">If provided, teacher can log in with email</p>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink mb-1">Phone (optional)</label>
+            <label className="block text-xs font-medium text-ink mb-1">Phone <span className="text-ink-faint">(optional)</span></label>
             <input name="phone" type="tel" value={formData.phone} onChange={handleChange}
               className="input" placeholder="08012345678" />
           </div>
@@ -204,9 +239,26 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
           <div>
             <label className="block text-xs font-medium text-ink mb-1">Temporary password *</label>
-            <input name="password" type="password" value={formData.password} onChange={handleChange}
-              className="input" placeholder="Min. 8 characters" required minLength={8} />
-            <p className="text-xs text-ink-faint mt-1">Teacher can change this after first login</p>
+            <div className="relative">
+              <input 
+                name="password" 
+                type={showPassword ? 'text' : 'password'} 
+                value={formData.password} 
+                onChange={handleChange}
+                className="input pr-10" 
+                placeholder="Min. 8 characters" 
+                required 
+                minLength={8} 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <p className="text-xs text-ink-faint mt-1">Teacher must change this after first login</p>
           </div>
         </div>
       </div>
@@ -214,7 +266,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       {/* Signature */}
       <div className="card p-6 flex flex-col gap-3">
         <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-          <Upload size={15} className="text-brand-500" /> Teacher Signature (optional)
+          <Upload size={15} className="text-brand-500" /> Teacher Signature <span className="text-ink-faint font-normal text-xs">(optional)</span>
         </h2>
         <div className="flex items-center gap-4">
           <div className="w-32 h-20 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-surface-50">
