@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, BookOpen, ArrowLeft, Pencil } from 'lucide-react'
+import { Plus, BookOpen, Pencil } from 'lucide-react'
 import { deleteSubject } from './actions'
 
 export default async function SubjectsPage() {
@@ -10,8 +10,18 @@ export default async function SubjectsPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id').eq('id', user.id).single()
+    .from('users').select('organization_id, role').eq('id', user.id).single()
   const orgId = profile?.organization_id
+
+  // Only institutions can access this page
+  if (!orgId) {
+    redirect('/dashboard')
+  }
+
+  // Check if user is admin (only admins can manage subjects)
+  if (profile?.role !== 'admin' && profile?.role !== 'school_admin') {
+    redirect('/dashboard')
+  }
 
   const [{ data: subjects }, { data: groups }, { data: templates }] = await Promise.all([
     supabase
@@ -45,14 +55,6 @@ export default async function SubjectsPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
-      <div className="flex items-center gap-2 text-sm">
-        <Link href="/settings" className="text-ink-muted hover:text-ink flex items-center gap-1">
-          <ArrowLeft size={13} /> Settings
-        </Link>
-        <span className="text-ink-faint">/</span>
-        <span className="text-ink font-medium">Subjects</span>
-      </div>
-
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="page-title">Subjects</h1>
