@@ -150,7 +150,12 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
         if (userError) throw new Error(userError.message)
         userId = newUser.id
-        toast.info('Teacher created without email. They can log in using their name and password if enabled.')
+        
+        // ✅ FIXED: Use toast() with icon instead of toast.info()
+        toast('Teacher created without email. They can log in using their name and password if enabled.', {
+          icon: 'ℹ️',
+          duration: 5000,
+        })
       }
 
       // Create teacher assignments
