@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Plus, Trash2, Upload, Download, User, BookOpen, Users, Crown, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -29,6 +29,13 @@ interface Props {
 }
 
 export default function TeacherManager({ teachers, classes, subjects }: Props) {
+  // ✅ DEBUG: Log what's being received
+  console.log('🔍 TeacherManager - Received teachers:', teachers)
+  console.log('🔍 TeacherManager - Teachers count:', teachers.length)
+  console.log('🔍 TeacherManager - Teacher names:', teachers.map(t => t.name))
+  console.log('🔍 TeacherManager - Classes count:', classes.length)
+  console.log('🔍 TeacherManager - Subjects count:', subjects.length)
+
   const [isAdding, setIsAdding] = useState(false)
   const [selectedTeacher, setSelectedTeacher] = useState<string>('')
   const [selectedClass, setSelectedClass] = useState<string>('')
@@ -44,6 +51,9 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault()
+    
+    console.log('📝 Assign form submitted:', { selectedTeacher, selectedClass, selectedSubject, role })
+    
     if (!selectedTeacher) return toast.error('Select a teacher')
 
     // Validate: If role is class_teacher, must select a class
@@ -73,8 +83,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       setSelectedSubject('')
       setRole('subject_teacher')
     } catch (error) {
+      console.error('❌ Assignment error:', error)
       toast.error('Failed to assign teacher')
-      console.error(error)
     }
   }
 
@@ -88,8 +98,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       await removeAssignment(formData)
       toast.success('Assignment removed')
     } catch (error) {
+      console.error('❌ Remove assignment error:', error)
       toast.error('Failed to remove assignment')
-      console.error(error)
     }
   }
 
@@ -107,8 +117,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       toast.success('Teachers uploaded successfully!')
       setShowUpload(false)
     } catch (error) {
+      console.error('❌ Upload error:', error)
       toast.error('Failed to upload teachers')
-      console.error(error)
     }
     setUploading(false)
   }
@@ -127,8 +137,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       URL.revokeObjectURL(url)
       toast.success('Template downloaded')
     } catch (error) {
+      console.error('❌ Template download error:', error)
       toast.error('Failed to download template')
-      console.error(error)
     }
   }
 
@@ -208,6 +218,9 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
+              {teachers.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">⚠️ No teachers found. Add a teacher first.</p>
+              )}
             </div>
 
             <div>
@@ -310,7 +323,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
             <User size={40} className="text-surface-200 mx-auto mb-3" />
             <p className="text-sm text-ink-muted mb-2">No teachers added yet</p>
             <p className="text-xs text-ink-faint">
-              Upload a CSV file or assign teachers manually
+              Upload a CSV file or add teachers manually
             </p>
           </div>
         ) : (
