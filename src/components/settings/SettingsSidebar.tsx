@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { 
   User, Building, Users, BookOpen, FileText, 
   CreditCard, LogOut, Bell, Shield, Palette,
   PenTool, Image, School
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
 
 interface Props {
   isInstitution: boolean
@@ -15,6 +17,8 @@ interface Props {
 
 export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
   const pathname = usePathname()
+  const router = useRouter()
+  const supabase = createClient()
 
   const items = [
     { label: 'Profile', href: '/settings', icon: User },
@@ -25,11 +29,41 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
       { label: 'Teachers', href: '/settings/teachers', icon: Users },
       { label: 'Templates', href: '/settings/templates', icon: FileText },
       { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
-      // ✅ Billing points to settings page with anchor
       { label: 'Billing', href: '/settings#billing', icon: CreditCard },
     ] : []),
-    { label: 'Logout', href: '/logout', icon: LogOut },
   ]
+
+  const handleLogout = async () => {
+    try {
+      // First try the API route
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      
+      if (response.ok) {
+        // Clear all local storage
+        localStorage.clear()
+        // Navigate to login
+        router.push('/login')
+        router.refresh()
+      } else {
+        // Fallback: direct signout
+        await supabase.auth.signOut()
+        // Clear local storage
+        localStorage.clear()
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Fallback: direct signout
+      try {
+        await supabase.auth.signOut()
+        localStorage.clear()
+        router.push('/login')
+      } catch (err) {
+        // Last resort: force redirect
+        window.location.href = '/login'
+      }
+    }
+  }
 
   return (
     <div className="w-64 flex-shrink-0">
@@ -56,6 +90,17 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
               </Link>
             )
           })}
+          
+          {/* Logout button - always visible, separated by border */}
+          <div className="border-t border-surface-200 mt-2 pt-2">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-red-600 hover:bg-red-50 w-full"
+            >
+              <LogOut size={16} className="text-red-500" />
+              Logout
+            </button>
+          </div>
         </nav>
       </div>
     </div>
