@@ -87,6 +87,12 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       return
     }
     
+    // ✅ Email is required
+    if (!formData.email.trim()) {
+      toast.error('Email address is required')
+      return
+    }
+    
     // ✅ Password is required (admin sets it)
     if (!formData.password.trim()) {
       toast.error('Please set a temporary password')
@@ -99,64 +105,35 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
     setLoading(true)
     try {
-      let userId = ''
-      
-      // ✅ Email is optional - if provided, create auth user; if not, create user directly
-      if (formData.email.trim()) {
-        // Create user with email (institutional user)
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email.trim(),
-          password: formData.password,
-          options: {
-            data: {
-              name: formData.name.trim(),
-              role: formData.role,
-              organization_id: orgId,
-            },
-          },
-        })
-
-        if (authError) throw new Error(authError.message)
-        if (!authData.user) throw new Error('Failed to create user')
-        userId = authData.user.id
-
-        // Update the user row with signature and phone
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            phone: formData.phone || null,
-            signature_url: sigUrl || null,
-            organization_id: orgId,
-            role: formData.role,
-          })
-          .eq('id', userId)
-
-        if (updateError) console.error('User update error:', updateError)
-      } else {
-        // ✅ Create user without email (direct insert into users table)
-        const { data: newUser, error: userError } = await supabase
-          .from('users')
-          .insert({
+      // ✅ Create user with email (required)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email.trim(),
+        password: formData.password,
+        options: {
+          data: {
             name: formData.name.trim(),
-            email: null,
-            phone: formData.phone || null,
             role: formData.role,
             organization_id: orgId,
-            signature_url: sigUrl || null,
-            is_active: true,
-          })
-          .select('id')
-          .single()
+          },
+        },
+      })
 
-        if (userError) throw new Error(userError.message)
-        userId = newUser.id
-        
-        // ✅ FIXED: Use toast() with icon instead of toast.info()
-        toast('Teacher created without email. They can log in using their name and password if enabled.', {
-          icon: 'ℹ️',
-          duration: 5000,
+      if (authError) throw new Error(authError.message)
+      if (!authData.user) throw new Error('Failed to create user')
+      const userId = authData.user.id
+
+      // Update the user row with signature and phone
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          phone: formData.phone || null,
+          signature_url: sigUrl || null,
+          organization_id: orgId,
+          role: formData.role,
         })
-      }
+        .eq('id', userId)
+
+      if (updateError) console.error('User update error:', updateError)
 
       // Create teacher assignments
       const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string }[] = []
@@ -221,10 +198,10 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-ink mb-1">Email address <span className="text-ink-faint">(optional)</span></label>
+            <label className="block text-xs font-medium text-ink mb-1">Email address *</label>
             <input name="email" type="email" value={formData.email} onChange={handleChange}
-              className="input" placeholder="teacher@school.com" />
-            <p className="text-xs text-ink-faint mt-1">If provided, teacher can log in with email</p>
+              className="input" placeholder="teacher@school.com" required />
+            <p className="text-xs text-ink-faint mt-1">Teacher will use this email to log in</p>
           </div>
 
           <div>
