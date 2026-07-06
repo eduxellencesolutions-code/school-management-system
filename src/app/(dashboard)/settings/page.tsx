@@ -193,13 +193,13 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* Current plan - Only show for institutions */}
+      {/* ✅ Billing Section - with id="billing" for anchor navigation */}
       {isInstitution && (
-        <div className="card">
+        <div id="billing" className="card scroll-mt-20">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
               <Crown size={16} className="text-brand-500" />
-              Subscription
+              Subscription & Billing
             </h2>
             <span className="badge badge-blue">{planInfo?.label}</span>
           </div>
@@ -212,7 +212,7 @@ export default async function SettingsPage() {
             {/* Feature checklist */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: `${planLimits?.max_groups === null ? 'Unlimited' : planLimits?.max_groups} class${planLimits?.max_groups === 1 ? '' : 'es'}`, enabled: true },
+                { label: `${planLimits?.max_groups === null ? 'Unlimited' : planLimits?.max_groups} classes`, enabled: true },
                 { label: `${planLimits?.max_learners === null ? 'Unlimited' : planLimits?.max_learners} students`, enabled: true },
                 { label: 'Excel export', enabled: planLimits?.has_excel_export ?? false },
                 { label: 'PDF reports', enabled: planLimits?.has_pdf_export ?? false },
