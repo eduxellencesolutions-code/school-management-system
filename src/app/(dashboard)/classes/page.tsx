@@ -4,7 +4,12 @@ import Link from 'next/link'
 import { BookOpen, Plus, Users, ClipboardList } from 'lucide-react'
 import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 
-export default async function ClassesPage() {
+export default async function ClassesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string; error?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -15,7 +20,7 @@ export default async function ClassesPage() {
     .eq('id', authUser.id)
     .single()
 
-  // ✅ FIXED: Build query properly with conditional filtering
+  // Build query
   let query = supabase
     .from('groups')
     .select(`
@@ -29,7 +34,6 @@ export default async function ClassesPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  // ✅ Apply filters based on user type
   if (profile?.organization_id) {
     query = query.eq('organization_id', profile.organization_id)
   } else {
@@ -38,8 +42,17 @@ export default async function ClassesPage() {
 
   const { data: groups } = await query
 
-  // ✅ Debug: Log the results
-  console.log('Classes found:', groups?.length)
+  // ✅ Show message based on URL params
+  let message = null
+  if (params.success === 'deleted') {
+    message = { type: 'success', text: 'Class deleted successfully!' }
+  } else if (params.error === 'has_students') {
+    message = { type: 'error', text: 'Cannot delete class: students are still enrolled.' }
+  } else if (params.error === 'delete_failed') {
+    message = { type: 'error', text: 'Failed to delete class. Please try again.' }
+  } else if (params.error === 'no_id') {
+    message = { type: 'error', text: 'Invalid class ID.' }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,6 +65,17 @@ export default async function ClassesPage() {
           <Plus size={15} /> New Class
         </Link>
       </div>
+
+      {/* ✅ Show messages */}
+      {message && (
+        <div className={`p-4 rounded-lg border ${
+          message.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-700' 
+            : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
       {groups && groups.length > 0 ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
