@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 
 export async function deleteGroup(formData: FormData) {
   const supabase = await createClient()
@@ -90,6 +91,10 @@ export async function deleteGroup(formData: FormData) {
     redirect('/classes?success=deleted')
 
   } catch (error) {
+    // ✅ If it's a redirect error, re-throw it (this is the fix!)
+    if (isRedirectError(error)) {
+      throw error
+    }
     console.error('Unexpected error deleting group:', error)
     redirect('/classes?error=unexpected')
   }
