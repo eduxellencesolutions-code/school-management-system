@@ -19,12 +19,13 @@ export default async function TemplatesPage() {
     .select('id, name, description, is_default, created_at')
     .order('created_at')
 
+  // ✅ FIXED: For solo teachers, filter by organization_id = null
   if (orgId) {
     // Institution user: filter by organization_id
     query = query.eq('organization_id', orgId)
   } else {
-    // Individual teacher: filter by instructor_id
-    query = query.eq('instructor_id', user.id)
+    // Individual teacher: filter by organization_id = null
+    query = query.is('organization_id', null)
   }
 
   const { data: templates } = await query
