@@ -10,7 +10,10 @@ export default async function TeachersPage() {
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id, role').eq('id', authUser.id).single()
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', authUser.id)
+    .single()
 
   // Only institutions can access this page
   if (!profile?.organization_id) {
@@ -22,11 +25,16 @@ export default async function TeachersPage() {
     redirect('/dashboard')
   }
 
-  // ✅ FIXED: Explicitly filter for teacher role
-  const { data: teachers } = await supabase
+  console.log('🔍 TEACHERS PAGE - Organization ID:', profile.organization_id)
+
+  // ✅ Get all teachers in the organization with their assignments
+  const { data: teachers, error: teachersError } = await supabase
     .from('users')
     .select(`
-      id, name, email, role,
+      id, 
+      name, 
+      email, 
+      role,
       teacher_assignments(
         id,
         class_id,
@@ -36,47 +44,78 @@ export default async function TeachersPage() {
         subjects:subject_id(id, name)
       )
     `)
-    .eq('organization_id', profile?.organization_id)
-    .eq('role', 'teacher')  // ✅ Changed from .neq('role', 'admin') to .eq('role', 'teacher')
+    .eq('organization_id', profile.organization_id)
+    .eq('role', 'teacher')
     .order('name')
 
-  // ✅ Add debug log
-  console.log('👨‍🏫 Teachers fetched:', teachers?.length)
-  console.log('👨‍🏫 Teachers names:', teachers?.map(t => t.name))
+  if (teachersError) {
+    console.error('❌ Error fetching teachers:', teachersError)
+  }
+
+  console.log('👨‍🏫 Teachers found:', teachers?.length || 0)
+  console.log('👨‍🏫 Teacher names:', teachers?.map(t => t.name) || [])
+
+  // ✅ If no teachers, try to fetch all users to debug
+  if (!teachers || teachers.length === 0) {
+    const { data: allUsers } = await supabase
+      .from('users')
+      .select('id, name, email, role')
+      .eq('organization_id', profile.organization_id)
+      .order('name')
+    
+    console.log('📊 All users in organization:', allUsers?.map(u => ({ 
+      name: u.name, 
+      role: u.role,
+      email: u.email 
+    })) || [])
+  }
 
   // ✅ Transform the data to handle array cases from Supabase
-  const transformedTeachers = (teachers || []).map(teacher => ({
-    ...teacher,
-    teacher_assignments: (teacher.teacher_assignments || []).map((assignment: any) => {
-      // Handle groups - Supabase returns array, extract first item
-      let groups = assignment.groups
-      if (Array.isArray(groups) && groups.length > 0) {
-        groups = groups[0]
-      } else if (Array.isArray(groups) && groups.length === 0) {
-        groups = null
-      }
-      
-      // Handle subjects - Supabase returns array, extract first item
-      let subjects = assignment.subjects
-      if (Array.isArray(subjects) && subjects.length > 0) {
-        subjects = subjects[0]
-      } else if (Array.isArray(subjects) && subjects.length === 0) {
-        subjects = null
-      }
-      
-      return {
-        ...assignment,
-        groups,
-        subjects
-      }
-    })
-  }))
+  const transformedTeachers = (teachers || []).map(teacher => {
+    // Create a clean teacher object
+    const cleanTeacher = {
+      id: teacher.id,
+      name: teacher.name || '',
+      email: teacher.email || '',
+      role: teacher.role || 'teacher',
+      teacher_assignments: [] as any[]
+    }
+
+    // Transform assignments if they exist
+    if (teacher.teacher_assignments && Array.isArray(teacher.teacher_assignments)) {
+      cleanTeacher.teacher_assignments = teacher.teacher_assignments.map((assignment: any) => {
+        // Handle groups - Supabase returns array, extract first item
+        let groups = assignment.groups
+        if (Array.isArray(groups) && groups.length > 0) {
+          groups = groups[0]
+        } else if (Array.isArray(groups) && groups.length === 0) {
+          groups = null
+        }
+        
+        // Handle subjects - Supabase returns array, extract first item
+        let subjects = assignment.subjects
+        if (Array.isArray(subjects) && subjects.length > 0) {
+          subjects = subjects[0]
+        } else if (Array.isArray(subjects) && subjects.length === 0) {
+          subjects = null
+        }
+        
+        return {
+          ...assignment,
+          groups,
+          subjects
+        }
+      })
+    }
+
+    return cleanTeacher
+  })
 
   // Get all classes
   const { data: classes } = await supabase
     .from('groups')
     .select('id, name')
-    .eq('organization_id', profile?.organization_id)
+    .eq('organization_id', profile.organization_id)
     .eq('is_active', true)
     .order('name')
 
@@ -87,7 +126,7 @@ export default async function TeachersPage() {
       id, name, group_id,
       group:groups(name)
     `)
-    .eq('organization_id', profile?.organization_id)
+    .eq('organization_id', profile.organization_id)
     .eq('is_active', true)
     .order('name')
 
@@ -104,6 +143,11 @@ export default async function TeachersPage() {
     }
   })
 
+  console.log('📋 Final data being passed to TeacherManager:')
+  console.log('  - Teachers count:', transformedTeachers.length)
+  console.log('  - Classes count:', classes?.length || 0)
+  console.log('  - Subjects count:', transformedSubjects.length)
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
       <div className="flex items-start justify-between gap-4">
@@ -119,7 +163,7 @@ export default async function TeachersPage() {
       </div>
 
       <TeacherManager 
-        teachers={transformedTeachers || []} 
+        teachers={transformedTeachers} 
         classes={classes || []} 
         subjects={transformedSubjects || []} 
       />
