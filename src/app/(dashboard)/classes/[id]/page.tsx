@@ -72,9 +72,11 @@ export default async function ClassDetailPage({ params }: Props) {
       .eq('group_id', id)
       .eq('is_active', true)
       .order('name'),
+    // ✅ FIXED: Templates query with organization filter
     supabase
       .from('assessment_templates')
       .select('id, name')
+      .or(`organization_id.eq.${group.organization_id ?? 'null'},organization_id.is.null`)
       .order('name'),
   ])
 
