@@ -43,7 +43,7 @@ export async function getTeachers() {
       )
     `)
     .eq('organization_id', profile?.organization_id)
-    .neq('role', 'admin')
+    .eq('role', 'teacher')  // ✅ FIXED: Only get teachers, not admins
     .order('name')
 
   return teachers || []
