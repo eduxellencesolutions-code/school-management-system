@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BookOpen, Plus, Users, ClipboardList } from 'lucide-react'
+import { BookOpen, Plus, Users, ClipboardList, Settings } from 'lucide-react'
 import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 
 export default async function ClassesPage({
@@ -14,17 +14,31 @@ export default async function ClassesPage({
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // ✅ Get user profile
   const { data: profile } = await supabase
     .from('users')
     .select('*')
     .eq('id', authUser.id)
     .single()
 
-  // Build query
+  // ✅ If no profile, redirect
+  if (!profile) {
+    console.error('❌ No profile found for user:', authUser.id)
+    redirect('/login')
+  }
+
+  // ✅ Build the query properly
   let query = supabase
     .from('groups')
     .select(`
-      id, name, code, type, is_active, created_at,
+      id, 
+      name, 
+      code, 
+      type, 
+      is_active, 
+      created_at,
+      organization_id,
+      instructor_id,
       instructor:users(name),
       session:academic_sessions(name),
       term:terms(name),
@@ -34,13 +48,33 @@ export default async function ClassesPage({
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  if (profile?.organization_id) {
+  // ✅ Apply the correct filter based on user type
+  if (profile.organization_id) {
+    // INSTITUTION USER: Show classes belonging to this organization
     query = query.eq('organization_id', profile.organization_id)
   } else {
+    // SOLO TEACHER: Show only classes they created
     query = query.eq('instructor_id', authUser.id)
   }
 
-  const { data: groups } = await query
+  // ✅ Execute the query
+  const { data: groups, error } = await query
+
+  // ✅ Log for debugging
+  console.log('📚 Classes query result:', {
+    count: groups?.length || 0,
+    error: error?.message || 'none',
+    firstGroup: groups?.[0]?.name || 'none',
+    filter: profile.organization_id ? `organization_id = ${profile.organization_id}` : `instructor_id = ${authUser.id}`
+  })
+
+  // ✅ If there's an error, log it
+  if (error) {
+    console.error('❌ Error fetching classes:', error)
+  }
+
+  // ✅ Use empty array if no groups
+  const classList = groups || []
 
   // ✅ Show message based on URL params
   let message = null
@@ -50,8 +84,6 @@ export default async function ClassesPage({
     message = { type: 'error', text: 'Cannot delete class: students are still enrolled.' }
   } else if (params.error === 'delete_failed') {
     message = { type: 'error', text: 'Failed to delete class. Please try again.' }
-  } else if (params.error === 'no_id') {
-    message = { type: 'error', text: 'Invalid class ID.' }
   }
 
   return (
@@ -77,9 +109,9 @@ export default async function ClassesPage({
         </div>
       )}
 
-      {groups && groups.length > 0 ? (
+      {classList.length > 0 ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {groups.map((g) => {
+          {classList.map((g) => {
             const learners = (g.learner_count as unknown as { count: number }[])?.[0]?.count ?? 0
             const subjects = (g.subject_count as unknown as { count: number }[])?.[0]?.count ?? 0
             const instructor = g.instructor as unknown as { name: string } | null
@@ -128,7 +160,7 @@ export default async function ClassesPage({
                       href={`/classes/${g.id}`}
                       className="btn-secondary btn-sm btn flex-1 justify-center"
                     >
-                      Manage
+                      <Settings size={12} /> Manage
                     </Link>
                     <DeleteGroupButton groupId={g.id} groupName={g.name} />
                   </div>
