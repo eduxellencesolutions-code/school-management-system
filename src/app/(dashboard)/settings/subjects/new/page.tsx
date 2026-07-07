@@ -17,12 +17,79 @@ export default async function NewSubjectPage({ searchParams }: Props) {
     .from('users').select('organization_id').eq('id', user.id).single()
   const orgId = profile?.organization_id
 
+  // ✅ Build queries based on user type
+  let groupsQuery = supabase
+    .from('groups')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name')
+
+  let templatesQuery = supabase
+    .from('assessment_templates')
+    .select('id, name, is_default')
+    .order('name')
+
+  if (orgId) {
+    // ✅ Institution: filter by organization_id
+    groupsQuery = groupsQuery.eq('organization_id', orgId)
+    templatesQuery = templatesQuery.eq('organization_id', orgId)
+  } else {
+    // ✅ Solo teacher: show ONLY their own classes
+    groupsQuery = groupsQuery.eq('instructor_id', user.id)
+    // Solo teacher: show templates with organization_id = null OR instructor_id = user.id
+    templatesQuery = templatesQuery.is('organization_id', null)
+  }
+
   const [{ data: groups }, { data: templates }] = await Promise.all([
-    supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name'),
-    supabase.from('assessment_templates').select('id, name, is_default').eq('organization_id', orgId).order('name'),
+    groupsQuery,
+    templatesQuery,
   ])
 
-  const defaultTemplate = templates?.find(t => t.is_default)
+  // ✅ Also fetch solo teacher templates with instructor_id (if any)
+  let soloTemplates = []
+  if (!orgId) {
+    const { data: instructorTemplates } = await supabase
+      .from('assessment_templates')
+      .select('id, name, is_default')
+      .eq('instructor_id', user.id)
+      .order('name')
+    soloTemplates = instructorTemplates || []
+  }
+
+  // ✅ Combine templates (deduplicate)
+  const allTemplates = [...(templates || [])]
+  for (const t of soloTemplates) {
+    if (!allTemplates.find(existing => existing.id === t.id)) {
+      allTemplates.push(t)
+    }
+  }
+
+  const defaultTemplate = allTemplates.find(t => t.is_default)
+
+  // ✅ If no classes, show a helpful message
+  if (!groups || groups.length === 0) {
+    return (
+      <div className="flex flex-col gap-6 max-w-xl">
+        <div className="flex items-center gap-2 text-sm">
+          <Link href="/settings/subjects" className="text-ink-muted hover:text-ink flex items-center gap-1">
+            <ArrowLeft size={13} /> Subjects
+          </Link>
+          <span className="text-ink-faint">/</span>
+          <span className="text-ink font-medium">Add subject</span>
+        </div>
+
+        <div className="card p-8 text-center">
+          <h2 className="text-lg font-semibold text-ink mb-2">No classes found</h2>
+          <p className="text-sm text-ink-muted mb-4">
+            You need to create a class before you can add subjects.
+          </p>
+          <Link href="/classes/new" className="btn-primary btn">
+            Create your first class
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -69,7 +136,7 @@ export default async function NewSubjectPage({ searchParams }: Props) {
           </label>
           <select name="group_id" required className="input" defaultValue={classId ?? ''}>
             <option value="">Select a class…</option>
-            {groups?.map(g => (
+            {groups.map(g => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
           </select>
@@ -79,13 +146,13 @@ export default async function NewSubjectPage({ searchParams }: Props) {
           <label className="block text-xs font-medium text-ink mb-1">Assessment template</label>
           <select name="template_id" className="input" defaultValue={defaultTemplate?.id ?? ''}>
             <option value="">No template</option>
-            {templates?.map(t => (
+            {allTemplates.map(t => (
               <option key={t.id} value={t.id}>
                 {t.name}{t.is_default ? ' (default)' : ''}
               </option>
             ))}
           </select>
-          {templates?.length === 0 && (
+          {allTemplates.length === 0 && (
             <p className="text-xs text-amber-600 mt-1">
               No templates yet.{' '}
               <Link href="/settings/templates/new" className="underline">Create one first →</Link>
