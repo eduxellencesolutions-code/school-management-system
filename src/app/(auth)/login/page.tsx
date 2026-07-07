@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { Eye, EyeOff } from 'lucide-react'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email'),
@@ -19,6 +20,7 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -32,7 +34,6 @@ export default function LoginPage() {
         password: data.password,
       })
       if (error) {
-        // ✅ Better error handling for email confirmation
         if (error.message.includes('Email not confirmed')) {
           toast.error('Please confirm your email address before logging in.')
         } else {
@@ -42,7 +43,6 @@ export default function LoginPage() {
         return
       }
       toast.success('Welcome back!')
-      // Wait for session to be written before navigating
       await new Promise(resolve => setTimeout(resolve, 500))
       router.refresh()
       router.push('/dashboard')
@@ -75,6 +75,7 @@ export default function LoginPage() {
           {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
         </div>
 
+        {/* ✅ Password with Eye Toggle */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-ink">Password</label>
@@ -82,12 +83,21 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <input
-            type="password"
-            placeholder="••••••••"
-            className="input"
-            {...register('password')}
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              className="input pr-10"
+              {...register('password')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
           {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
         </div>
 
