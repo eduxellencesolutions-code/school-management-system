@@ -58,7 +58,7 @@ export default async function ClassesPage({ searchParams }: PageProps) {
         created_at,
         organization_id,
         instructor_id,
-        instructor:users(name),
+        instructor:users!groups_instructor_id_fkey(name),
         session:academic_sessions(name),
         term:terms(name),
         learner_count:learners(count),
