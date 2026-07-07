@@ -18,17 +18,16 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  // ✅ Debug log
   console.log('🔍 Sidebar Props:', { isInstitution, isAdmin })
 
-  // ✅ Base items for all users
+  // ✅ Base items for ALL users
   const items = [
     { label: 'Profile', href: '/settings', icon: User },
     { label: 'Account', href: '/settings/account', icon: Shield },
     { label: 'Notifications', href: '/settings/notifications', icon: Bell },
   ]
 
-  // ✅ Institution-admin-only features
+  // ✅ Institution-admin-ONLY features
   if (isInstitution && isAdmin) {
     items.push(
       { label: 'Institution', href: '/settings/institution', icon: Building },
@@ -36,7 +35,7 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
     )
   }
 
-  // ✅ Features available to BOTH solo teachers AND institution admins
+  // ✅ Features for BOTH solo teachers AND institution admins
   items.push(
     { label: 'Templates', href: '/settings/templates', icon: FileText },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
