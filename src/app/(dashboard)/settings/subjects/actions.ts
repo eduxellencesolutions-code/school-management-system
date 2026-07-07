@@ -18,16 +18,48 @@ export async function createSubject(formData: FormData) {
 
   if (!name || !groupId) return
 
-  await supabase.from('subjects').insert({
+  // ✅ Verify the group belongs to this user (solo) or organization (institution)
+  const { data: group } = await supabase
+    .from('groups')
+    .select('id, instructor_id, organization_id')
+    .eq('id', groupId)
+    .single()
+
+  if (!group) {
+    console.error('Group not found:', groupId)
+    return
+  }
+
+  // ✅ Solo teacher check: group must have their instructor_id
+  // Institution check: group must have their organization_id
+  if (profile?.organization_id) {
+    // Institution: check organization_id
+    if (group.organization_id !== profile.organization_id) {
+      console.error('Group does not belong to this organization')
+      return
+    }
+  } else {
+    // Solo teacher: check instructor_id
+    if (group.instructor_id !== user.id) {
+      console.error('Group does not belong to this teacher')
+      return
+    }
+  }
+
+  const { error } = await supabase.from('subjects').insert({
     organization_id: profile?.organization_id ?? null,
     group_id:        groupId,
     name,
     code:            code || null,
     template_id:     templateId || null,
-    // For solo teachers, store instructor_id for RLS
     instructor_id:   profile?.organization_id ? null : user.id,
     is_active:       true,
   })
+
+  if (error) {
+    console.error('Error creating subject:', error)
+    return
+  }
 
   revalidatePath('/settings/subjects')
   revalidatePath(`/classes/${groupId}`)
