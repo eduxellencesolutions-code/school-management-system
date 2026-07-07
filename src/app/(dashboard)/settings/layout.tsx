@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SettingsSidebar from '@/components/settings/SettingsSidebar'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsLayout({
   children,
 }: {
@@ -16,6 +18,14 @@ export default async function SettingsLayout({
     .select('*, organization:organizations(*)')
     .eq('id', authUser.id)
     .single()
+
+  console.log('🔍 Settings Layout:', {
+    userId: authUser.id,
+    role: profile?.role,
+    organization_id: profile?.organization_id,
+    isInstitution: !!profile?.organization_id,
+    isAdmin: profile?.role === 'admin' || profile?.role === 'school_admin'
+  })
 
   const isInstitution = !!profile?.organization_id
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
