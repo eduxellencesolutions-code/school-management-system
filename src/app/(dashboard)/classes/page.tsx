@@ -8,18 +8,15 @@ import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// ✅ Properly type the props
-interface PageProps {
-  searchParams?: {
-    success?: string
-    error?: string
-  }
+// ✅ Use the correct Next.js 15 PageProps type
+type PageProps = {
+  searchParams: Promise<{ success?: string; error?: string }>
 }
 
 export default async function ClassesPage({ searchParams }: PageProps) {
   try {
-    // ✅ Parse searchParams safely
-    const params = searchParams || {}
+    // ✅ Await the searchParams promise
+    const params = await searchParams
     const supabase = await createClient()
     const { data: { user: authUser } } = await supabase.auth.getUser()
     
