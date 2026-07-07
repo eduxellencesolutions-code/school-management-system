@@ -15,7 +15,8 @@ export default async function ClassesPage() {
     .eq('id', authUser.id)
     .single()
 
-  const groupsQuery = supabase
+  // ✅ FIXED: Build query properly with conditional filtering
+  let query = supabase
     .from('groups')
     .select(`
       id, name, code, type, is_active, created_at,
@@ -28,13 +29,17 @@ export default async function ClassesPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
+  // ✅ Apply filters based on user type
   if (profile?.organization_id) {
-    groupsQuery.eq('organization_id', profile.organization_id)
+    query = query.eq('organization_id', profile.organization_id)
   } else {
-    groupsQuery.eq('instructor_id', authUser.id)
+    query = query.eq('instructor_id', authUser.id)
   }
 
-  const { data: groups } = await groupsQuery
+  const { data: groups } = await query
+
+  // ✅ Debug: Log the results
+  console.log('Classes found:', groups?.length)
 
   return (
     <div className="flex flex-col gap-6">
