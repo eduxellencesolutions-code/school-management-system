@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { BookOpen, Plus, Users, ClipboardList, Settings } from 'lucide-react'
 import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 
+// ✅ Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 export default async function ClassesPage({
   searchParams,
 }: {
@@ -12,40 +15,34 @@ export default async function ClassesPage({
   try {
     const params = await searchParams
     const supabase = await createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
     
-    // ✅ Get user and session
-    const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
+    console.log('🔍 Classes Page - User:', authUser?.id)
     
-    console.log('🔍 Classes Page - Auth:', { 
-      userId: authUser?.id, 
-      error: userError?.message || 'none' 
-    })
-    
-    if (userError || !authUser) {
-      console.error('❌ Auth error in classes page:', userError)
+    if (!authUser) {
+      console.log('❌ No user in classes page - redirecting to login')
       redirect('/login')
     }
 
-    // ✅ Get user profile
-    const { data: profile, error: profileError } = await supabase
+    // ✅ Get user profile with organization
+    const { data: profile } = await supabase
       .from('users')
-      .select('*')
+      .select('*, organization:organizations(*)')
       .eq('id', authUser.id)
       .single()
 
-    if (profileError || !profile) {
-      console.error('❌ Profile error:', profileError)
+    if (!profile) {
+      console.error('❌ No profile found for user:', authUser.id)
       redirect('/login')
     }
 
     console.log('👤 Profile:', { 
       name: profile.name, 
       role: profile.role, 
-      organization_id: profile.organization_id,
-      isInstitution: !!profile.organization_id 
+      organization_id: profile.organization_id 
     })
 
-    // ✅ Build the query based on user type
+    // ✅ Build the query - show ALL classes for this user type
     const groupsQuery = supabase
       .from('groups')
       .select(`
@@ -66,17 +63,24 @@ export default async function ClassesPage({
       .eq('is_active', true)
       .order('created_at', { ascending: false })
 
-    // ✅ Apply the correct filter
+    // ✅ Apply the correct filter based on user type
     let query
+    let userType = ''
     if (profile.organization_id) {
-      console.log('🏫 Institution mode - showing organization classes')
+      userType = 'institution'
       query = groupsQuery.eq('organization_id', profile.organization_id)
+      console.log('🏫 Institution mode - showing organization classes')
     } else {
-      console.log('👨‍🏫 Solo teacher mode - showing personal classes')
+      userType = 'solo'
       query = groupsQuery.eq('instructor_id', authUser.id)
+      console.log('👨‍🏫 Solo teacher mode - showing personal classes')
     }
 
     const { data: groups, error } = await query
+
+    if (error) {
+      console.error('❌ Error fetching classes:', error)
+    }
 
     console.log('📚 Classes found:', groups?.length || 0)
 
@@ -98,7 +102,11 @@ export default async function ClassesPage({
         <div className="flex items-center justify-between">
           <div>
             <h1 className="page-title">Classes</h1>
-            <p className="page-subtitle">Manage your classes and courses</p>
+            <p className="page-subtitle">
+              {userType === 'institution' 
+                ? `Manage all classes in ${profile?.organization?.name || 'your organization'}` 
+                : 'Manage your personal classes'}
+            </p>
           </div>
           <Link href="/classes/new" className="btn-primary btn">
             <Plus size={15} /> New Class
@@ -191,13 +199,12 @@ export default async function ClassesPage({
     )
   } catch (error) {
     console.error('🔥 Fatal error in classes page:', error)
-    // Don't redirect to login on error - show the error
     return (
       <div className="flex flex-col gap-6">
         <div className="card p-8 text-center">
           <h2 className="text-lg font-semibold text-red-600 mb-2">Something went wrong</h2>
           <p className="text-ink-muted">Please try refreshing the page.</p>
-          <pre className="mt-4 text-xs text-left bg-red-50 p-4 rounded overflow-auto">
+          <pre className="mt-4 text-xs text-left bg-red-50 p-4 rounded overflow-auto max-h-40">
             {error instanceof Error ? error.message : 'Unknown error'}
           </pre>
         </div>
