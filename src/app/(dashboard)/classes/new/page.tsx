@@ -93,6 +93,9 @@ export default function NewClassPage() {
       if (error) throw error
 
       toast.success(`Class "${data.name}" created!`)
+      
+      // ✅ FIXED: Refresh the router state before navigating
+      router.refresh()
       router.push(`/classes/${group.id}`)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create class')
