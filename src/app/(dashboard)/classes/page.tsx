@@ -4,16 +4,22 @@ import Link from 'next/link'
 import { BookOpen, Plus, Users, ClipboardList, Settings } from 'lucide-react'
 import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
 
-// ✅ Force dynamic rendering
+// ✅ Force dynamic rendering to fix searchParams error
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-export default async function ClassesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ success?: string; error?: string }>
-}) {
+// ✅ Properly type the props
+interface PageProps {
+  searchParams?: {
+    success?: string
+    error?: string
+  }
+}
+
+export default async function ClassesPage({ searchParams }: PageProps) {
   try {
-    const params = await searchParams
+    // ✅ Parse searchParams safely
+    const params = searchParams || {}
     const supabase = await createClient()
     const { data: { user: authUser } } = await supabase.auth.getUser()
     
@@ -39,10 +45,11 @@ export default async function ClassesPage({
     console.log('👤 Profile:', { 
       name: profile.name, 
       role: profile.role, 
-      organization_id: profile.organization_id 
+      organization_id: profile.organization_id,
+      isInstitution: !!profile.organization_id
     })
 
-    // ✅ Build the query - show ALL classes for this user type
+    // ✅ Build the query based on user type
     const groupsQuery = supabase
       .from('groups')
       .select(`
@@ -63,14 +70,17 @@ export default async function ClassesPage({
       .eq('is_active', true)
       .order('created_at', { ascending: false })
 
-    // ✅ Apply the correct filter based on user type
+    // ✅ Apply filter based on user type
     let query
     let userType = ''
+    
     if (profile.organization_id) {
+      // ✅ INSTITUTION USER: Show all classes in the organization
       userType = 'institution'
       query = groupsQuery.eq('organization_id', profile.organization_id)
       console.log('🏫 Institution mode - showing organization classes')
     } else {
+      // ✅ SOLO TEACHER: Show only their own classes
       userType = 'solo'
       query = groupsQuery.eq('instructor_id', authUser.id)
       console.log('👨‍🏫 Solo teacher mode - showing personal classes')
@@ -87,7 +97,7 @@ export default async function ClassesPage({
     // ✅ Use empty array if no groups
     const classList = groups || []
 
-    // ✅ Show message based on URL params
+    // ✅ Handle URL messages
     let message = null
     if (params.success === 'deleted') {
       message = { type: 'success', text: 'Class deleted successfully!' }
@@ -104,7 +114,7 @@ export default async function ClassesPage({
             <h1 className="page-title">Classes</h1>
             <p className="page-subtitle">
               {userType === 'institution' 
-                ? `Manage all classes in ${profile?.organization?.name || 'your organization'}` 
+                ? `Manage all classes in ${profile?.organization?.name || 'your organization'}`
                 : 'Manage your personal classes'}
             </p>
           </div>
@@ -113,6 +123,7 @@ export default async function ClassesPage({
           </Link>
         </div>
 
+        {/* ✅ Show messages */}
         {message && (
           <div className={`p-4 rounded-lg border ${
             message.type === 'success' 
@@ -201,12 +212,15 @@ export default async function ClassesPage({
     console.error('🔥 Fatal error in classes page:', error)
     return (
       <div className="flex flex-col gap-6">
-        <div className="card p-8 text-center">
+        <div className="card p-8 text-center border-red-200 bg-red-50">
           <h2 className="text-lg font-semibold text-red-600 mb-2">Something went wrong</h2>
           <p className="text-ink-muted">Please try refreshing the page.</p>
-          <pre className="mt-4 text-xs text-left bg-red-50 p-4 rounded overflow-auto max-h-40">
+          <pre className="mt-4 text-xs text-left bg-white p-4 rounded overflow-auto max-h-40 border border-red-100">
             {error instanceof Error ? error.message : 'Unknown error'}
           </pre>
+          <Link href="/classes" className="btn-primary btn mt-4">
+            Try again
+          </Link>
         </div>
       </div>
     )
