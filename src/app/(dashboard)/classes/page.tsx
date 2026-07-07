@@ -28,7 +28,7 @@ export default async function ClassesPage({
   }
 
   // ✅ Build the query properly
-  let query = supabase
+  const groupsQuery = supabase
     .from('groups')
     .select(`
       id, 
@@ -48,17 +48,10 @@ export default async function ClassesPage({
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
-  // ✅ Apply the correct filter based on user type
-  if (profile.organization_id) {
-    // INSTITUTION USER: Show classes belonging to this organization
-    query = query.eq('organization_id', profile.organization_id)
-  } else {
-    // SOLO TEACHER: Show only classes they created
-    query = query.eq('instructor_id', authUser.id)
-  }
-
-  // ✅ Execute the query
-  const { data: groups, error } = await query
+  // ✅ Apply the correct filter based on user type using inline ternary
+  const { data: groups, error } = await (profile.organization_id
+    ? groupsQuery.eq('organization_id', profile.organization_id)
+    : groupsQuery.eq('instructor_id', authUser.id))
 
   // ✅ Log for debugging
   console.log('📚 Classes query result:', {
