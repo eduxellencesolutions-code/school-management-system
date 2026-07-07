@@ -23,6 +23,7 @@ import {
   Clock,
   Zap
 } from 'lucide-react'
+import Link from 'next/link'
 
 interface NotificationPreference {
   id: string
@@ -32,6 +33,17 @@ interface NotificationPreference {
   enabled: boolean
   created_at: string
   updated_at: string
+}
+
+interface Notification {
+  id: string
+  user_id: string
+  title: string
+  message: string | null
+  notification_type: 'info' | 'success' | 'warning' | 'error'
+  is_read: boolean
+  created_at: string
+  metadata: any
 }
 
 interface NotificationPreferenceGroup {
@@ -46,7 +58,7 @@ interface NotificationPreferenceGroup {
   }[]
 }
 
-// ✅ FIXED: Return type matches NotificationPreference with temporary IDs
+// Get default preferences
 const getDefaultPreferences = (userId: string): NotificationPreference[] => {
   const now = new Date().toISOString()
   const defaults = [
@@ -78,10 +90,16 @@ export default function NotificationsPage() {
   const [saving, setSaving] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreference[]>([])
   const [hasChanges, setHasChanges] = useState(false)
+  
+  // ✅ Live notifications state
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loadingNotifications, setLoadingNotifications] = useState(true)
 
   // Load notification preferences
   useEffect(() => {
     loadPreferences()
+    loadNotifications()
   }, [])
 
   const loadPreferences = async () => {
@@ -90,7 +108,6 @@ export default function NotificationsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get user's notification preferences
       const { data: prefs, error } = await supabase
         .from('notification_preferences')
         .select('*')
@@ -98,7 +115,6 @@ export default function NotificationsPage() {
 
       if (error && error.code !== 'PGRST116') throw error
 
-      // If no preferences exist, create defaults
       if (!prefs || prefs.length === 0) {
         const defaultPrefs = getDefaultPreferences(user.id)
         const { data: newPrefs, error: insertError } = await supabase
@@ -114,13 +130,91 @@ export default function NotificationsPage() {
     } catch (error) {
       console.error('Error loading preferences:', error)
       toast.error('Failed to load notification settings')
-      // Set default preferences as fallback
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setPreferences(getDefaultPreferences(user.id))
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ✅ LIVE: Load actual notifications from database (NO PLACEHOLDERS)
+  const loadNotifications = async () => {
+    setLoadingNotifications(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setNotifications([])
+        setUnreadCount(0)
+        setLoadingNotifications(false)
+        return
+      }
+
+      const { data: notifs, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+
+      const realNotifications = notifs || []
+      setNotifications(realNotifications)
+      
+      const unread = realNotifications.filter(n => !n.is_read).length
+      setUnreadCount(unread)
+    } catch (error) {
+      console.error('Error loading notifications:', error)
+      setNotifications([])
+      setUnreadCount(0)
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }
+
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+
+      if (error) throw error
+
+      setNotifications(prev => 
+        prev.map(n => 
+          n.id === notificationId ? { ...n, is_read: true } : n
+        )
+      )
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+    }
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+
+      if (error) throw error
+
+      setNotifications(prev => 
+        prev.map(n => ({ ...n, is_read: true }))
+      )
+      setUnreadCount(0)
+      toast.success('All notifications marked as read')
+    } catch (error) {
+      console.error('Error marking all as read:', error)
+      toast.error('Failed to mark all as read')
     }
   }
 
@@ -143,7 +237,6 @@ export default function NotificationsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Update each preference
       for (const pref of preferences) {
         if (pref.id && !pref.id.startsWith('temp_')) {
           const { error } = await supabase
@@ -162,8 +255,9 @@ export default function NotificationsPage() {
       toast.success('Notification preferences saved!')
       setHasChanges(false)
       
-      // Send a test notification
+      // ✅ Send a test notification so user sees something real
       await sendTestNotification()
+      await loadNotifications()
     } catch (error) {
       console.error('Error saving preferences:', error)
       toast.error('Failed to save preferences')
@@ -172,6 +266,7 @@ export default function NotificationsPage() {
     }
   }
 
+  // ✅ Only create a real notification when user saves preferences
   const sendTestNotification = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -200,7 +295,6 @@ export default function NotificationsPage() {
 
     const defaults = getDefaultPreferences(user.id)
     
-    // Update each preference to default
     setPreferences(prev => prev.map((pref, index) => {
       const defaultPref = defaults[index]
       return {
@@ -210,11 +304,43 @@ export default function NotificationsPage() {
       }
     }))
     setHasChanges(true)
-    // ✅ FIXED: Use toast() with icon instead of toast.info()
     toast('Preferences reset. Click Save to apply changes.', {
       icon: 'ℹ️',
       duration: 5000,
     })
+  }
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'success': return CheckCircle2
+      case 'warning': return AlertCircle
+      case 'error': return XCircle
+      default: return Bell
+    }
+  }
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'success': return 'text-green-500'
+      case 'warning': return 'text-amber-500'
+      case 'error': return 'text-red-500'
+      default: return 'text-blue-500'
+    }
+  }
+
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date()
+    const past = new Date(dateString)
+    const diffMs = now.getTime() - past.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+    return past.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   // Group preferences by category
@@ -256,7 +382,6 @@ export default function NotificationsPage() {
       }
     ]
 
-    // Fill in current values
     return groups.map(group => ({
       ...group,
       preferences: group.preferences.map(pref => {
@@ -271,15 +396,6 @@ export default function NotificationsPage() {
   }
 
   const preferenceGroups = getPreferenceGroups()
-
-  const getChannelLabel = (channel: string) => {
-    switch (channel) {
-      case 'email': return 'Email only'
-      case 'in_app': return 'In-app only'
-      case 'both': return 'Email & In-app'
-      default: return 'In-app'
-    }
-  }
 
   if (loading) {
     return (
@@ -325,13 +441,13 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Notification summary */}
+      {/* ✅ REAL notification summary - from database */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="flex items-center gap-3 p-3 bg-surface-50 rounded-lg">
           <Bell size={18} className="text-brand-500" />
           <div>
             <p className="text-xs text-ink-faint">Total Notifications</p>
-            <p className="text-sm font-medium text-ink">12 unread</p>
+            <p className="text-sm font-medium text-ink">{notifications.length}</p>
           </div>
         </div>
         <div className="flex items-center gap-3 p-3 bg-surface-50 rounded-lg">
@@ -378,7 +494,6 @@ export default function NotificationsPage() {
                         <p className="text-xs text-ink-muted mt-0.5">{pref.description}</p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        {/* Channel selector */}
                         <select
                           value={pref.channel}
                           onChange={(e) => handleTogglePreference(globalIndex, 'channel', e.target.value as 'email' | 'in_app' | 'both')}
@@ -388,7 +503,6 @@ export default function NotificationsPage() {
                           <option value="email">Email</option>
                           <option value="both">Both</option>
                         </select>
-                        {/* Toggle switch */}
                         <button
                           type="button"
                           onClick={() => handleTogglePreference(globalIndex, 'enabled', !isEnabled)}
@@ -412,43 +526,85 @@ export default function NotificationsPage() {
         </div>
       ))}
 
-      {/* In-App Notification Preview */}
+      {/* ✅ REAL In-App Notifications - ONLY from database */}
       <div className="card">
-        <div className="card-header flex items-center gap-2">
-          <BellRing size={16} className="text-brand-500" />
-          <h2 className="font-semibold text-sm text-ink">Recent Notifications</h2>
-          <span className="badge badge-blue text-[10px] ml-auto">Live</span>
+        <div className="card-header flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BellRing size={16} className="text-brand-500" />
+            <h2 className="font-semibold text-sm text-ink">Recent Notifications</h2>
+            {unreadCount > 0 && (
+              <span className="badge badge-red text-[10px]">{unreadCount} unread</span>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllAsRead}
+              className="btn-secondary btn-sm btn text-xs"
+            >
+              Mark all as read
+            </button>
+          )}
         </div>
         <div className="card-body">
-          <div className="divide-y divide-surface-200">
-            <div className="py-3 flex items-start gap-3">
-              <div className="w-2 h-2 mt-2 rounded-full bg-blue-500 animate-pulse" />
-              <div className="flex-1">
-                <p className="text-sm text-ink font-medium">Report ready for download</p>
-                <p className="text-xs text-ink-muted">The term report for Primary 5 is ready to download</p>
-                <p className="text-xs text-ink-faint mt-1">2 minutes ago</p>
-              </div>
+          {loadingNotifications ? (
+            <div className="py-8 text-center">
+              <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-ink-muted">Loading notifications...</p>
             </div>
-            <div className="py-3 flex items-start gap-3">
-              <div className="w-2 h-2 mt-2 rounded-full bg-green-500" />
-              <div className="flex-1">
-                <p className="text-sm text-ink font-medium">New teacher assigned</p>
-                <p className="text-xs text-ink-muted">Amara Okafor has been assigned to Primary 6</p>
-                <p className="text-xs text-ink-faint mt-1">1 hour ago</p>
-              </div>
+          ) : notifications.length === 0 ? (
+            <div className="py-12 text-center">
+              <BellOff size={48} className="text-surface-200 mx-auto mb-4" />
+              <p className="text-base font-medium text-ink">No notifications yet</p>
+              <p className="text-sm text-ink-muted mt-1">
+                Notifications will appear here when you receive them.
+              </p>
+              <p className="text-xs text-ink-faint mt-2">
+                Try saving your notification preferences to generate a test notification.
+              </p>
             </div>
-            <div className="py-3 flex items-start gap-3">
-              <div className="w-2 h-2 mt-2 rounded-full bg-amber-500" />
-              <div className="flex-1">
-                <p className="text-sm text-ink font-medium">System update scheduled</p>
-                <p className="text-xs text-ink-muted">Maintenance will occur on Saturday at 2 AM</p>
-                <p className="text-xs text-ink-faint mt-1">3 hours ago</p>
-              </div>
+          ) : (
+            <div className="divide-y divide-surface-200">
+              {notifications.map((notification) => {
+                const Icon = getNotificationIcon(notification.notification_type)
+                return (
+                  <div 
+                    key={notification.id} 
+                    className={`py-3 flex items-start gap-3 cursor-pointer hover:bg-surface-50 rounded-lg transition-colors px-2 ${
+                      !notification.is_read ? 'bg-brand-50/50' : ''
+                    }`}
+                    onClick={() => markAsRead(notification.id)}
+                  >
+                    {!notification.is_read && (
+                      <div className="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0" />
+                    )}
+                    <Icon size={16} className={`${getNotificationColor(notification.notification_type)} mt-0.5 flex-shrink-0`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-ink font-medium">{notification.title}</p>
+                      {notification.message && (
+                        <p className="text-xs text-ink-muted">{notification.message}</p>
+                      )}
+                      <p className="text-xs text-ink-faint mt-1">
+                        {getTimeAgo(notification.created_at)}
+                        {!notification.is_read && (
+                          <span className="ml-2 text-blue-500 text-[10px] font-medium">· Unread</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          </div>
-          <button className="btn-secondary btn-sm btn w-full mt-4">
-            View all notifications
-          </button>
+          )}
+          
+          {/* ✅ View All Notifications - links to a real page */}
+          {notifications.length > 0 && (
+            <Link 
+              href="/notifications" 
+              className="btn-secondary btn-sm btn w-full mt-4"
+            >
+              View all notifications
+            </Link>
+          )}
         </div>
       </div>
     </div>
