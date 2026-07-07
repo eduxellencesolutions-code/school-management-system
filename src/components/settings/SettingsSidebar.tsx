@@ -21,23 +21,27 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
   // ✅ Debug log
   console.log('🔍 Sidebar Props:', { isInstitution, isAdmin })
 
-  // ✅ Build items based on user type
+  // ✅ Base items for all users
   const items = [
     { label: 'Profile', href: '/settings', icon: User },
     { label: 'Account', href: '/settings/account', icon: Shield },
     { label: 'Notifications', href: '/settings/notifications', icon: Bell },
   ]
 
-  // ✅ Add institution/admin items ONLY if user is an institution admin
+  // ✅ Institution-admin-only features
   if (isInstitution && isAdmin) {
     items.push(
       { label: 'Institution', href: '/settings/institution', icon: Building },
       { label: 'Teachers', href: '/settings/teachers', icon: Users },
-      { label: 'Templates', href: '/settings/templates', icon: FileText },
-      { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
-      { label: 'Billing', href: '/settings#billing', icon: CreditCard },
     )
   }
+
+  // ✅ Features available to BOTH solo teachers AND institution admins
+  items.push(
+    { label: 'Templates', href: '/settings/templates', icon: FileText },
+    { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
+    { label: 'Billing', href: '/settings#billing', icon: CreditCard },
+  )
 
   console.log('🔍 Sidebar Items:', items.map(i => i.label))
 
