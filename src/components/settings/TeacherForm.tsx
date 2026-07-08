@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { User, Mail, Phone, Upload, Save, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import { createTeacher } from '@/app/(dashboard)/settings/teachers/actions'
 
 interface Props {
   classes: { id: string; name: string }[]
@@ -78,6 +79,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
     }
   }
 
+  // ✅ UPDATED: handleSubmit now uses the server action
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -105,72 +107,34 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
 
     setLoading(true)
     try {
-      // ✅ Create user with email (required)
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email.trim(),
+      const subjectGroupMap: Record<string, string> = {}
+      subjects.forEach(s => { subjectGroupMap[s.id] = s.group_id })
+
+      const result = await createTeacher({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        role: formData.role,
         password: formData.password,
-        options: {
-          data: {
-            name: formData.name.trim(),
-            role: formData.role,
-            organization_id: orgId,
-          },
-        },
+        signatureUrl: sigUrl,
+        selectedClasses: formData.selectedClasses,
+        selectedSubjects: formData.selectedSubjects,
+        isClassTeacher: formData.isClassTeacher,
+        classTeacherOf: formData.classTeacherOf,
+        subjectGroupMap,
       })
 
-      if (authError) throw new Error(authError.message)
-      if (!authData.user) throw new Error('Failed to create user')
-      const userId = authData.user.id
-
-      // Update the user row with signature and phone
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          phone: formData.phone || null,
-          signature_url: sigUrl || null,
-          organization_id: orgId,
-          role: formData.role,
-        })
-        .eq('id', userId)
-
-      if (updateError) console.error('User update error:', updateError)
-
-      // Create teacher assignments
-      const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string }[] = []
-
-      // Class teacher assignment
-      if (formData.isClassTeacher && formData.classTeacherOf) {
-        assignments.push({
-          teacher_id: userId,
-          class_id: formData.classTeacherOf,
-          role: 'class_teacher',
-        })
+      if (result.error) {
+        toast.error(result.error)
+        return
       }
 
-      // Subject teacher assignments
-      formData.selectedSubjects.forEach(subjectId => {
-        const subject = subjects.find(s => s.id === subjectId)
-        assignments.push({
-          teacher_id: userId,
-          class_id: subject?.group_id || undefined,
-          subject_id: subjectId,
-          role: 'subject_teacher',
-        })
-      })
-
-      if (assignments.length > 0) {
-        const { error: assignError } = await supabase
-          .from('teacher_assignments')
-          .insert(assignments)
-        if (assignError) console.error('Assignment error:', assignError)
-      }
-
-      toast.success(`Teacher ${formData.name} added successfully!`)
+      toast.success(`Teacher ${result.teacherName} added successfully!`)
       router.push('/settings/teachers')
       router.refresh()
     } catch (err) {
       console.error('Error adding teacher:', err)
-      toast.error(err instanceof Error ? err.message : 'Failed to add teacher')
+      toast.error('Failed to add teacher')
     } finally {
       setLoading(false)
     }
