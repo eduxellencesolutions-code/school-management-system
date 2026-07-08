@@ -4,6 +4,10 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createSubject } from '../actions'
 
+// ✅ Force dynamic rendering
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface Props { searchParams: Promise<{ class?: string }> }
 
 export default async function NewSubjectPage({ searchParams }: Props) {
@@ -46,7 +50,7 @@ export default async function NewSubjectPage({ searchParams }: Props) {
   ])
 
   // ✅ Also fetch solo teacher templates with instructor_id (if any)
-  let soloTemplates = []
+  let soloTemplates: any[] = []
   if (!orgId) {
     const { data: instructorTemplates } = await supabase
       .from('assessment_templates')
