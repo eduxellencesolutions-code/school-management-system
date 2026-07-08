@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import StudentEditForm from '@/components/students/StudentEditForm'
 import StudentScoreHistory from '@/components/students/StudentScoreHistory'
+import DeleteStudentButton from '@/components/students/DeleteStudentButton'
 
 interface Props { 
   params: Promise<{ id: string }> 
@@ -92,12 +93,19 @@ export default async function StudentDetailPage({ params }: Props) {
             </span>
           </div>
         </div>
-        <Link
-          href={`/scores?class=${group?.id}&student=${learner.id}`}
-          className="btn-primary btn-sm btn shrink-0"
-        >
-          Enter scores
-        </Link>
+        {/* ✅ Updated: Added DeleteStudentButton next to Enter scores */}
+        <div className="flex gap-2 shrink-0">
+          <Link
+            href={`/scores?class=${group?.id}&student=${learner.id}`}
+            className="btn-primary btn-sm btn"
+          >
+            Enter scores
+          </Link>
+          <DeleteStudentButton
+            studentId={learner.id}
+            studentName={`${learner.first_name} ${learner.last_name}`}
+          />
+        </div>
       </div>
 
       {/* Quick stats */}
