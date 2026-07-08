@@ -3,17 +3,20 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Plus, Upload } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import DeleteStudentButton from '@/components/students/DeleteStudentButton'
 
-interface Props { 
-  searchParams: Promise<{ class?: string; q?: string }> 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+interface Props {
+  searchParams: Promise<{ class?: string; q?: string; success?: string; error?: string }>
 }
 
-// ✅ Extracted to a client component to avoid window on server
 import ClassFilter from '@/components/students/ClassFilter'
 
 export default async function StudentsPage({ searchParams }: Props) {
   const params = await searchParams
-  
+
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
@@ -26,14 +29,12 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const orgId = profile?.organization_id
 
-  // ✅ FIXED: Build groups query with branching logic
   let groupsQuery = supabase
     .from('groups')
     .select('id, name')
     .eq('is_active', true)
     .order('name')
 
-  // ✅ FIXED: Build learners query with branching logic
   let query = supabase
     .from('learners')
     .select('id, first_name, last_name, admission_number, gender, is_active, created_at, group:groups(name)')
@@ -42,11 +43,9 @@ export default async function StudentsPage({ searchParams }: Props) {
     .limit(100)
 
   if (orgId) {
-    // ✅ Institution: filter by organization_id
     groupsQuery = groupsQuery.eq('organization_id', orgId)
     query = query.eq('organization_id', orgId)
   } else {
-    // ✅ Solo teacher: scope by their own classes
     const { data: teacherGroups } = await supabase
       .from('groups')
       .select('id')
@@ -54,13 +53,11 @@ export default async function StudentsPage({ searchParams }: Props) {
       .eq('is_active', true)
 
     const groupIds = teacherGroups?.map(g => g.id) ?? []
-    
-    // ✅ Solo teacher: filter groups by their own class IDs
+
     if (groupIds.length > 0) {
       groupsQuery = groupsQuery.in('id', groupIds)
       query = query.in('group_id', groupIds)
     } else {
-      // No groups, return nothing
       groupsQuery = groupsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
       query = query.eq('id', '00000000-0000-0000-0000-000000000000')
     }
@@ -68,10 +65,19 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const { data: groups } = await groupsQuery
 
-  // ✅ Apply class filter if provided
   if (params.class) query = query.eq('group_id', params.class)
 
   const { data: learners } = await query
+
+  // ✅ Handle delete success/error messages
+  let message = null
+  if (params.success === 'deleted') {
+    message = { type: 'success', text: 'Student deleted successfully!' }
+  } else if (params.error === 'delete_failed') {
+    message = { type: 'error', text: 'Failed to delete student. Please try again.' }
+  } else if (params.error === 'unexpected') {
+    message = { type: 'error', text: 'Something went wrong. Please try again.' }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,7 +98,16 @@ export default async function StudentsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* ✅ Client component handles window/navigation */}
+      {message && (
+        <div className={`p-4 rounded-lg border ${
+          message.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
       <ClassFilter groups={groups ?? []} selectedClass={params.class ?? ''} />
 
       {learners && learners.length > 0 ? (
@@ -135,9 +150,15 @@ export default async function StudentsPage({ searchParams }: Props) {
                       </td>
                       <td className="text-xs text-ink-muted">{formatDate(l.created_at)}</td>
                       <td>
-                        <Link href={`/students/${l.id}`} className="btn-ghost btn-sm btn">
-                          View →
-                        </Link>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Link href={`/students/${l.id}`} className="btn-ghost btn-sm btn">
+                            View →
+                          </Link>
+                          <DeleteStudentButton
+                            studentId={l.id}
+                            studentName={`${l.first_name} ${l.last_name}`}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )
