@@ -4,6 +4,10 @@ import Link from 'next/link'
 import { Plus, BookOpen, Pencil } from 'lucide-react'
 import { deleteSubject } from './actions'
 
+// ✅ Force dynamic rendering to prevent stale cache
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function SubjectsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
