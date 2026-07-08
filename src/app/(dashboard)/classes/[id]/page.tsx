@@ -30,11 +30,12 @@ export default async function ClassDetailPage({ params }: Props) {
 
   console.log('Fetching group with ID:', id)
 
+  // ✅ FIXED: Explicit foreign key for instructor embed
   const { data: group, error: groupError } = await supabase
     .from('groups')
     .select(`
       *,
-      instructor:users(id, name, email),
+      instructor:users!groups_instructor_id_fkey(id, name, email),
       session:academic_sessions(name),
       term:terms(name)
     `)
