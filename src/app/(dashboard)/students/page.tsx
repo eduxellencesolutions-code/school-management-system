@@ -26,21 +26,49 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const orgId = profile?.organization_id
 
-  const { data: groups } = await supabase
+  // ✅ FIXED: Build groups query with branching logic
+  let groupsQuery = supabase
     .from('groups')
     .select('id, name')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
     .eq('is_active', true)
     .order('name')
 
+  // ✅ FIXED: Build learners query with branching logic
   let query = supabase
     .from('learners')
     .select('id, first_name, last_name, admission_number, gender, is_active, created_at, group:groups(name)')
-    .eq('organization_id', orgId ?? '00000000-0000-0000-0000-000000000000')
     .eq('is_active', true)
     .order('last_name')
     .limit(100)
 
+  if (orgId) {
+    // ✅ Institution: filter by organization_id
+    groupsQuery = groupsQuery.eq('organization_id', orgId)
+    query = query.eq('organization_id', orgId)
+  } else {
+    // ✅ Solo teacher: scope by their own classes
+    const { data: teacherGroups } = await supabase
+      .from('groups')
+      .select('id')
+      .eq('instructor_id', authUser.id)
+      .eq('is_active', true)
+
+    const groupIds = teacherGroups?.map(g => g.id) ?? []
+    
+    // ✅ Solo teacher: filter groups by their own class IDs
+    if (groupIds.length > 0) {
+      groupsQuery = groupsQuery.in('id', groupIds)
+      query = query.in('group_id', groupIds)
+    } else {
+      // No groups, return nothing
+      groupsQuery = groupsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+    }
+  }
+
+  const { data: groups } = await groupsQuery
+
+  // ✅ Apply class filter if provided
   if (params.class) query = query.eq('group_id', params.class)
 
   const { data: learners } = await query
