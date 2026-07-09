@@ -16,20 +16,82 @@ export default async function ScoresPage({ searchParams }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
+  // ✅ Get user profile
+  const { data: profile } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single()
+  
   const orgId = profile?.organization_id
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
-  // ✅ FALLBACK: Get all active groups (bypasses org filter for now)
-  const { data: groups } = await supabase
-    .from('groups')
-    .select('id, name, code')
-    .eq('is_active', true)
-    .order('name')
+  // ✅ Three-way role scoping
+  let groups: { id: string; name: string; code: string }[] = []
+  let userRole: 'admin' | 'class_teacher' | 'subject_teacher' | 'solo' = 'solo'
+  let restrictedSubjectId: string | null = null
+
+  if (orgId && isAdmin) {
+    // ✅ ADMIN: See all classes in the organization
+    userRole = 'admin'
+    const { data } = await supabase
+      .from('groups')
+      .select('id, name, code')
+      .eq('organization_id', orgId)
+      .eq('is_active', true)
+      .order('name')
+    groups = data ?? []
+  } else if (orgId && !isAdmin) {
+    // ✅ INSTITUTION TEACHER: See only assigned classes/subjects
+    const { data: assignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id, subject_id, role')
+      .eq('teacher_id', authUser.id)
+
+    const classTeacherOf = assignments?.filter(a => a.role === 'class_teacher').map(a => a.class_id) ?? []
+    const subjectTeacherOf = assignments?.filter(a => a.role === 'subject_teacher') ?? []
+
+    if (classTeacherOf.length > 0) {
+      // ✅ CLASS TEACHER: See their class(es) with all subjects
+      userRole = 'class_teacher'
+      const { data } = await supabase
+        .from('groups')
+        .select('id, name, code')
+        .in('id', classTeacherOf)
+        .eq('is_active', true)
+        .order('name')
+      groups = data ?? []
+    } else if (subjectTeacherOf.length > 0) {
+      // ✅ SUBJECT TEACHER: See their class(es) + only their subject
+      userRole = 'subject_teacher'
+      const classIds = [...new Set(subjectTeacherOf.map(a => a.class_id).filter(Boolean))]
+      const { data } = await supabase
+        .from('groups')
+        .select('id, name, code')
+        .in('id', classIds)
+        .eq('is_active', true)
+        .order('name')
+      groups = data ?? []
+      // A subject teacher only ever sees/submits their own subject
+      if (subjectTeacherOf.length === 1) restrictedSubjectId = subjectTeacherOf[0].subject_id
+    }
+  } else {
+    // ✅ SOLO TEACHER: See only their own classes
+    userRole = 'solo'
+    const { data } = await supabase
+      .from('groups')
+      .select('id, name, code')
+      .eq('instructor_id', authUser.id)
+      .eq('is_active', true)
+      .order('name')
+    groups = data ?? []
+  }
 
   const selectedGroupId = params.class
-  const selectedSubjectId = params.subject
+  const selectedSubjectId = restrictedSubjectId ?? params.subject
 
-  const { data: subjects } = selectedGroupId
+  // ✅ Fetch subjects for the selected class
+  const { data: subjectsRaw } = selectedGroupId
     ? await supabase
         .from('subjects')
         .select('id, name, code, template_id')
@@ -37,6 +99,11 @@ export default async function ScoresPage({ searchParams }: Props) {
         .eq('is_active', true)
         .order('name')
     : { data: null }
+
+  // ✅ Subject teachers only ever see their own subject in the dropdown
+  const subjects = userRole === 'subject_teacher' && restrictedSubjectId
+    ? (subjectsRaw ?? []).filter(s => s.id === restrictedSubjectId)
+    : subjectsRaw
 
   let learners = null
   let components = null
@@ -93,6 +160,7 @@ export default async function ScoresPage({ searchParams }: Props) {
         subjects={subjects ?? []}
         selectedGroupId={selectedGroupId ?? ''}
         selectedSubjectId={selectedSubjectId ?? ''}
+        userRole={userRole}
       />
 
       {selectedGroupId && selectedSubjectId && learners && components && selectedSubject && existingScores ? (
