@@ -35,6 +35,7 @@ export default async function TeachersPage() {
       name, 
       email, 
       role,
+      signature_url,
       teacher_assignments(
         id,
         class_id,
@@ -78,6 +79,7 @@ export default async function TeachersPage() {
       name: teacher.name || '',
       email: teacher.email || '',
       role: teacher.role || 'teacher',
+      signature_url: teacher.signature_url || null,
       teacher_assignments: [] as any[]
     }
 
