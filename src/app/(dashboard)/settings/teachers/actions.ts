@@ -324,6 +324,7 @@ export async function uploadTeachers(formData: FormData) {
         const { data: newAuthUser, error: inviteError } =
           await adminClient.auth.admin.inviteUserByEmail(teacher.email, {
             data: { name: teacher.name, role: teacher.role, organization_id: orgId },
+            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/set-password`,  // ✅ UPDATED: Added redirectTo
           })
 
         if (inviteError || !newAuthUser.user) {
