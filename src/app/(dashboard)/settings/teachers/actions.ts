@@ -324,7 +324,7 @@ export async function uploadTeachers(formData: FormData) {
         const { data: newAuthUser, error: inviteError } =
           await adminClient.auth.admin.inviteUserByEmail(teacher.email, {
             data: { name: teacher.name, role: teacher.role, organization_id: orgId },
-            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/set-password`,  // ✅ UPDATED: Added redirectTo
+            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/set-password`,
           })
 
         if (inviteError || !newAuthUser.user) {
@@ -477,6 +477,29 @@ export async function deleteTeacher(formData: FormData) {
     .from('users')
     .delete()
     .eq('id', teacherId)
+
+  revalidatePath('/settings/teachers')
+}
+
+// ✅ NEW: Update teacher signature
+export async function updateTeacherSignature(formData: FormData) {
+  await checkInstitutionAccess()
+  const supabase = await createClient()
+
+  const teacherId = formData.get('teacher_id') as string
+  const signatureUrl = formData.get('signature_url') as string
+
+  if (!teacherId || !signatureUrl) return
+
+  const { error } = await supabase
+    .from('users')
+    .update({ signature_url: signatureUrl })
+    .eq('id', teacherId)
+
+  if (error) {
+    console.error('Error updating signature:', error)
+    return
+  }
 
   revalidatePath('/settings/teachers')
 }
