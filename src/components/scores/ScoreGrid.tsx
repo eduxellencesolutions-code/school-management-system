@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { debounce, formatScore, cn } from '@/lib/utils'
 import { Save, Download, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import Papa from 'papaparse'
 
 interface Learner { id: string; first_name: string; last_name: string; admission_number?: string }
 interface Component { id: string; name: string; max_score: number; sequence: number }
@@ -19,9 +20,10 @@ interface Props {
   components: Component[]
   subject: Subject
   existingScores: { learner_id: string; component_id: string; score: number | null }[]
+  canImport?: boolean
 }
 
-export default function ScoreGrid({ groupId, subjectId, learners, components, subject, existingScores }: Props) {
+export default function ScoreGrid({ groupId, subjectId, learners, components, subject, existingScores, canImport = false }: Props) {
   const supabase = createClient()
   const [scores, setScores] = useState<ScoreMap>(() => {
     const map: ScoreMap = {}
@@ -35,7 +37,10 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     return map
   })
 
-  // Properly typed save function with useCallback
+  // ✅ Sorted components by sequence
+  const sortedComponents = [...components].sort((a, b) => a.sequence - b.sequence)
+
+  // ✅ Properly typed save function with useCallback
   const saveScore = useCallback(async (learnerId: string, componentId: string, value: number | null) => {
     setScores(prev => ({
       ...prev,
@@ -72,7 +77,7 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     if (error) toast.error('Failed to save score')
   }, [supabase, subjectId, components])
 
-  // ✅ FIX: Per-cell debounce with individual timeouts
+  // ✅ Per-cell debounce with individual timeouts
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({})
 
   const debouncedSave = useCallback((learnerId: string, componentId: string, value: number | null) => {
@@ -109,9 +114,10 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
   }
 
   function getMaxTotal(): number {
-    return components.reduce((sum, c) => sum + c.max_score, 0)
+    return sortedComponents.reduce((sum, c) => sum + c.max_score, 0)
   }
 
+  // ✅ FIXED: Export with sorted components, clean headers (CA1, CA2, Exam, Total)
   function exportToExcel() {
     const rows = learners.map((l, i) => {
       const row: Record<string, unknown> = {
@@ -119,12 +125,10 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
         'Admission No': l.admission_number ?? '',
         'Student Name': `${l.last_name} ${l.first_name}`,
       }
-      for (const c of components) {
-        row[`${c.name} (${c.max_score})`] = scores[l.id]?.[c.id]?.value ?? ''
+      for (const c of sortedComponents) {
+        row[c.name] = scores[l.id]?.[c.id]?.value ?? ''
       }
       row['Total'] = getRowTotal(l.id)
-      row['Max'] = getMaxTotal()
-      row['%'] = getMaxTotal() > 0 ? ((getRowTotal(l.id) / getMaxTotal()) * 100).toFixed(1) : ''
       return row
     })
 
@@ -135,7 +139,77 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
     toast.success('Excel file downloaded')
   }
 
-  const sortedComponents = [...components].sort((a, b) => a.sequence - b.sequence)
+  // ✅ Import handler
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const loadingToast = toast.loading('Processing import file...')
+
+    try {
+      const rows: any[] = await new Promise((resolve, reject) => {
+        if (file.name.endsWith('.csv')) {
+          Papa.parse(file, { header: true, skipEmptyLines: true, complete: r => resolve(r.data), error: reject })
+        } else {
+          const reader = new FileReader()
+          reader.onload = ev => {
+            const wb = XLSX.read(new Uint8Array(ev.target?.result as ArrayBuffer), { type: 'array' })
+            resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }))
+          }
+          reader.readAsArrayBuffer(file)
+        }
+      })
+
+      let matched = 0
+      let unmatched = 0
+      let invalidScores = 0
+
+      for (const row of rows as any[]) {
+        // Try to find student by admission number
+        const admNo = row['Admission No'] ?? row['admission_number']
+        const learner = learners.find(l => l.admission_number === admNo)
+        if (!learner) { 
+          unmatched++ 
+          continue 
+        }
+
+        for (const c of sortedComponents) {
+          // ✅ Exact match on component name (CA1, CA2, Exam)
+          const key = Object.keys(row).find(k => k === c.name)
+          if (!key) continue
+          
+          const raw = row[key]
+          if (raw === '' || raw === undefined || raw === null) continue
+          
+          const value = parseFloat(raw)
+          if (isNaN(value)) {
+            invalidScores++
+            continue
+          }
+          
+          if (value > c.max_score) {
+            invalidScores++
+            continue
+          }
+          
+          matched++
+          // ✅ Use existing handleChange which triggers debounced save
+          handleChange(learner.id, c.id, String(value))
+        }
+      }
+
+      toast.dismiss(loadingToast)
+      toast.success(`Imported scores for ${matched} entries${unmatched > 0 ? `, ${unmatched} students not matched` : ''}${invalidScores > 0 ? `, ${invalidScores} invalid scores skipped` : ''}`)
+      
+      // Reset file input
+      e.target.value = ''
+    } catch (error) {
+      toast.dismiss(loadingToast)
+      console.error('Import error:', error)
+      toast.error('Failed to import file')
+    }
+  }
+
   const allSaved = Object.values(scores).every(s => Object.values(s).every(c => c.status !== 'saving'))
 
   return (
@@ -156,6 +230,17 @@ export default function ScoreGrid({ groupId, subjectId, learners, components, su
               : <><Loader2 size={12} className="animate-spin" /> Saving…</>
             }
           </div>
+          {canImport && (
+            <label className="btn-secondary btn-sm btn cursor-pointer">
+              <Download size={13} /> Import
+              <input 
+                type="file" 
+                accept=".csv,.xlsx,.xls" 
+                className="hidden" 
+                onChange={handleImportFile} 
+              />
+            </label>
+          )}
           <button onClick={exportToExcel} className="btn-secondary btn-sm btn">
             <Download size={13} /> Export Excel
           </button>
