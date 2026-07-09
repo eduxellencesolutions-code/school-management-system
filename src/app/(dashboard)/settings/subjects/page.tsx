@@ -16,10 +16,7 @@ export default async function SubjectsPage() {
   const { data: profile } = await supabase
     .from('users').select('organization_id, role').eq('id', user.id).single()
   const orgId = profile?.organization_id
-
-  // ✅ Allow solo teachers AND institution admins
-  // Solo teachers: orgId = null, role = 'teacher'
-  // Institution admins: orgId = uuid, role = 'admin'
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
   // ✅ Build query based on user type
   let subjectsQuery = supabase
@@ -39,15 +36,44 @@ export default async function SubjectsPage() {
     .select('id, name')
     .order('name')
 
-  if (orgId) {
+  let userType = ''
+
+  if (orgId && isAdmin) {
     // ✅ Institution admin: filter by organization_id
+    userType = 'institution'
     subjectsQuery = subjectsQuery.eq('organization_id', orgId)
     groupsQuery = groupsQuery.eq('organization_id', orgId)
     templatesQuery = templatesQuery.eq('organization_id', orgId)
+  } else if (orgId && !isAdmin) {
+    // ✅ Assigned teacher: show only assigned subjects
+    userType = 'assigned'
+    const { data: assignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id, subject_id')
+      .eq('teacher_id', user.id)
+
+    const classIds = [...new Set((assignments ?? []).map(a => a.class_id).filter(Boolean))]
+    const subjectIds = [...new Set((assignments ?? []).map(a => a.subject_id).filter(Boolean))]
+
+    if (classIds.length === 0 && subjectIds.length === 0) {
+      return (
+        <div className="flex flex-col gap-6 max-w-3xl">
+          <div>
+            <h1 className="page-title">Subjects</h1>
+            <p className="page-subtitle">You have no subject assignments yet. Contact your administrator.</p>
+          </div>
+        </div>
+      )
+    }
+
+    subjectsQuery = subjectIds.length > 0
+      ? subjectsQuery.in('id', subjectIds)
+      : subjectsQuery.in('group_id', classIds)
+    groupsQuery = groupsQuery.in('id', classIds)
+    templatesQuery = templatesQuery.eq('organization_id', orgId)
   } else {
     // ✅ Solo teacher: show only their subjects (by instructor_id)
-    // Subjects don't have instructor_id directly, so we filter by group_id
-    // First get the solo teacher's groups
+    userType = 'solo'
     const { data: teacherGroups } = await supabase
       .from('groups')
       .select('id')
@@ -61,7 +87,6 @@ export default async function SubjectsPage() {
       groupsQuery = groupsQuery.in('id', groupIds)
     } else {
       // No groups, return empty arrays
-      const { data: empty } = await supabase.from('subjects').select('id').limit(0)
       return (
         <div className="flex flex-col gap-6 max-w-3xl">
           <div className="flex items-start justify-between gap-4">
@@ -115,14 +140,18 @@ export default async function SubjectsPage() {
         <div>
           <h1 className="page-title">Subjects</h1>
           <p className="page-subtitle">
-            {orgId 
+            {userType === 'institution'
               ? 'Manage subjects across all classes in your organization.'
+              : userType === 'assigned'
+              ? 'Subjects assigned to you'
               : 'Manage subjects for your classes.'}
           </p>
         </div>
-        <Link href={`/settings/subjects/new${orgId ? '' : '?solo=true'}`} className="btn-primary btn shrink-0">
-          <Plus size={14} /> Add subject
-        </Link>
+        {userType !== 'assigned' && (
+          <Link href={`/settings/subjects/new${orgId && userType !== 'assigned' ? '' : '?solo=true'}`} className="btn-primary btn shrink-0">
+            <Plus size={14} /> Add subject
+          </Link>
+        )}
       </div>
 
       {Object.keys(byGroup).length > 0 ? (
@@ -153,23 +182,25 @@ export default async function SubjectsPage() {
                         }
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link
-                        href={`/settings/subjects/${s.id}`}
-                        className="btn-secondary btn-sm btn"
-                      >
-                        <Pencil size={12} /> Edit
-                      </Link>
-                      <form action={deleteSubject}>
-                        <input type="hidden" name="id" value={s.id} />
-                        <button
-                          type="submit"
-                          className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
+                    {userType !== 'assigned' && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link
+                          href={`/settings/subjects/${s.id}`}
+                          className="btn-secondary btn-sm btn"
                         >
-                          Remove
-                        </button>
-                      </form>
-                    </div>
+                          <Pencil size={12} /> Edit
+                        </Link>
+                        <form action={deleteSubject}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button
+                            type="submit"
+                            className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
+                          >
+                            Remove
+                          </button>
+                        </form>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -179,15 +210,21 @@ export default async function SubjectsPage() {
       ) : (
         <div className="card py-16 flex flex-col items-center text-center">
           <BookOpen size={40} className="text-surface-200 mb-4" />
-          <h3 className="font-semibold text-ink mb-1">No subjects yet</h3>
+          <h3 className="font-semibold text-ink mb-1">
+            {userType === 'assigned' ? 'No subjects assigned yet' : 'No subjects yet'}
+          </h3>
           <p className="text-sm text-ink-muted mb-6 max-w-xs">
-            {orgId 
+            {userType === 'institution'
               ? 'Add subjects to your classes so teachers can enter scores.'
+              : userType === 'assigned'
+              ? 'You haven\'t been assigned to any subjects yet. Contact your administrator.'
               : 'Create a class first, then add subjects to it.'}
           </p>
-          <Link href={orgId ? '/settings/subjects/new' : '/classes/new'} className="btn-primary btn">
-            <Plus size={14} /> {orgId ? 'Add first subject' : 'Create first class'}
-          </Link>
+          {userType !== 'assigned' && (
+            <Link href={orgId ? '/settings/subjects/new' : '/classes/new'} className="btn-primary btn">
+              <Plus size={14} /> {orgId ? 'Add first subject' : 'Create first class'}
+            </Link>
+          )}
         </div>
       )}
     </div>
