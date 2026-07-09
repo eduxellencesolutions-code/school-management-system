@@ -39,11 +39,15 @@ export default async function ClassesPage({ searchParams }: PageProps) {
       redirect('/login')
     }
 
+    const isInstitution = !!profile.organization_id
+    const isAdmin = profile.role === 'admin' || profile.role === 'school_admin'
+
     console.log('👤 Profile:', { 
       name: profile.name, 
       role: profile.role, 
       organization_id: profile.organization_id,
-      isInstitution: !!profile.organization_id
+      isInstitution,
+      isAdmin
     })
 
     // ✅ Build the query based on user type
@@ -70,12 +74,27 @@ export default async function ClassesPage({ searchParams }: PageProps) {
     // ✅ Apply filter based on user type
     let query
     let userType = ''
-    
-    if (profile.organization_id) {
-      // ✅ INSTITUTION USER: Show all classes in the organization
+
+    if (isInstitution && isAdmin) {
+      // ✅ INSTITUTION ADMIN: Show all classes in the organization
       userType = 'institution'
       query = groupsQuery.eq('organization_id', profile.organization_id)
-      console.log('🏫 Institution mode - showing organization classes')
+      console.log('🏫 Institution admin mode - showing organization classes')
+    } else if (isInstitution && !isAdmin) {
+      // ✅ ASSIGNED TEACHER: Only classes they're assigned to
+      userType = 'assigned'
+      console.log('👨‍🏫 Assigned teacher mode - showing assigned classes')
+      
+      const { data: assignments } = await supabase
+        .from('teacher_assignments')
+        .select('class_id')
+        .eq('teacher_id', authUser.id)
+        .not('class_id', 'is', null)
+
+      const classIds = [...new Set((assignments ?? []).map(a => a.class_id))]
+      query = classIds.length > 0
+        ? groupsQuery.in('id', classIds)
+        : groupsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
     } else {
       // ✅ SOLO TEACHER: Show only their own classes
       userType = 'solo'
@@ -110,14 +129,19 @@ export default async function ClassesPage({ searchParams }: PageProps) {
           <div>
             <h1 className="page-title">Classes</h1>
             <p className="page-subtitle">
-              {userType === 'institution' 
+              {userType === 'institution'
                 ? `Manage all classes in ${profile?.organization?.name || 'your organization'}`
+                : userType === 'assigned'
+                ? 'Classes assigned to you'
                 : 'Manage your personal classes'}
             </p>
           </div>
-          <Link href="/classes/new" className="btn-primary btn">
-            <Plus size={15} /> New Class
-          </Link>
+          {/* ✅ Hide New Class button for assigned teachers */}
+          {userType !== 'assigned' && (
+            <Link href="/classes/new" className="btn-primary btn">
+              <Plus size={15} /> New Class
+            </Link>
+          )}
         </div>
 
         {/* ✅ Show messages */}
@@ -182,9 +206,12 @@ export default async function ClassesPage({ searchParams }: PageProps) {
                         href={`/classes/${g.id}`}
                         className="btn-secondary btn-sm btn flex-1 justify-center"
                       >
-                        <Settings size={12} /> Manage
+                        <Settings size={12} /> {userType === 'assigned' ? 'View' : 'Manage'}
                       </Link>
-                      <DeleteGroupButton groupId={g.id} groupName={g.name} />
+                      {/* ✅ Hide Delete button for assigned teachers */}
+                      {userType !== 'assigned' && (
+                        <DeleteGroupButton groupId={g.id} groupName={g.name} />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -194,13 +221,19 @@ export default async function ClassesPage({ searchParams }: PageProps) {
         ) : (
           <div className="card py-16 flex flex-col items-center justify-center text-center">
             <BookOpen size={40} className="text-surface-200 mb-4" />
-            <h3 className="font-semibold text-ink mb-1">No classes yet</h3>
+            <h3 className="font-semibold text-ink mb-1">
+              {userType === 'assigned' ? 'No classes assigned yet' : 'No classes yet'}
+            </h3>
             <p className="text-sm text-ink-muted mb-6 max-w-xs">
-              Create your first class to start enrolling students and entering scores.
+              {userType === 'assigned'
+                ? 'You haven\'t been assigned to any classes yet. Contact your school administrator.'
+                : 'Create your first class to start enrolling students and entering scores.'}
             </p>
-            <Link href="/classes/new" className="btn-primary btn">
-              <Plus size={15} /> Create first class
-            </Link>
+            {userType !== 'assigned' && (
+              <Link href="/classes/new" className="btn-primary btn">
+                <Plus size={15} /> Create first class
+              </Link>
+            )}
           </div>
         )}
       </div>
