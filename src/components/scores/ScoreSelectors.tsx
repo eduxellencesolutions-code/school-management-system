@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 
 interface Props {
-  groups: { id: string; name: string; code?: string }[]  // ✅ Allow optional code
-  subjects: { id: string; name: string; code: string; template_id: string }[]
+  groups: { id: string; name: string; code?: string | null }[]  // ✅ Allow null from Supabase
+  subjects: { id: string; name: string; code?: string | null; template_id?: string | null }[]  // ✅ Allow null from Supabase
   selectedGroupId: string
   selectedSubjectId: string
   userRole?: 'admin' | 'class_teacher' | 'subject_teacher' | 'solo'
