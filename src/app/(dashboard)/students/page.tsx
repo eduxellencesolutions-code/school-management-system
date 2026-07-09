@@ -23,11 +23,12 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', authUser.id)
     .single()
 
   const orgId = profile?.organization_id
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
   let groupsQuery = supabase
     .from('groups')
@@ -42,10 +43,34 @@ export default async function StudentsPage({ searchParams }: Props) {
     .order('last_name')
     .limit(100)
 
-  if (orgId) {
+  let userType = ''
+
+  if (orgId && isAdmin) {
+    // ✅ Institution admin: full access
+    userType = 'institution'
     groupsQuery = groupsQuery.eq('organization_id', orgId)
     query = query.eq('organization_id', orgId)
+  } else if (orgId && !isAdmin) {
+    // ✅ Assigned teacher: view-only
+    userType = 'assigned'
+    const { data: assignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id')
+      .eq('teacher_id', authUser.id)
+      .not('class_id', 'is', null)
+
+    const classIds = [...new Set((assignments ?? []).map(a => a.class_id))]
+
+    if (classIds.length > 0) {
+      groupsQuery = groupsQuery.in('id', classIds)
+      query = query.in('group_id', classIds)
+    } else {
+      groupsQuery = groupsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000')
+    }
   } else {
+    // ✅ Solo teacher
+    userType = 'solo'
     const { data: teacherGroups } = await supabase
       .from('groups')
       .select('id')
@@ -88,14 +113,16 @@ export default async function StudentsPage({ searchParams }: Props) {
             {learners?.length ?? 0} student{learners?.length !== 1 ? 's' : ''} found
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/students/import" className="btn-secondary btn">
-            <Upload size={14} /> Import CSV
-          </Link>
-          <Link href="/students/new" className="btn-primary btn">
-            <Plus size={14} /> Add Student
-          </Link>
-        </div>
+        {userType !== 'assigned' && (
+          <div className="flex gap-2">
+            <Link href="/students/import" className="btn-secondary btn">
+              <Upload size={14} /> Import CSV
+            </Link>
+            <Link href="/students/new" className="btn-primary btn">
+              <Plus size={14} /> Add Student
+            </Link>
+          </div>
+        )}
       </div>
 
       {message && (
@@ -154,10 +181,12 @@ export default async function StudentsPage({ searchParams }: Props) {
                           <Link href={`/students/${l.id}`} className="btn-ghost btn-sm btn">
                             View →
                           </Link>
-                          <DeleteStudentButton
-                            studentId={l.id}
-                            studentName={`${l.first_name} ${l.last_name}`}
-                          />
+                          {userType !== 'assigned' && (
+                            <DeleteStudentButton
+                              studentId={l.id}
+                              studentName={`${l.first_name} ${l.last_name}`}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -171,13 +200,22 @@ export default async function StudentsPage({ searchParams }: Props) {
         <div className="card py-16 flex flex-col items-center text-center">
           <Users size={40} className="text-surface-200 mb-4" />
           <h3 className="font-semibold text-ink mb-1">No students yet</h3>
-          <p className="text-sm text-ink-muted mb-6 max-w-xs">
-            Add students one by one or import them all at once using a CSV file.
-          </p>
-          <div className="flex gap-2">
-            <Link href="/students/import" className="btn-secondary btn">Import CSV</Link>
-            <Link href="/students/new" className="btn-primary btn">Add student</Link>
-          </div>
+          {userType !== 'assigned' && (
+            <>
+              <p className="text-sm text-ink-muted mb-6 max-w-xs">
+                Add students one by one or import them all at once using a CSV file.
+              </p>
+              <div className="flex gap-2">
+                <Link href="/students/import" className="btn-secondary btn">Import CSV</Link>
+                <Link href="/students/new" className="btn-primary btn">Add student</Link>
+              </div>
+            </>
+          )}
+          {userType === 'assigned' && (
+            <p className="text-sm text-ink-muted mb-6 max-w-xs">
+              You don't have any students assigned to you yet.
+            </p>
+          )}
         </div>
       )}
     </div>
