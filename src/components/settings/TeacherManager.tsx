@@ -71,7 +71,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       formData.append('subject_id', selectedSubject || '')
       formData.append('role', role)
 
-      const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers')
+      // ✅ FIXED: Correct import path to actions file
+      const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers/actions')
       await assignTeacher(formData)
       
       toast.success('Teacher assigned successfully!')
@@ -98,7 +99,9 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
     try {
       const formData = new FormData()
       formData.append('assignment_id', assignmentId)
-      const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers')
+      
+      // ✅ FIXED: Correct import path to actions file
+      const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers/actions')
       await removeAssignment(formData)
       
       toast.success('Assignment removed')
@@ -120,7 +123,8 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       const formData = new FormData()
       formData.append('file', file)
 
-      const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers')
+      // ✅ FIXED: Correct import path to actions file
+      const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers/actions')
       await uploadTeachers(formData)
       
       toast.success('Teachers uploaded successfully!')
