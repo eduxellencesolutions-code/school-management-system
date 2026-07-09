@@ -5,41 +5,36 @@ import ScoreSelectors from '@/components/scores/ScoreSelectors'
 import Link from 'next/link'
 import { BookOpen } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface Props {
   searchParams: Promise<{ class?: string; subject?: string }>
 }
 
 export default async function ScoresPage({ searchParams }: Props) {
   const params = await searchParams
-  
+
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  // ✅ Get user profile
-  const { data: profile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser.id)
-    .single()
-  
+  const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
   const orgId = profile?.organization_id
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
-  // ✅ Three-way role scoping
-  let groups: { id: string; name: string; code: string }[] = []
+  let groups: { id: string; name: string; code?: string }[] = []
   let userRole: 'admin' | 'class_teacher' | 'subject_teacher' | 'solo' = 'solo'
   let restrictedSubjectId: string | null = null
+  let canImport = false
 
   if (orgId && isAdmin) {
     // ✅ ADMIN: See all classes in the organization
     userRole = 'admin'
+    canImport = true
     const { data } = await supabase
-      .from('groups')
-      .select('id, name, code')
-      .eq('organization_id', orgId)
-      .eq('is_active', true)
-      .order('name')
+      .from('groups').select('id, name, code')
+      .eq('organization_id', orgId).eq('is_active', true).order('name')
     groups = data ?? []
   } else if (orgId && !isAdmin) {
     // ✅ INSTITUTION TEACHER: See only assigned classes/subjects
@@ -48,42 +43,38 @@ export default async function ScoresPage({ searchParams }: Props) {
       .select('class_id, subject_id, role')
       .eq('teacher_id', authUser.id)
 
-    const classTeacherOf = assignments?.filter(a => a.role === 'class_teacher').map(a => a.class_id) ?? []
-    const subjectTeacherOf = assignments?.filter(a => a.role === 'subject_teacher') ?? []
+    const classTeacherOf = [...new Set((assignments ?? []).filter(a => a.role === 'class_teacher').map(a => a.class_id).filter(Boolean))]
+    const subjectTeacherOf = (assignments ?? []).filter(a => a.role === 'subject_teacher')
 
     if (classTeacherOf.length > 0) {
       // ✅ CLASS TEACHER: See their class(es) with all subjects
       userRole = 'class_teacher'
+      canImport = true
       const { data } = await supabase
-        .from('groups')
-        .select('id, name, code')
-        .in('id', classTeacherOf)
-        .eq('is_active', true)
-        .order('name')
+        .from('groups').select('id, name, code')
+        .in('id', classTeacherOf).eq('is_active', true).order('name')
       groups = data ?? []
     } else if (subjectTeacherOf.length > 0) {
       // ✅ SUBJECT TEACHER: See their class(es) + only their subject
       userRole = 'subject_teacher'
       const classIds = [...new Set(subjectTeacherOf.map(a => a.class_id).filter(Boolean))]
       const { data } = await supabase
-        .from('groups')
-        .select('id, name, code')
-        .in('id', classIds)
-        .eq('is_active', true)
-        .order('name')
+        .from('groups').select('id, name, code')
+        .in('id', classIds).eq('is_active', true).order('name')
       groups = data ?? []
       // A subject teacher only ever sees/submits their own subject
-      if (subjectTeacherOf.length === 1) restrictedSubjectId = subjectTeacherOf[0].subject_id
+      if (params.class) {
+        const match = subjectTeacherOf.find(a => a.class_id === params.class)
+        restrictedSubjectId = match?.subject_id ?? null
+      }
     }
   } else {
     // ✅ SOLO TEACHER: See only their own classes
     userRole = 'solo'
+    canImport = true
     const { data } = await supabase
-      .from('groups')
-      .select('id, name, code')
-      .eq('instructor_id', authUser.id)
-      .eq('is_active', true)
-      .order('name')
+      .from('groups').select('id, name, code')
+      .eq('instructor_id', authUser.id).eq('is_active', true).order('name')
     groups = data ?? []
   }
 
@@ -138,12 +129,12 @@ export default async function ScoresPage({ searchParams }: Props) {
     }
 
     if (learners && components) {
-      const { data: scores } = await supabase
+      const { data: scoresData } = await supabase
         .from('scores')
         .select('learner_id, component_id, score')
         .eq('subject_id', selectedSubjectId)
         .in('learner_id', learners.map(l => l.id))
-      existingScores = scores
+      existingScores = scoresData
     }
   }
 
@@ -151,16 +142,22 @@ export default async function ScoresPage({ searchParams }: Props) {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="page-title">Score Entry</h1>
-        <p className="page-subtitle">Select a class and subject to start entering scores</p>
+        <p className="page-subtitle">
+          {userRole === 'subject_teacher'
+            ? 'Enter scores for your assigned subject'
+            : userRole === 'class_teacher'
+            ? 'Enter scores and import subject broadsheets for your class'
+            : 'Select a class and subject to start entering scores'}
+        </p>
       </div>
 
-      {/* ✅ Move window-dependent selectors to client component */}
       <ScoreSelectors
         groups={groups ?? []}
         subjects={subjects ?? []}
         selectedGroupId={selectedGroupId ?? ''}
         selectedSubjectId={selectedSubjectId ?? ''}
         userRole={userRole}
+        lockSubject={userRole === 'subject_teacher'}
       />
 
       {selectedGroupId && selectedSubjectId && learners && components && selectedSubject && existingScores ? (
@@ -181,14 +178,12 @@ export default async function ScoresPage({ searchParams }: Props) {
             learners={learners}
             components={components}
             existingScores={existingScores}
+            canImport={canImport}
           />
         )
       ) : selectedGroupId && subjects?.length === 0 ? (
         <div className="card py-12 flex flex-col items-center text-center">
-          <p className="text-sm text-ink-muted mb-3">No subjects added to this class.</p>
-          <Link href={`/classes/${selectedGroupId}`} className="btn-primary btn-sm btn">
-            Add subjects
-          </Link>
+          <p className="text-sm text-ink-muted mb-3">No subjects available to you in this class.</p>
         </div>
       ) : !selectedGroupId ? (
         <div className="card py-12 flex flex-col items-center text-center text-ink-muted text-sm">
