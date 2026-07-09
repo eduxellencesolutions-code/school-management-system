@@ -11,6 +11,7 @@ interface Teacher {
   name: string
   email: string
   role: string
+  signature_url: string | null
   teacher_assignments: Assignment[]
 }
 
@@ -48,6 +49,33 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
   // Get subjects for a specific class
   const getClassSubjects = (classId: string) => {
     return subjects.filter(s => s.group_id === classId)
+  }
+
+  // ✅ Signature upload handler
+  async function handleSignatureUpload(teacherId: string, file: File) {
+    const supabase = createClient()
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `signatures/staff/${teacherId}-${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('signatures')
+        .upload(path, file, { upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
+
+      const { updateTeacherSignature } = await import('@/app/(dashboard)/settings/teachers/actions')
+      const formData = new FormData()
+      formData.append('teacher_id', teacherId)
+      formData.append('signature_url', publicUrl)
+      await updateTeacherSignature(formData)
+
+      toast.success('Signature updated')
+      window.location.reload()
+    } catch (err) {
+      console.error('Signature upload error:', err)
+      toast.error('Failed to upload signature')
+    }
   }
 
   async function handleAssign(e: React.FormEvent) {
@@ -369,8 +397,31 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
             return (
               <div key={teacher.id} className="px-5 py-4 hover:bg-surface-50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
-                    {teacher.name.slice(0, 2).toUpperCase()}
+                  {/* ✅ Signature display with upload overlay */}
+                  <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 relative group/sig">
+                    {teacher.signature_url ? (
+                      <img 
+                        src={teacher.signature_url} 
+                        alt={`${teacher.name} signature`} 
+                        className="w-full h-full object-contain bg-white border border-surface-200 rounded" 
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">
+                        {teacher.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <label className="absolute inset-0 bg-black/50 opacity-0 group-hover/sig:opacity-100 transition-opacity flex items-center justify-center cursor-pointer rounded">
+                      <Upload size={12} className="text-white" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0]
+                          if (f) handleSignatureUpload(teacher.id, f)
+                        }}
+                      />
+                    </label>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-ink">{teacher.name}</p>
