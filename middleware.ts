@@ -22,8 +22,9 @@ export const config = {
      * - /parent (public route - no auth required)
      * - /api/parent (public API - no auth required)
      * - /login, /signup (public auth routes)
+     * - /auth/set-password (public route for setting password after invite)
      * - /api/auth (public auth API)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|api/parent|login|signup|api/auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|api/parent|login|signup|auth/set-password|api/auth).*)',
   ],
 }
