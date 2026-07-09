@@ -9,6 +9,7 @@ interface Props {
   selectedGroupId: string
   selectedSubjectId: string
   userRole?: 'admin' | 'class_teacher' | 'subject_teacher' | 'solo'
+  lockSubject?: boolean
 }
 
 export default function ScoreSelectors({ 
@@ -16,7 +17,8 @@ export default function ScoreSelectors({
   subjects, 
   selectedGroupId, 
   selectedSubjectId,
-  userRole 
+  userRole,
+  lockSubject = false
 }: Props) {
   const router = useRouter()
 
@@ -31,7 +33,7 @@ export default function ScoreSelectors({
   }
 
   // ✅ Determine if subject selector should be disabled
-  const isSubjectLocked = userRole === 'subject_teacher' && subjects.length === 1
+  const isSubjectLocked = lockSubject || (userRole === 'subject_teacher' && subjects.length === 1)
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -56,7 +58,7 @@ export default function ScoreSelectors({
             value={selectedSubjectId}
             onChange={handleSubjectChange}
             className="input min-w-[180px]"
-            disabled={isSubjectLocked}
+            disabled={!selectedGroupId || subjects.length === 0 || isSubjectLocked}
           >
             <option value="">Select subject…</option>
             {subjects.map(s => (
