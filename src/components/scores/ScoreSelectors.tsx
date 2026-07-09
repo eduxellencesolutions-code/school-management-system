@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 
 interface Props {
-  groups: { id: string; name: string; code: string }[]
+  groups: { id: string; name: string; code?: string }[]  // ✅ Allow optional code
   subjects: { id: string; name: string; code: string; template_id: string }[]
   selectedGroupId: string
   selectedSubjectId: string
