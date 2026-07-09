@@ -23,7 +23,8 @@ export default async function ScoresPage({ searchParams }: Props) {
   const orgId = profile?.organization_id
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
-  let groups: { id: string; name: string; code?: string }[] = []
+  // ✅ FIXED: Allow null for code field from Supabase
+  let groups: { id: string; name: string; code?: string | null }[] = []
   let userRole: 'admin' | 'class_teacher' | 'subject_teacher' | 'solo' = 'solo'
   let restrictedSubjectId: string | null = null
   let canImport = false
