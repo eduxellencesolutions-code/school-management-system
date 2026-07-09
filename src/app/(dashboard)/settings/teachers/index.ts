@@ -5,5 +5,6 @@ export {
   removeAssignment,
   uploadTeachers,
   downloadTeacherTemplate,
-  deleteTeacher
+  deleteTeacher,
+  updateTeacherSignature
 } from './actions'
