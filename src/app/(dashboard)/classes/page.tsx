@@ -62,7 +62,6 @@ export default async function ClassesPage({ searchParams }: PageProps) {
         created_at,
         organization_id,
         instructor_id,
-        instructor:users!groups_instructor_id_fkey(name),
         session:academic_sessions(name),
         term:terms(name),
         learner_count:learners(count),
@@ -113,6 +112,22 @@ export default async function ClassesPage({ searchParams }: PageProps) {
     // ✅ Use empty array if no groups
     const classList = groups || []
 
+    // ✅ Look up actual class teachers via teacher_assignments
+    const classIds = (classList ?? []).map(g => g.id)
+    const { data: classTeacherAssignments } = classIds.length > 0
+      ? await supabase
+          .from('teacher_assignments')
+          .select('class_id, teacher:users!teacher_assignments_teacher_id_fkey(name)')
+          .in('class_id', classIds)
+          .eq('role', 'class_teacher')
+      : { data: [] }
+
+    const classTeacherMap = Object.fromEntries(
+      (classTeacherAssignments ?? []).map(a => [a.class_id, (a.teacher as any)?.name ?? null])
+    )
+
+    console.log('📚 Class Teacher Map:', classTeacherMap)
+
     // ✅ Handle URL messages
     let message = null
     if (params.success === 'deleted') {
@@ -160,7 +175,10 @@ export default async function ClassesPage({ searchParams }: PageProps) {
             {classList.map((g) => {
               const learners = (g.learner_count as unknown as { count: number }[])?.[0]?.count ?? 0
               const subjects = (g.subject_count as unknown as { count: number }[])?.[0]?.count ?? 0
-              const instructor = g.instructor as unknown as { name: string } | null
+              // ✅ For solo teachers, use instructor_id; for institution, use classTeacherMap
+              const teacherName = userType === 'solo'
+                ? (g.instructor_id ? (g as any).instructor?.name : null)
+                : classTeacherMap[g.id]
 
               return (
                 <div key={g.id} className="card hover:shadow-md transition-shadow">
@@ -185,8 +203,8 @@ export default async function ClassesPage({ searchParams }: PageProps) {
                         <BookOpen size={12} /> {subjects} subject{subjects !== 1 ? 's' : ''}
                       </div>
                     </div>
-                    {instructor && (
-                      <p className="text-xs text-ink-muted">Teacher: {instructor.name}</p>
+                    {teacherName && (
+                      <p className="text-xs text-ink-muted">Teacher: {teacherName}</p>
                     )}
                     {(g.session as unknown as { name: string } | null)?.name && (
                       <p className="text-xs text-ink-muted">
