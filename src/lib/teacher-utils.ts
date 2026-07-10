@@ -92,54 +92,47 @@ export async function getTeacherContext(teacherId: string): Promise<TeacherConte
   }
 }
 
-// Get classes and subjects for a teacher's dashboard
+// ✅ REWRITTEN: Get classes and subjects for a teacher's dashboard
 export async function getTeacherDashboardData(teacherId: string) {
   const supabase = await createClient()
   const context = await getTeacherContext(teacherId)
-  
-  // Get classes the teacher has access to
-  let classesQuery = supabase
-    .from('groups')
-    .select('id, name, code, teacher_id, learner_count:learners(count)')
-    .eq('is_active', true)
 
-  if (context.assignedClassIds.length > 0) {
-    // Teacher has specific class assignments
-    classesQuery = classesQuery.in('id', context.assignedClassIds)
-  } else if (context.classTeacherOf) {
-    // Teacher is a class teacher
-    classesQuery = classesQuery.eq('id', context.classTeacherOf)
+  // "Classes" here means classes they are the CLASS TEACHER of — not just associated with
+  const classTeacherClassIds = context.allAssignments
+    .filter(a => a.role === 'class_teacher' && a.class_id)
+    .map(a => a.class_id as string)
+
+  let classes: any[] = []
+  if (classTeacherClassIds.length > 0) {
+    const { data } = await supabase
+      .from('groups')
+      .select('id, name, code, learner_count:learners(count)')
+      .in('id', classTeacherClassIds)
+      .eq('is_active', true)
+      .order('name')
+    classes = data || []
   }
 
-  const { data: classes } = await classesQuery.order('name')
+  // Subjects they are SPECIFICALLY assigned to teach (subject_teacher role)
+  const subjectTeacherSubjectIds = context.allAssignments
+    .filter(a => a.role === 'subject_teacher' && a.subject_id)
+    .map(a => a.subject_id as string)
 
-  // Get subjects the teacher teaches
-  let subjectsQuery = supabase
-    .from('subjects')
-    .select('id, name, code, group_id, teacher_id, group:groups(name)')
-    .eq('is_active', true)
-
-  if (context.subjectTeacherOf.length > 0) {
-    // Teacher has specific subject assignments
-    subjectsQuery = subjectsQuery.in('id', context.subjectTeacherOf)
-  } else if (context.classTeacherOf) {
-    // If class teacher, they might teach all subjects in their class
-    subjectsQuery = subjectsQuery.eq('group_id', context.classTeacherOf)
+  let subjects: any[] = []
+  if (subjectTeacherSubjectIds.length > 0) {
+    const { data } = await supabase
+      .from('subjects')
+      .select('id, name, code, group_id, group:groups(name)')
+      .in('id', subjectTeacherSubjectIds)
+      .eq('is_active', true)
+      .order('name')
+    subjects = (data || []).map(s => ({
+      ...s,
+      group: Array.isArray(s.group) ? (s.group[0] ?? null) : (s.group || null)
+    }))
   }
 
-  const { data: subjects } = await subjectsQuery.order('name')
-
-  // ✅ Transform subjects to handle array case from Supabase
-  const transformedSubjects = (subjects || []).map(s => ({
-    ...s,
-    group: Array.isArray(s.group) ? (s.group[0] ?? null) : (s.group || null)
-  }))
-
-  return {
-    context,
-    classes: classes || [],
-    subjects: transformedSubjects
-  }
+  return { context, classes, subjects }
 }
 
 // Check if a teacher has access to a specific class
