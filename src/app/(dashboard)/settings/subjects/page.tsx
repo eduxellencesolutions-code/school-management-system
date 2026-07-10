@@ -182,7 +182,14 @@ export default async function SubjectsPage() {
                         }
                       </span>
                     </div>
-                    {userType !== 'assigned' && (
+                    {userType === 'assigned' ? (
+                      <Link
+                        href={`/scores?class=${s.group_id}&subject=${s.id}`}
+                        className="btn-primary btn-sm btn"
+                      >
+                        Enter scores
+                      </Link>
+                    ) : (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Link
                           href={`/settings/subjects/${s.id}`}
