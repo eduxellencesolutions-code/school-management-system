@@ -10,10 +10,12 @@ export default async function TemplatesPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id').eq('id', user.id).single()
+    .from('users').select('organization_id, role').eq('id', user.id).single()
   const orgId = profile?.organization_id
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isAssigned = !!orgId && !isAdmin
 
-  console.log('🔍 TEMPLATES PAGE - User:', user.id, 'Organization:', orgId)
+  console.log('🔍 TEMPLATES PAGE - User:', user.id, 'Organization:', orgId, 'isAdmin:', isAdmin, 'isAssigned:', isAssigned)
 
   let templates: any[] = []
 
@@ -87,9 +89,12 @@ export default async function TemplatesPage() {
             Each subject is assigned one template.
           </p>
         </div>
-        <Link href="/settings/templates/new" className="btn-primary btn shrink-0">
-          <Plus size={14} /> New template
-        </Link>
+        {/* ✅ Hide New Template button for assigned teachers */}
+        {!isAssigned && (
+          <Link href="/settings/templates/new" className="btn-primary btn shrink-0">
+            <Plus size={14} /> New template
+          </Link>
+        )}
       </div>
 
       {templates && templates.length > 0 ? (
@@ -107,20 +112,23 @@ export default async function TemplatesPage() {
                     </div>
                     {t.description && <p className="text-xs text-ink-muted">{t.description}</p>}
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Link href={`/settings/templates/${t.id}`} className="btn-secondary btn-sm btn">
-                      <Pencil size={12} /> Edit
-                    </Link>
-                    <form action={deleteTemplate}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <button
-                        type="submit"
-                        className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
-                      >
-                        Delete
-                      </button>
-                    </form>
-                  </div>
+                  {/* ✅ Hide Edit/Delete buttons for assigned teachers */}
+                  {!isAssigned && (
+                    <div className="flex gap-2 shrink-0">
+                      <Link href={`/settings/templates/${t.id}`} className="btn-secondary btn-sm btn">
+                        <Pencil size={12} /> Edit
+                      </Link>
+                      <form action={deleteTemplate}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <button
+                          type="submit"
+                          className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </div>
 
                 {comps.length > 0 ? (
@@ -150,11 +158,16 @@ export default async function TemplatesPage() {
           <FileSliders size={40} className="text-surface-200 mb-4" />
           <h3 className="font-semibold text-ink mb-1">No templates yet</h3>
           <p className="text-sm text-ink-muted mb-6 max-w-xs">
-            Create your first assessment template to define how scores are structured.
+            {isAssigned
+              ? 'No templates are available. Contact your administrator.'
+              : 'Create your first assessment template to define how scores are structured.'}
           </p>
-          <Link href="/settings/templates/new" className="btn-primary btn">
-            <Plus size={14} /> Create first template
-          </Link>
+          {/* ✅ Hide Create First Template button for assigned teachers */}
+          {!isAssigned && (
+            <Link href="/settings/templates/new" className="btn-primary btn">
+              <Plus size={14} /> Create first template
+            </Link>
+          )}
         </div>
       )}
     </div>
