@@ -443,7 +443,10 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-2">
               {[
                 ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add a class', href: '/classes/new', icon: '📚' }] : []),
-                { label: 'Enrol students', href: '/students/new', icon: '👤' },
+                // ✅ Conditional swap: Enrol students vs View students
+                (isSoloTeacher || isInstitutionAdmin)
+                  ? { label: 'Enrol students', href: '/students/new', icon: '👤' }
+                  : { label: 'View students', href: '/students', icon: '👤' },
                 { label: 'Enter scores', href: '/scores', icon: '✏️' },
                 { label: 'View reports', href: '/reports', icon: '📄' },
                 ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add subjects', href: '/settings/subjects/new', icon: '📖' }] : []),
