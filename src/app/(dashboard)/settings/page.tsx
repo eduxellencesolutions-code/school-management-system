@@ -11,7 +11,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('*, organization:organizations(*)')
+    .select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
   
