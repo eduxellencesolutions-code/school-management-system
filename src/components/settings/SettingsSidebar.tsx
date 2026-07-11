@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   User, Building, Users, BookOpen, FileText, 
-  CreditCard, LogOut, Bell, Shield
+  CreditCard, LogOut, Bell, Shield, MessageSquare
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -38,6 +38,7 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
   // ✅ Features for BOTH solo teachers AND institution admins
   items.push(
     { label: 'Templates', href: '/settings/templates', icon: FileText },
+    { label: 'Remarks', href: '/settings/remarks', icon: MessageSquare },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
     { label: 'Billing', href: '/settings#billing', icon: CreditCard },
   )
