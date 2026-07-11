@@ -31,20 +31,20 @@ export default async function ReportsPage() {
         .eq('created_by', authUser.id).order('created_at', { ascending: false })
   )
 
-  // Fetch classes - fix the nested relations
+  // ✅ FIXED: Fetch classes - removed !inner from both queries
   const { data: classes } = await (orgId
     ? supabase.from('groups').select(`
         id, 
         name, 
-        session:academic_sessions!inner(name),
-        term:terms!inner(name)
+        session:academic_sessions(name),
+        term:terms(name)
       `)
         .eq('organization_id', orgId).eq('is_active', true).order('name')
     : supabase.from('groups').select(`
         id, 
         name, 
-        session:academic_sessions!inner(name),
-        term:terms!inner(name)
+        session:academic_sessions(name),
+        term:terms(name)
       `)
         .eq('instructor_id', authUser.id).eq('is_active', true).order('name')
   )
