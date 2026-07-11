@@ -83,14 +83,14 @@ interface GradeRule {
   remark: string
 }
 
-// Matches DEFAULT_GRADING in utils.ts exactly
+// ✅ UPDATED: Grading rules with D at 45-49 and E at 40-44
 const DEFAULT_GRADE_RULES: GradeRule[] = [
   { min: 70, max: 100, grade: 'A', remark: 'Excellent' },
   { min: 60, max: 69,  grade: 'B', remark: 'Very Good' },
   { min: 50, max: 59,  grade: 'C', remark: 'Good' },
-  { min: 40, max: 49,  grade: 'D', remark: 'Pass' },
-  { min: 30, max: 39,  grade: 'E', remark: 'Below Pass' },
-  { min: 0,  max: 29,  grade: 'F', remark: 'Fail' },
+  { min: 45, max: 49,  grade: 'D', remark: 'Pass' },
+  { min: 40, max: 44,  grade: 'E', remark: 'Below Pass' },
+  { min: 0,  max: 39,  grade: 'F', remark: 'Fail' },
 ]
 
 function getGrade(percentage: number, rules: GradeRule[]): { grade: string; remark: string } {
