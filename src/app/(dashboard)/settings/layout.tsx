@@ -13,7 +13,7 @@ export default async function SettingsLayout({
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('users')
     .select('*, organization:organizations(*)')
     .eq('id', authUser.id)
@@ -24,7 +24,13 @@ export default async function SettingsLayout({
     role: profile?.role,
     organization_id: profile?.organization_id,
     isInstitution: !!profile?.organization_id,
-    isAdmin: profile?.role === 'admin' || profile?.role === 'school_admin'
+    isAdmin: profile?.role === 'admin' || profile?.role === 'school_admin',
+    profileError: profileError ? {
+      message: profileError.message,
+      code: profileError.code,
+      details: profileError.details,
+      hint: profileError.hint,
+    } : null,
   })
 
   const isInstitution = !!profile?.organization_id
