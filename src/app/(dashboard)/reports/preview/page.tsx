@@ -128,9 +128,10 @@ export default function PreviewReportPage() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) { router.push('/login'); return }
 
+      // FIX 1: Added !users_organization_id_fkey to resolve ambiguous relation
       const { data: profileData } = await supabase
         .from('users')
-        .select('*, organization:organizations(*)')
+        .select('*, organization:organizations!users_organization_id_fkey(*)')
         .eq('id', userData.user.id)
         .single()
 
@@ -158,10 +159,10 @@ export default function PreviewReportPage() {
         }
       }
 
-      // ✅ UPDATED: Fetch report with term and session data
+      // FIX 2: Added !reports_organization_id_fkey to resolve ambiguous relation
       const { data: reportData, error: reportError } = await supabase
         .from('reports')
-        .select(`*, group:groups(name, session:academic_sessions(name), term:terms(name)), learner:learners(first_name, last_name), created_by_user:users(name), organization:organizations(name, logo_url, motto)`)
+        .select(`*, group:groups(name, session:academic_sessions(name), term:terms(name)), learner:learners(first_name, last_name), created_by_user:users(name), organization:organizations!reports_organization_id_fkey(name, logo_url, motto)`)
         .eq('id', reportId!)
         .single()
 
