@@ -196,6 +196,7 @@ interface Institution {
   email?: string
   website?: string
   principal_name?: string
+  principal_title?: string
   principal_signature_url?: string
   teacher_signature_url?: string
   colors?: { primary: string; secondary: string }
@@ -333,6 +334,7 @@ export function StudentReportCard({
   const displayPrincipalName = isInstitution && institution?.principal_name ? institution.principal_name : principalName
   const displayPrincipalSignature = isInstitution && institution?.principal_signature_url ? institution.principal_signature_url : principalSignature
   const displayTeacherSignature = isInstitution && institution?.teacher_signature_url ? institution.teacher_signature_url : teacherSignature
+  const displayPrincipalTitle = isInstitution && institution?.principal_title ? institution.principal_title : 'Principal'
 
   // Check if components should be shown
   const hasComponents = opts.show_components && student.scores.some(s => s.components && s.components.length > 0)
@@ -574,7 +576,7 @@ export function StudentReportCard({
             {student.principal_remark && isInstitution ? (
               <>
                 <Text style={[styles.remarksLabel, { marginTop: 4, color: isInstitution ? instColors.primary : muted }]}>
-                  PRINCIPAL'S COMMENT
+                  {`${(institution?.principal_title || 'PRINCIPAL').toUpperCase()}'S COMMENT`}
                 </Text>
                 <Text style={styles.remarksText}>{student.principal_remark}</Text>
               </>
@@ -593,10 +595,10 @@ export function StudentReportCard({
             </View>
             {isInstitution && (
               <View style={styles.sigBlock}>
-                <Text style={styles.sigLabel}>Principal's Signature</Text>
+                <Text style={styles.sigLabel}>{`${displayPrincipalTitle}'s Signature`}</Text>
                 {displayPrincipalSignature ? <Image src={displayPrincipalSignature} style={styles.sigImage} /> : null}
                 <View style={styles.sigLine} />
-                <Text style={styles.sigName}>{displayPrincipalName || 'Principal'}</Text>
+                <Text style={styles.sigName}>{displayPrincipalName || displayPrincipalTitle}</Text>
               </View>
             )}
             <View style={styles.sigBlock}>
