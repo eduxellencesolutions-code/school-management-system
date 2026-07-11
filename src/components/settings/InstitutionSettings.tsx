@@ -14,6 +14,7 @@ interface Organization {
   motto: string | null
   logo_url: string | null
   principal_name: string | null
+  principal_title: string | null
   principal_signature_url: string | null
   teacher_signature_url: string | null
   address: string | null
@@ -54,6 +55,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     website: organization?.website || '',
     established_year: organization?.established_year || '',
     principal_name: organization?.principal_name || '',
+    principal_title: organization?.principal_title || 'Principal',
     primary_color: organization?.colors?.primary || '#1a56db',
     secondary_color: organization?.colors?.secondary || '#0f766e',
     show_attendance: organization?.report_card_settings?.show_attendance ?? true,
@@ -165,6 +167,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
         website: formData.website,
         established_year: formData.established_year ? parseInt(formData.established_year as string) : null,
         principal_name: formData.principal_name,
+        principal_title: formData.principal_title,
         colors: {
           primary: formData.primary_color,
           secondary: formData.secondary_color
@@ -472,16 +475,35 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
-          <input
-            type="text"
-            name="principal_name"
-            value={formData.principal_name}
-            onChange={handleChange}
-            className="input max-w-md"
-            placeholder="e.g. Dr. John Doe"
-          />
+        {/* ✅ Updated: Two-column row for Principal's Name + Title */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
+            <input
+              type="text"
+              name="principal_name"
+              value={formData.principal_name}
+              onChange={handleChange}
+              className="input"
+              placeholder="e.g. Dr. John Doe"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Title</label>
+            <select
+              name="principal_title"
+              value={formData.principal_title}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="Principal">Principal</option>
+              <option value="Head Teacher">Head Teacher</option>
+              <option value="Headmaster">Headmaster</option>
+              <option value="Headmistress">Headmistress</option>
+              <option value="Proprietor">Proprietor</option>
+              <option value="Proprietress">Proprietress</option>
+            </select>
+          </div>
         </div>
       </div>
 
