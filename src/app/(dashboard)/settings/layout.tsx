@@ -15,7 +15,7 @@ export default async function SettingsLayout({
 
   const { data: profile, error: profileError } = await supabase
     .from('users')
-    .select('*, organization:organizations(*)')
+    .select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
 
