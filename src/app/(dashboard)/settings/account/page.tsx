@@ -15,7 +15,9 @@ import {
   EyeOff,
   LogOut,
   Smartphone,
-  Key
+  Key,
+  Upload,
+  PenTool
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -40,7 +42,11 @@ export default function AccountPage() {
     created_at: string
   } | null>(null)
 
-  // Load user info on mount
+  // Signature state
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null)
+  const [uploadingSig, setUploadingSig] = useState(false)
+
+  // Load user info and signature on mount
   useState(() => {
     async function loadUserInfo() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -49,6 +55,10 @@ export default function AccountPage() {
           email: user.email || 'No email set',
           created_at: user.created_at || new Date().toISOString(),
         })
+
+        const { data: profile } = await supabase
+          .from('users').select('signature_url').eq('id', user.id).single()
+        setSignatureUrl(profile?.signature_url ?? null)
       }
     }
     loadUserInfo()
@@ -90,6 +100,38 @@ export default function AccountPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to update password')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSignatureUpload(file: File) {
+    setUploadingSig(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const ext = file.name.split('.').pop()
+      const path = `signatures/self/${user.id}-${Date.now()}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('signatures')
+        .upload(path, file, { upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ signature_url: publicUrl })
+        .eq('id', user.id)
+      if (updateError) throw updateError
+
+      setSignatureUrl(publicUrl)
+      toast.success('Signature updated — this will appear on your generated report cards')
+    } catch (err) {
+      console.error('Signature upload error:', err)
+      toast.error('Failed to upload signature')
+    } finally {
+      setUploadingSig(false)
     }
   }
 
@@ -161,6 +203,42 @@ export default function AccountPage() {
                 <p className="text-sm text-green-600 font-medium">Active</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* My Signature */}
+      <div className="card">
+        <div className="card-header flex items-center gap-2">
+          <PenTool size={16} className="text-brand-500" />
+          <h2 className="font-semibold text-sm text-ink">My Signature</h2>
+        </div>
+        <div className="card-body">
+          <p className="text-sm text-ink-muted mb-4">
+            Upload your signature to appear on report cards you generate. If your school administrator has already uploaded one for you, it will show below.
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="w-32 h-20 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-surface-50">
+              {signatureUrl ? (
+                <img src={signatureUrl} alt="My signature" className="w-full h-full object-contain" />
+              ) : (
+                <span className="text-xs text-ink-faint">No signature</span>
+              )}
+            </div>
+            <label className="btn-secondary btn-sm btn cursor-pointer">
+              {uploadingSig ? 'Uploading…' : signatureUrl ? 'Replace signature' : 'Upload signature'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) handleSignatureUpload(f)
+                }}
+                disabled={uploadingSig}
+              />
+              {uploadingSig && <Upload size={13} className="ml-1.5" />}
+            </label>
           </div>
         </div>
       </div>
