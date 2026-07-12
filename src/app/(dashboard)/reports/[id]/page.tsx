@@ -57,6 +57,22 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const showPrincipalRemark = orgSettings?.report_card_settings?.show_class_teacher_comment ?? false
 
+  // Fetch full organization details for school branding
+  const { data: orgFull } = profile?.organization_id
+    ? await supabase
+        .from('organizations')
+        .select('name, school_name, motto, logo_url, address, principal_name, principal_title, principal_signature_url')
+        .eq('id', profile.organization_id)
+        .single()
+    : { data: null }
+
+  // Fetch report creator's profile for teacher name and signature
+  const { data: reportCreator } = await supabase
+    .from('users')
+    .select('name, signature_url')
+    .eq('id', report.created_by)
+    .single()
+
   const group    = report.group as { id: string; name: string; code?: string } | null
   const term     = report.term  as { id: string; name: string } | null
   const data     = report.report_data ?? {}
@@ -86,8 +102,23 @@ export default async function ReportDetailPage({ params }: Props) {
             reportId={id}
             groupName={group?.name ?? 'Report'}
             termName={term?.name ?? ''}
+            sessionName={data.session_name ?? ''}
             learners={learners}
             subjects={subjects}
+            school={{
+              name: orgFull?.school_name || orgFull?.name || 'School',
+              motto: orgFull?.motto,
+              logo_url: orgFull?.logo_url,
+              address: orgFull?.address,
+            }}
+            teacherName={reportCreator?.name}
+            teacherSignature={reportCreator?.signature_url}
+            principalName={orgFull?.principal_name}
+            principalTitle={orgFull?.principal_title}
+            principalSignature={orgFull?.principal_signature_url}
+            studentRemarks={report.student_remarks ?? {}}
+            generatedDate={report.completed_at ?? report.created_at}
+            isInstitution={!!profile?.organization_id}
           />
           <DeleteReportButton
             reportId={id}
