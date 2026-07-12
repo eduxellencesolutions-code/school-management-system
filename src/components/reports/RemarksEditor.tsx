@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { saveStudentRemarks } from '@/app/reports/[id]/actions'
+import { saveStudentRemarks } from '@/app/(dashboard)/reports/[id]/actions'
 import { Save, Loader2 } from 'lucide-react'
 
 interface RemarkTemplate {
