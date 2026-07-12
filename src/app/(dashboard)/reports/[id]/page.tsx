@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import ReportDownloadButtons from '@/components/reports/ReportDownloadButtons'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
+import RemarksEditor from '@/components/reports/RemarksEditor'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -20,6 +21,41 @@ export default async function ReportDetailPage({ params }: Props) {
     .single()
 
   if (error || !report) notFound()
+
+  // Fetch profile to determine permissions
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, role').eq('id', user.id).single()
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isSolo = !profile?.organization_id
+
+  let canEditRemarks = isSolo || isAdmin
+  if (!canEditRemarks && profile?.organization_id) {
+    const { data: assignment } = await supabase
+      .from('teacher_assignments')
+      .select('id')
+      .eq('teacher_id', user.id)
+      .eq('class_id', report.group_id)
+      .eq('role', 'class_teacher')
+      .maybeSingle()
+    canEditRemarks = !!assignment
+  }
+
+  // Fetch remark templates if user can edit remarks
+  let remarkTemplates: any[] = []
+  if (canEditRemarks) {
+    const { data } = profile?.organization_id
+      ? await supabase.from('remark_templates').select('*').eq('organization_id', profile.organization_id)
+      : await supabase.from('remark_templates').select('*').is('organization_id', null).eq('instructor_id', user.id)
+    remarkTemplates = data ?? []
+  }
+
+  // Fetch organization settings for principal remark toggle
+  const { data: orgSettings } = profile?.organization_id
+    ? await supabase.from('organizations').select('report_card_settings').eq('id', profile.organization_id).single()
+    : { data: null }
+
+  const showPrincipalRemark = orgSettings?.report_card_settings?.show_class_teacher_comment ?? false
 
   const group    = report.group as { id: string; name: string; code?: string } | null
   const term     = report.term  as { id: string; name: string } | null
@@ -61,50 +97,69 @@ export default async function ReportDetailPage({ params }: Props) {
       </div>
 
       {learners.length > 0 ? (
-        <div className="card overflow-hidden">
-          <div className="px-5 py-3 bg-surface-50 border-b border-surface-200 text-center">
-            <p className="font-bold text-ink">{group?.name}</p>
-            {term?.name && <p className="text-xs text-ink-muted">{term.name} — Result Broadsheet</p>}
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-surface-100 border-b border-surface-200">
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">#</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px]">Student</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">Adm. No</th>
-                  {subjects.map((s: any) => (
-                    <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap">
-                      {s.name}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Total</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">%</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Grade</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Pos.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {learners.map((row: any, i: number) => (
-                  <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
-                    <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
-                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{row.last_name} {row.first_name}</td>
-                    <td className="px-3 py-2 font-mono text-ink-muted">{row.admission_number ?? '—'}</td>
+        <>
+          <div className="card overflow-hidden">
+            <div className="px-5 py-3 bg-surface-50 border-b border-surface-200 text-center">
+              <p className="font-bold text-ink">{group?.name}</p>
+              {term?.name && <p className="text-xs text-ink-muted">{term.name} — Result Broadsheet</p>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface-100 border-b border-surface-200">
+                    <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">#</th>
+                    <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px]">Student</th>
+                    <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase">Adm. No</th>
                     {subjects.map((s: any) => (
-                      <td key={s.id} className="px-3 py-2 text-center font-mono">
-                        {row.subject_totals?.[s.id] ?? '—'}
-                      </td>
+                      <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap">
+                        {s.name}
+                      </th>
                     ))}
-                    <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
-                    <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
-                    <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
-                    <td className="px-3 py-2 text-center font-bold">{row.position}</td>
+                    <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Total</th>
+                    <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">%</th>
+                    <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Grade</th>
+                    <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Pos.</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {learners.map((row: any, i: number) => (
+                    <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
+                      <td className="px-3 py-2 text-ink-muted">{i + 1}</td>
+                      <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{row.last_name} {row.first_name}</td>
+                      <td className="px-3 py-2 font-mono text-ink-muted">{row.admission_number ?? '—'}</td>
+                      {subjects.map((s: any) => (
+                        <td key={s.id} className="px-3 py-2 text-center font-mono">
+                          {row.subject_totals?.[s.id] ?? '—'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
+                      <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
+                      <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
+                      <td className="px-3 py-2 text-center font-bold">{row.position}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Remarks Editor - shown conditionally based on permissions */}
+          {canEditRemarks && learners.length > 0 && (
+            <RemarksEditor
+              reportId={id}
+              learners={learners.map((l: any) => ({
+                learner_id: l.learner_id,
+                first_name: l.first_name,
+                last_name: l.last_name,
+                percentage: l.percentage,
+                grade: l.grade,
+              }))}
+              templates={remarkTemplates}
+              initialRemarks={report.student_remarks ?? {}}
+              showPrincipalRemark={showPrincipalRemark}
+            />
+          )}
+        </>
       ) : (
         <div className="card py-12 text-center text-ink-muted text-sm">
           No report data available.
