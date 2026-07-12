@@ -27,10 +27,10 @@ export default async function ClassesPage({ searchParams }: PageProps) {
       redirect('/login')
     }
 
-    // ✅ Get user profile with organization
+    // FIX: Added !users_organization_id_fkey to resolve ambiguous relation
     const { data: profile } = await supabase
       .from('users')
-      .select('*, organization:organizations(*)')
+      .select('*, organization:organizations!users_organization_id_fkey(*)')
       .eq('id', authUser.id)
       .single()
 
