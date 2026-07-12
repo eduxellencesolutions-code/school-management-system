@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { PLAN_PRICING, PLAN_LIMITS, type SubscriptionPlan } from '@/types'
 import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown } from 'lucide-react'
 import Link from 'next/link'
+import UpgradeButton from '@/components/billing/UpgradeButton'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -245,9 +246,7 @@ export default async function SettingsPage() {
                           <p className="text-sm font-medium text-ink">{info.label}</p>
                           <p className="text-xs text-ink-muted">{info.naira} {info.period}</p>
                         </div>
-                        <button className="btn-primary btn-sm btn">
-                          Upgrade
-                        </button>
+                        <UpgradeButton planKey={key} label={info.label} />
                       </div>
                     ))}
                 </div>
