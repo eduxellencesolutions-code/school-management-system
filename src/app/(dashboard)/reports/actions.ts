@@ -171,12 +171,20 @@ async function generateReportData(
       subjectTotals[subject.id] = total
       overallTotal += total
 
-      // ✅ Build component scores for this subject
-      const componentScores: Record<string, number> = {}
-      subjectScoreData.forEach((s: any) => {
-        const comp = components.find((c: any) => c.id === s.component_id)
-        if (comp) {
-          componentScores[comp.name] = s.score || 0
+      // ✅ Self-contained component snapshot — score AND max_score AND weight, frozen at generation time
+      const subjectComponents = subjectComponentMap[subject.id] || []
+      const componentScores = subjectComponents.map((comp: any) => {
+        const scoreEntry = subjectScoreData.find((s: any) => s.component_id === comp.id)
+        const score = scoreEntry?.score ?? 0
+        const maxScore = comp.max_score
+        return {
+          name: comp.name,
+          score,
+          max_score: maxScore,
+          weight: maxScore, // component's own max IS its weight within the subject total
+          percentage: maxScore > 0 ? Math.round((score / maxScore) * 1000) / 10 : 0,
+          position: null,        // reserved for future per-component ranking
+          teacher_comment: null, // reserved for future per-component remarks
         }
       })
 
@@ -194,7 +202,7 @@ async function generateReportData(
         percentage: Math.round(percentage * 10) / 10,
         grade: gradeResult.grade,
         remark: gradeResult.remark,
-        component_scores: componentScores
+        component_scores: componentScores // ← now an array of full objects, not a flat {name: score} map
       }
     })
 
