@@ -17,15 +17,15 @@ export default async function StudentDetailPage({ params }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  // FIX: Added foreign key qualifiers to resolve ambiguous relations
-  // - group:groups!students_group_id_fkey to specify the FK from learners to groups
-  // - organization:organizations!students_organization_id_fkey to specify the FK from learners to organizations
+  // FIX: Using correct foreign key names from the database
+  // - group:groups!learners_group_id_fkey (FK from learners.group_id → groups.id)
+  // - organization:organizations!learners_organization_id_fkey (FK from learners.organization_id → organizations.id)
   const { data: learner, error: learnerError } = await supabase
     .from('learners')
     .select(`
       *,
-      group:groups!students_group_id_fkey(id, name, code),
-      organization:organizations!students_organization_id_fkey(name)
+      group:groups!learners_group_id_fkey(id, name, code),
+      organization:organizations!learners_organization_id_fkey(name)
     `)
     .eq('id', id)
     .single()
