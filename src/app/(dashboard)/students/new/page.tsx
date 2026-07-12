@@ -33,6 +33,7 @@ export default function NewStudentPage() {
   const [loading, setLoading] = useState(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [groupsLoaded, setGroupsLoaded] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -44,11 +45,38 @@ export default function NewStudentPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-      const { data: grps } = await supabase
-        .from('groups').select('id, name')
-        .eq('organization_id', profile?.organization_id ?? '')
-        .eq('is_active', true).order('name')
+      
+      setUserId(user.id)
+      
+      const { data: profile } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
+      
+      // FIX: Handle solo teachers and institution teachers correctly
+      let query = supabase
+        .from('groups')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+      
+      if (profile?.organization_id) {
+        // Institution teacher/admin - show organization classes
+        query = query.eq('organization_id', profile.organization_id)
+        console.log('Loading institution classes for org:', profile.organization_id)
+      } else {
+        // Solo teacher - show their own classes
+        query = query.eq('instructor_id', user.id)
+        console.log('Loading solo teacher classes for user:', user.id)
+      }
+      
+      const { data: grps, error } = await query
+      
+      if (error) {
+        console.error('Error loading classes:', error)
+      }
+      
       setGroups(grps ?? [])
       setGroupsLoaded(true)
     }
@@ -60,7 +88,12 @@ export default function NewStudentPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
-      const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+      
+      const { data: profile } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single()
 
       const { error } = await supabase.from('learners').insert({
         organization_id:  profile?.organization_id,
