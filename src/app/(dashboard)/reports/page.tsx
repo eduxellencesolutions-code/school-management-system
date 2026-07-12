@@ -12,8 +12,9 @@ export default async function ReportsPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // FIX: Added !users_organization_id_fkey to resolve ambiguous relation
   const { data: profile } = await supabase
-    .from('users').select('*, organization:organizations(*)')
+    .from('users').select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id).single()
 
   const orgId = profile?.organization_id
