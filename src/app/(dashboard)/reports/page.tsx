@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, XCircle } from 'lucide-react'
-import ReportGenerator from '@/components/reports/ReportGenerator'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 export const runtime = 'nodejs'
@@ -57,11 +56,6 @@ export default async function ReportsPage() {
     term: Array.isArray(cls.term) ? cls.term[0] : cls.term,
   }))
 
-  // Fetch org for ReportGenerator
-  const { data: org } = orgId
-    ? await supabase.from('organizations').select('*').eq('id', orgId).single()
-    : { data: null }
-
   const totalReports = reports?.length ?? 0
   const completedReports = reports?.filter(r => r.status === 'ready').length ?? 0
   const processingReports = reports?.filter(r => r.status === 'processing' || r.status === 'pending').length ?? 0
@@ -101,8 +95,6 @@ export default async function ReportsPage() {
         <div className="stat-card border-amber-200"><div className="stat-value text-amber-600">{processingReports}</div><div className="stat-label">Processing</div></div>
         <div className="stat-card border-red-200"><div className="stat-value text-red-600">{failedReports}</div><div className="stat-label">Failed</div></div>
       </div>
-
-      <ReportGenerator groups={transformedClasses || []} org={org || null} userId={authUser.id} userRole={userRole} />
 
       <div className="card">
         <div className="card-header">
