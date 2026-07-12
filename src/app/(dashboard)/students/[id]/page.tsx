@@ -17,16 +17,22 @@ export default async function StudentDetailPage({ params }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  // FIX: Added !students_organization_id_fkey to resolve ambiguous relation
-  const { data: learner } = await supabase
+  // FIX: Added foreign key qualifiers to resolve ambiguous relations
+  // - group:groups!students_group_id_fkey to specify the FK from learners to groups
+  // - organization:organizations!students_organization_id_fkey to specify the FK from learners to organizations
+  const { data: learner, error: learnerError } = await supabase
     .from('learners')
     .select(`
       *,
-      group:groups(id, name, code),
+      group:groups!students_group_id_fkey(id, name, code),
       organization:organizations!students_organization_id_fkey(name)
     `)
     .eq('id', id)
     .single()
+
+  if (learnerError) {
+    console.error('Error fetching learner:', learnerError)
+  }
 
   if (!learner) notFound()
 
