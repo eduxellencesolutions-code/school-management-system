@@ -138,7 +138,8 @@ export default async function ReportsPage() {
                         <Download size={14} /> Download
                       </a>
                     )}
-                    <Link href={`/reports/preview?id=${report.id}`} className="btn-primary btn-sm btn">View</Link>
+                    {/* FIX: Changed from /reports/preview?id= to /reports/ for the consolidated view */}
+                    <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
                     <DeleteReportButton reportId={report.id} reportName={groupName} />
                   </div>
                 </div>
