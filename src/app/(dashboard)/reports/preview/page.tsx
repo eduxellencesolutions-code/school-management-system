@@ -579,9 +579,9 @@ export default function PreviewReportPage() {
               <thead>
                 {/* Row 1: subject group headers */}
                 <tr className="bg-surface-100 border-b border-surface-100">
-                  <th className="px-2 py-1" />
-                  <th className="px-2 py-1" />
-                  <th className="px-2 py-1" />
+                  <th className="px-2 py-1 sticky left-0 bg-surface-100 z-20" />
+                  <th className="px-2 py-1 sticky left-8 bg-surface-100 z-20" />
+                  <th className="px-2 py-1 sticky left-[7.5rem] bg-surface-100 z-20" />
                   {learners[0].scores.map(s => {
                     const colSpan = s.components.length > 0 ? s.components.length + 1 : 1
                     return (
@@ -595,9 +595,9 @@ export default function PreviewReportPage() {
                 </tr>
                 {/* Row 2: column labels */}
                 <tr className="bg-surface-50 border-b border-surface-200">
-                  <th className="text-center px-2 py-2 font-semibold text-ink-muted uppercase tracking-wider w-8">#</th>
-                  <th className="text-left px-3 py-2 font-semibold text-ink-muted uppercase tracking-wider min-w-[130px]">Student</th>
-                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase tracking-wider">Adm. No</th>
+                  <th className="text-center px-2 py-2 font-semibold text-ink-muted uppercase tracking-wider w-8 sticky left-0 bg-surface-50 z-20">#</th>
+                  <th className="text-left px-3 py-2 font-semibold text-ink-muted uppercase tracking-wider min-w-[130px] sticky left-8 bg-surface-50 z-20">Student</th>
+                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase tracking-wider sticky left-[7.5rem] bg-surface-50 z-20">Adm. No</th>
                   {learners[0].scores.map(s => (
                     s.components.length > 0 ? (
                       <>
@@ -628,9 +628,9 @@ export default function PreviewReportPage() {
               <tbody>
                 {learners.map((learner, i) => (
                   <tr key={learner.id} className={cn('border-b border-surface-100', i % 2 === 0 ? 'bg-white' : 'bg-surface-50/50')}>
-                    <td className="text-center px-2 py-2 text-ink-muted font-mono">{learner.position}</td>
-                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{learner.last_name} {learner.first_name}</td>
-                    <td className="px-2 py-2 text-ink-muted font-mono">{learner.admission_number || '—'}</td>
+                    <td className="text-center px-2 py-2 text-ink-muted font-mono sticky left-0 bg-inherit z-10">{learner.position}</td>
+                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
+                    <td className="px-2 py-2 text-ink-muted font-mono sticky left-[7.5rem] bg-inherit z-10">{learner.admission_number || '—'}</td>
                     {learner.scores.map(s => (
                       s.components.length > 0 ? (
                         <>
@@ -679,7 +679,9 @@ export default function PreviewReportPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-surface-200 bg-surface-100 font-semibold">
-                  <td colSpan={3} className="px-3 py-2 text-xs text-ink-muted uppercase">Class avg</td>
+                  <td className="px-3 py-2 text-xs text-ink-muted uppercase sticky left-0 bg-surface-100 z-10">Class avg</td>
+                  <td className="px-3 py-2 sticky left-8 bg-surface-100 z-10" />
+                  <td className="px-3 py-2 sticky left-[7.5rem] bg-surface-100 z-10" />
                   {learners[0].scores.map(s => (
                     s.components.length > 0 ? (
                       <>
