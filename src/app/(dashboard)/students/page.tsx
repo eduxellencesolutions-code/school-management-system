@@ -170,8 +170,8 @@ export default async function StudentsPage({ searchParams }: Props) {
                       <td className="text-ink-muted text-sm">{group?.name ?? '—'}</td>
                       <td>
                         {l.gender && (
-                          <span className={`badge ${l.gender === 'male' ? 'badge-blue' : 'badge-amber'}`}>
-                            {l.gender === 'male' ? 'Male' : l.gender === 'female' ? 'Female' : 'Other'}
+                          <span className={`badge ${l.gender === 'M' ? 'badge-blue' : l.gender === 'F' ? 'badge-amber' : 'badge-gray'}`}>
+                            {l.gender === 'M' ? 'Male' : l.gender === 'F' ? 'Female' : 'Other'}
                           </span>
                         )}
                       </td>
