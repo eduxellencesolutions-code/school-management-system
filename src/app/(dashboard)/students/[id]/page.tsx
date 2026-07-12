@@ -17,12 +17,13 @@ export default async function StudentDetailPage({ params }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // FIX: Added !students_organization_id_fkey to resolve ambiguous relation
   const { data: learner } = await supabase
     .from('learners')
     .select(`
       *,
       group:groups(id, name, code),
-      organization:organizations(name)
+      organization:organizations!students_organization_id_fkey(name)
     `)
     .eq('id', id)
     .single()
