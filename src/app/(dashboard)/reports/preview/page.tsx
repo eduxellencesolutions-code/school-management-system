@@ -173,11 +173,16 @@ export default function PreviewReportPage() {
         await fetchLearnerResults(reportData.group_id)
       }
 
-      // Mark processing reports as completed
+      // FIX 3: Changed 'completed' to 'ready' to match database CHECK constraint
+      // and added error handling so failures are no longer silent
       if (reportData.status === 'processing' || reportData.status === 'pending') {
-        await supabase.from('reports')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
+        const { error: statusUpdateError } = await supabase.from('reports')
+          .update({ status: 'ready', completed_at: new Date().toISOString() })
           .eq('id', reportId!)
+
+        if (statusUpdateError) {
+          console.error('Error updating report status:', statusUpdateError)
+        }
       }
     } catch (error) {
       console.error('Error fetching report:', error)
