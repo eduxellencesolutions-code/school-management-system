@@ -98,13 +98,16 @@ export default function ReportDownloadButtons({
         const row = learners[i]
         toast.loading(`Generating PDF ${i + 1}/${learners.length}…`, { id: loadingToast })
 
+        // ✅ Use the new component_scores array structure
         const subjectResults = subjects.map((s: any) => {
           const detail = row.subject_details?.find((d: any) => d.subject_id === s.id)
-          const components = detail?.component_scores
-            ? Object.entries(detail.component_scores).map(([name, score]) => ({
-                name, score: score as number, max_score: 0, // max_score per-component not tracked in saved snapshot; total/percentage below remain accurate
-              }))
-            : []
+          // component_scores is now a proper array with everything already attached
+          const components = (detail?.component_scores ?? []).map((c: any) => ({
+            name: c.name,
+            score: c.score,
+            max_score: c.max_score,
+          }))
+
           return {
             subject_id: s.id,
             subject_name: s.name,
