@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,25 +10,59 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 const schema = z.object({
-  name:       z.string().min(2, 'Class name is required'),
-  code:       z.string().optional(),
-  type:       z.enum(['class', 'course', 'department']),
-  session_name: z.string().optional(),
-  term_name:    z.string().optional(),
+  name: z.string().min(2, 'Class name is required'),
+  code: z.string().optional(),
+  type: z.enum(['class', 'course', 'department']),
+  session_id: z.string().optional(),
+  term_id: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
-const TERM_PRESETS = ['First Term', 'Second Term', 'Third Term', 'First Semester', 'Second Semester']
+interface SessionOption { id: string; name: string }
+interface TermOption { id: string; name: string; session_id: string }
 
 export default function NewClassPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const [sessions, setSessions] = useState<SessionOption[]>([])
+  const [terms, setTerms] = useState<TermOption[]>([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { type: 'class' },
   })
+
+  const selectedSessionId = watch('session_id')
+
+  useEffect(() => {
+    async function loadOptions() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from('users').select('organization_id').eq('id', user.id).single()
+
+      const { data: sessionsData } = profile?.organization_id
+        ? await supabase.from('academic_sessions').select('id, name').eq('organization_id', profile.organization_id).order('name', { ascending: false })
+        : await supabase.from('academic_sessions').select('id, name').eq('instructor_id', user.id).order('name', { ascending: false })
+
+      setSessions(sessionsData ?? [])
+
+      const sessionIds = (sessionsData ?? []).map(s => s.id)
+      if (sessionIds.length > 0) {
+        const { data: termsData } = await supabase
+          .from('terms').select('id, name, session_id').in('session_id', sessionIds).order('name')
+        setTerms(termsData ?? [])
+      }
+
+      setLoadingOptions(false)
+    }
+    loadOptions()
+  }, [])
+
+  const availableTerms = terms.filter(t => t.session_id === selectedSessionId)
 
   async function onSubmit(data: FormData) {
     setLoading(true)
@@ -39,43 +73,6 @@ export default function NewClassPage() {
       const { data: profile } = await supabase
         .from('users').select('organization_id, role').eq('id', user.id).single()
 
-      // Create or reuse session
-      let sessionId: string | null = null
-      if (data.session_name && profile?.organization_id) {
-        const { data: existingSession } = await supabase
-          .from('academic_sessions')
-          .select('id')
-          .eq('organization_id', profile.organization_id)
-          .eq('name', data.session_name)
-          .single()
-
-        if (existingSession) {
-          sessionId = existingSession.id
-        } else {
-          const { data: newSession } = await supabase
-            .from('academic_sessions')
-            .insert({ organization_id: profile.organization_id, name: data.session_name, is_active: true })
-            .select().single()
-          sessionId = newSession?.id ?? null
-        }
-      }
-
-      // Create or reuse term
-      let termId: string | null = null
-      if (data.term_name && sessionId && profile?.organization_id) {
-        const { data: newTerm } = await supabase
-          .from('terms')
-          .insert({
-            session_id: sessionId,
-            organization_id: profile.organization_id,
-            name: data.term_name,
-            is_active: true,
-          })
-          .select().single()
-        termId = newTerm?.id ?? null
-      }
-
-      // Create the group
       const { data: group, error } = await supabase
         .from('groups')
         .insert({
@@ -84,8 +81,8 @@ export default function NewClassPage() {
           code: data.code || null,
           type: data.type,
           instructor_id: user.id,
-          session_id: sessionId,
-          term_id: termId,
+          session_id: data.session_id || null,
+          term_id: data.term_id || null,
           is_active: true,
         })
         .select().single()
@@ -93,8 +90,6 @@ export default function NewClassPage() {
       if (error) throw error
 
       toast.success(`Class "${data.name}" created!`)
-      
-      // ✅ FIXED: Refresh the router state before navigating
       router.refresh()
       router.push(`/classes/${group.id}`)
     } catch (err: unknown) {
@@ -137,20 +132,39 @@ export default function NewClassPage() {
         </div>
 
         <div className="border-t border-surface-200 pt-4">
-          <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Academic period (optional)</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Session / Year</label>
-              <input type="text" placeholder="2026/2027" className="input" {...register('session_name')} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Term / Semester</label>
-              <select className="input" {...register('term_name')}>
-                <option value="">Select term</option>
-                {TERM_PRESETS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Academic period (optional)</p>
+            <Link href="/settings/academic" className="text-xs text-brand-500 hover:underline">Manage sessions & terms</Link>
           </div>
+
+          {loadingOptions ? (
+            <p className="text-xs text-ink-faint">Loading…</p>
+          ) : sessions.length === 0 ? (
+            <p className="text-xs text-ink-faint">
+              No sessions set up yet.{' '}
+              <Link href="/settings/academic" className="text-brand-500 hover:underline">Add one first</Link>{' '}
+              or skip this for now.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Session / Year</label>
+                <select className="input" {...register('session_id')}>
+                  <option value="">Select session</option>
+                  {sessions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">Term / Semester</label>
+                <select className="input" {...register('term_id')} disabled={!selectedSessionId}>
+                  <option value="">
+                    {selectedSessionId ? 'Select term' : 'Select session first'}
+                  </option>
+                  {availableTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">
