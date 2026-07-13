@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   User, Building, Users, BookOpen, FileText, 
-  CreditCard, LogOut, Bell, Shield, MessageSquare
+  CreditCard, LogOut, Bell, Shield, MessageSquare, Calendar
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -40,6 +40,7 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
     { label: 'Templates', href: '/settings/templates', icon: FileText },
     { label: 'Remarks', href: '/settings/remarks', icon: MessageSquare },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
+    { label: 'Academic Periods', href: '/settings/academic', icon: Calendar },
     { label: 'Billing', href: '/settings#billing', icon: CreditCard },
   )
 
