@@ -34,7 +34,8 @@ export default async function AcademicPeriodsPage() {
     ? (await supabase.from('organizations').select('current_term_id').eq('id', orgId).single()).data?.current_term_id
     : (await supabase.from('users').select('current_term_id').eq('id', user.id).single()).data?.current_term_id
 
-  const termsBySession: Record<string, typeof terms> = {}
+  // FIX: Explicit type declaration to avoid TypeScript narrowing issues
+  const termsBySession: Record<string, { id: string; name: string; session_id: string }[]> = {}
   for (const t of terms ?? []) {
     if (!termsBySession[t.session_id]) termsBySession[t.session_id] = []
     termsBySession[t.session_id]!.push(t)
