@@ -1,13 +1,7 @@
 export const runtime = 'nodejs';
-
 import { NextRequest, NextResponse } from 'next/server';
 import Flutterwave from 'flutterwave-node-v3';
 import { createClient } from '@/lib/supabase/server';
-
-const flw = new Flutterwave(
-  process.env.FLW_PUBLIC_KEY!,
-  process.env.FLW_SECRET_KEY!
-);
 
 const PLANS: Record<string, { amount: number; label: string }> = {
   teacher_term: { amount: 1000, label: 'Teacher (per term)' },
@@ -18,23 +12,29 @@ const PLANS: Record<string, { amount: number; label: string }> = {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user
+    if (!process.env.FLW_PUBLIC_KEY || !process.env.FLW_SECRET_KEY) {
+      console.error('Flutterwave keys are not configured');
+      return NextResponse.json({ error: 'Payment provider not configured' }, { status: 500 });
+    }
+
+    const flw = new Flutterwave(
+      process.env.FLW_PUBLIC_KEY,
+      process.env.FLW_SECRET_KEY
+    );
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const { planKey } = await req.json();
     const plan = PLANS[planKey];
-
     if (!plan) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
     const tx_ref = `edux-${user.id}-${Date.now()}`;
-
     const response = await flw.Payment.initiate({
       tx_ref,
       amount: plan.amount,
