@@ -20,6 +20,11 @@ export default async function ReportDetailPage({ params }: Props) {
     .eq('id', id)
     .single()
 
+  // Added error logging to debug 404 issues
+  if (error) {
+    console.error('Error fetching report:', error)
+  }
+
   if (error || !report) notFound()
 
   // Fetch profile to determine permissions
