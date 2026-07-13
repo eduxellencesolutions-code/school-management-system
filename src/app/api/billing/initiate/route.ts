@@ -1,7 +1,6 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-// @ts-expect-error - flutterwave-node-v3 has no type declarations
 import Flutterwave from 'flutterwave-node-v3';
 import { createClient } from '@/lib/supabase/server';
 
