@@ -24,6 +24,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "file-saver": "^2.0.5",
+    "flutterwave-node-v3": "^1.0.0",
     "jspdf": "^2.5.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.417.0",
