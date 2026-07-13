@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
     // Get authenticated user
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const { planKey } = await req.json();
     const plan = PLANS[planKey];
-    
+
     if (!plan) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
