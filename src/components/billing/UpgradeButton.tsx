@@ -25,7 +25,6 @@ export default function UpgradeButton({ planKey, label }: UpgradeButtonProps) {
       const data = await response.json();
 
       if (data.paymentLink) {
-        // Redirect to Flutterwave checkout
         window.location.href = data.paymentLink;
       } else {
         toast.error(data.error || 'Failed to initiate payment');
