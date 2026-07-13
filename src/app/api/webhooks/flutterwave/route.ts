@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
+// @ts-expect-error - flutterwave-node-v3 has no type declarations
 import Flutterwave from 'flutterwave-node-v3';
 import { createClient } from '@supabase/supabase-js';
 
@@ -80,6 +81,23 @@ export async function POST(req: NextRequest) {
               expires_at: expiresAt.toISOString(),
               tx_ref: verification.data.tx_ref,
             });
+        }
+
+        // Update organization subscription
+        const { data: profile } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('id', userId)
+          .single();
+
+        if (profile?.organization_id) {
+          await supabase
+            .from('organizations')
+            .update({
+              subscription_plan: planKey,
+              subscription_status: 'active',
+            })
+            .eq('id', profile.organization_id);
         }
 
         console.log('✅ Subscription updated for user:', userId, 'Plan:', planKey);
