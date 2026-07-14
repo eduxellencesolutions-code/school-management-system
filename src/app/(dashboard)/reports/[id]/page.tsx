@@ -9,6 +9,55 @@ import RemarksEditor from '@/components/reports/RemarksEditor'
 
 interface Props { params: Promise<{ id: string }> }
 
+// Type definitions
+interface ComponentScore {
+  name: string
+  score: number
+  max_score: number
+  weight?: number
+  percentage?: number
+  position?: number | null
+  teacher_comment?: string | null
+}
+
+interface SubjectDetail {
+  subject_id: string
+  subject_name: string
+  total: number
+  max_score: number
+  percentage: number
+  grade: string
+  remark: string
+  component_scores: ComponentScore[]
+}
+
+interface Learner {
+  learner_id: string
+  first_name: string
+  last_name: string
+  admission_number: string | null
+  subject_totals: Record<string, number>
+  subject_details: SubjectDetail[]
+  overall_total: number
+  average: number
+  percentage: number
+  grade: string
+  remark: string
+  position: number
+}
+
+interface Subject {
+  id: string
+  name: string
+  code?: string
+  template_id?: string
+}
+
+interface SubjectComponent {
+  subject: Subject
+  components: string[]
+}
+
 export default async function ReportDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
@@ -69,19 +118,18 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const group = report.group as { id: string; name: string; code?: string } | null
   const data = report.report_data ?? {}
-  const learners = data.learners ?? []
-  const subjects = data.subjects ?? []
+  const learners: Learner[] = data.learners ?? []
+  const subjects: Subject[] = data.subjects ?? []
 
   // Build component columns for each subject
-  const subjectComponents = subjects.map((subject: any) => {
-    // Get component names from the first learner that has data
-    const firstLearner = learners.find((l: any) => 
-      l.subject_details?.find((s: any) => s.subject_id === subject.id)
+  const subjectComponents: SubjectComponent[] = subjects.map((subject: Subject) => {
+    const firstLearner = learners.find((learner: Learner) => 
+      learner.subject_details?.some((detail: SubjectDetail) => detail.subject_id === subject.id)
     )
-    const comps = firstLearner?.subject_details?.find((s: any) => s.subject_id === subject.id)?.component_scores || []
+    const comps = firstLearner?.subject_details?.find((detail: SubjectDetail) => detail.subject_id === subject.id)?.component_scores || []
     return {
       subject,
-      components: comps.map((c: any) => c.name)
+      components: comps.map((component: ComponentScore) => component.name)
     }
   })
 
@@ -166,11 +214,12 @@ export default async function ReportDetailPage({ params }: Props) {
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-0 bg-surface-100 z-10">#</th>
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px] sticky left-8 bg-surface-100 z-10">Student</th>
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-[7.5rem] bg-surface-100 z-10">Adm. No</th>
-                  {subjects.map((s: any) => {
-                    const comps = subjectComponents.find(sc => sc.subject.id === s.id)?.components || []
+                  {subjects.map((subject: Subject) => {
+                    const subjectComp = subjectComponents.find((sc: SubjectComponent) => sc.subject.id === subject.id)
+                    const comps = subjectComp?.components || []
                     return (
-                      <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap min-w-[100px]">
-                        {s.name}
+                      <th key={subject.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap min-w-[100px]">
+                        {subject.name}
                         {comps.length > 0 && (
                           <div className="font-normal text-[9px] text-ink-faint uppercase tracking-wider mt-0.5">
                             {comps.join(' · ')}
@@ -186,29 +235,28 @@ export default async function ReportDetailPage({ params }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {learners.map((row: any, i: number) => {
-                  // Get subject details for this learner
-                  const subjectDetails = row.subject_details || []
+                {learners.map((learner: Learner, index: number) => {
+                  const subjectDetails = learner.subject_details || []
                   
                   return (
-                    <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
-                      <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit z-10">{i + 1}</td>
-                      <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{row.last_name} {row.first_name}</td>
-                      <td className="px-3 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10">{row.admission_number ?? '—'}</td>
+                    <tr key={learner.learner_id} className={index % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
+                      <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit z-10">{index + 1}</td>
+                      <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
+                      <td className="px-3 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10">{learner.admission_number ?? '—'}</td>
                       
-                      {subjects.map((s: any) => {
-                        const detail = subjectDetails.find((d: any) => d.subject_id === s.id)
+                      {subjects.map((subject: Subject) => {
+                        const detail = subjectDetails.find((d: SubjectDetail) => d.subject_id === subject.id)
                         const total = detail?.total ?? '—'
                         const components = detail?.component_scores || []
                         
                         return (
-                          <td key={s.id} className="px-3 py-2 text-center">
+                          <td key={subject.id} className="px-3 py-2 text-center">
                             <span className="font-mono font-bold">{total}</span>
                             {components.length > 0 && (
                               <div className="flex flex-col gap-0.5 mt-1">
-                                {components.map((comp: any, idx: number) => (
+                                {components.map((component: ComponentScore, idx: number) => (
                                   <span key={idx} className="text-[9px] text-ink-faint">
-                                    {comp.name}: {comp.score}/{comp.max_score}
+                                    {component.name}: {component.score}/{component.max_score}
                                   </span>
                                 ))}
                               </div>
@@ -217,10 +265,10 @@ export default async function ReportDetailPage({ params }: Props) {
                         )
                       })}
                       
-                      <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
-                      <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
-                      <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
-                      <td className="px-3 py-2 text-center font-bold">{row.position}</td>
+                      <td className="px-3 py-2 text-center font-bold font-mono">{learner.overall_total}</td>
+                      <td className="px-3 py-2 text-center font-mono text-ink-muted">{learner.percentage}%</td>
+                      <td className="px-3 py-2 text-center font-bold">{learner.grade}</td>
+                      <td className="px-3 py-2 text-center font-bold">{learner.position}</td>
                     </tr>
                   )
                 })}
@@ -235,9 +283,12 @@ export default async function ReportDetailPage({ params }: Props) {
       {canEditRemarks && learners.length > 0 && (
         <RemarksEditor
           reportId={id}
-          learners={learners.map((l: any) => ({
-            learner_id: l.learner_id, first_name: l.first_name, last_name: l.last_name,
-            percentage: l.percentage, grade: l.grade,
+          learners={learners.map((learner: Learner) => ({
+            learner_id: learner.learner_id,
+            first_name: learner.first_name,
+            last_name: learner.last_name,
+            percentage: learner.percentage,
+            grade: learner.grade,
           }))}
           templates={remarkTemplates}
           initialRemarks={report.student_remarks ?? {}}
