@@ -53,11 +53,6 @@ interface Subject {
   template_id?: string
 }
 
-interface SubjectComponent {
-  subject: Subject
-  components: string[]
-}
-
 export default async function ReportDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
@@ -121,16 +116,14 @@ export default async function ReportDetailPage({ params }: Props) {
   const learners: Learner[] = data.learners ?? []
   const subjects: Subject[] = data.subjects ?? []
 
-  // Build component columns for each subject
-  const subjectComponents: SubjectComponent[] = subjects.map((subject: Subject) => {
+  // Build component list for each subject
+  const subjectComponentsMap: Record<string, string[]> = {}
+  subjects.forEach((subject: Subject) => {
     const firstLearner = learners.find((learner: Learner) => 
       learner.subject_details?.some((detail: SubjectDetail) => detail.subject_id === subject.id)
     )
     const comps = firstLearner?.subject_details?.find((detail: SubjectDetail) => detail.subject_id === subject.id)?.component_scores || []
-    return {
-      subject,
-      components: comps.map((component: ComponentScore) => component.name)
-    }
+    subjectComponentsMap[subject.id] = comps.map((c: ComponentScore) => c.name)
   })
 
   const statusBadge: Record<string, string> = {
@@ -141,7 +134,7 @@ export default async function ReportDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6 max-w-[95vw]">
       <div className="flex items-center gap-2 text-sm">
         <Link href="/reports" className="text-ink-muted hover:text-ink flex items-center gap-1">
           <ArrowLeft size={13} /> Reports
@@ -208,30 +201,49 @@ export default async function ReportDetailPage({ params }: Props) {
             <p className="font-bold text-ink">{group?.name}</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="bg-surface-100 border-b border-surface-200">
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-0 bg-surface-100 z-10">#</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px] sticky left-8 bg-surface-100 z-10">Student</th>
-                  <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-[7.5rem] bg-surface-100 z-10">Adm. No</th>
+                <tr className="bg-surface-100 border-b-2 border-surface-200">
+                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase sticky left-0 bg-surface-100 z-10" rowSpan={2}>#</th>
+                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase min-w-[140px] sticky left-8 bg-surface-100 z-10" rowSpan={2}>Student</th>
+                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase sticky left-[7.5rem] bg-surface-100 z-10" rowSpan={2}>Adm. No</th>
+                  
                   {subjects.map((subject: Subject) => {
-                    const subjectComp = subjectComponents.find((sc: SubjectComponent) => sc.subject.id === subject.id)
-                    const comps = subjectComp?.components || []
+                    const comps = subjectComponentsMap[subject.id] || []
+                    // Count how many component columns we need
+                    const totalCols = comps.length + 1 // components + total
                     return (
-                      <th key={subject.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap min-w-[100px]">
+                      <th key={subject.id} colSpan={totalCols} className="px-2 py-2 font-semibold text-ink-muted uppercase text-center border-x border-surface-200">
                         {subject.name}
-                        {comps.length > 0 && (
-                          <div className="font-normal text-[9px] text-ink-faint uppercase tracking-wider mt-0.5">
-                            {comps.join(' · ')}
-                          </div>
-                        )}
                       </th>
                     )
                   })}
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Total</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">%</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Grade</th>
-                  <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Pos.</th>
+                  
+                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Total</th>
+                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>%</th>
+                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Grade</th>
+                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Pos.</th>
+                </tr>
+                
+                {/* Component headers row */}
+                <tr className="bg-surface-50 border-b border-surface-200">
+                  {subjects.map((subject: Subject) => {
+                    const comps = subjectComponentsMap[subject.id] || []
+                    return (
+                      <th key={`${subject.id}-comps`} colSpan={comps.length + 1} className="px-1 py-1 text-center">
+                        <div className="flex justify-center items-center gap-1">
+                          {comps.map((compName: string, idx: number) => (
+                            <span key={idx} className="text-[9px] font-medium text-ink-muted uppercase tracking-wider px-1">
+                              {compName}
+                            </span>
+                          ))}
+                          <span className="text-[9px] font-bold text-ink-muted uppercase tracking-wider px-1 border-l border-surface-300 pl-2">
+                            Tot
+                          </span>
+                        </div>
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -240,35 +252,35 @@ export default async function ReportDetailPage({ params }: Props) {
                   
                   return (
                     <tr key={learner.learner_id} className={index % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
-                      <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit z-10">{index + 1}</td>
-                      <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
-                      <td className="px-3 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10">{learner.admission_number ?? '—'}</td>
+                      <td className="px-2 py-2 text-ink-muted sticky left-0 bg-inherit z-10 text-center">{index + 1}</td>
+                      <td className="px-2 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
+                      <td className="px-2 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10 text-center">{learner.admission_number ?? '—'}</td>
                       
                       {subjects.map((subject: Subject) => {
                         const detail = subjectDetails.find((d: SubjectDetail) => d.subject_id === subject.id)
-                        const total = detail?.total ?? '—'
                         const components = detail?.component_scores || []
+                        const total = detail?.total ?? '—'
                         
                         return (
-                          <td key={subject.id} className="px-3 py-2 text-center">
-                            <span className="font-mono font-bold">{total}</span>
-                            {components.length > 0 && (
-                              <div className="flex flex-col gap-0.5 mt-1">
-                                {components.map((component: ComponentScore, idx: number) => (
-                                  <span key={idx} className="text-[9px] text-ink-faint">
-                                    {component.name}: {component.score}/{component.max_score}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
+                          <>
+                            {/* Render each component score */}
+                            {components.map((component: ComponentScore, idx: number) => (
+                              <td key={`${subject.id}-comp-${idx}`} className="px-2 py-1 text-center font-mono text-xs border-x border-surface-100">
+                                {component.score}
+                              </td>
+                            ))}
+                            {/* Render total */}
+                            <td className="px-2 py-1 text-center font-bold font-mono text-xs border-x border-surface-100">
+                              {total}
+                            </td>
+                          </>
                         )
                       })}
                       
-                      <td className="px-3 py-2 text-center font-bold font-mono">{learner.overall_total}</td>
-                      <td className="px-3 py-2 text-center font-mono text-ink-muted">{learner.percentage}%</td>
-                      <td className="px-3 py-2 text-center font-bold">{learner.grade}</td>
-                      <td className="px-3 py-2 text-center font-bold">{learner.position}</td>
+                      <td className="px-2 py-2 text-center font-bold font-mono">{learner.overall_total}</td>
+                      <td className="px-2 py-2 text-center font-mono text-ink-muted">{learner.percentage}%</td>
+                      <td className="px-2 py-2 text-center font-bold">{learner.grade}</td>
+                      <td className="px-2 py-2 text-center font-bold">{learner.position}</td>
                     </tr>
                   )
                 })}
