@@ -19,75 +19,163 @@ async function getContext() {
 }
 
 export async function createSession(formData: FormData) {
-  const { user, orgId } = await getContext()
-  const supabase = await createClient()
+  try {
+    const { user, orgId } = await getContext()
+    const supabase = await createClient()
 
-  const name = (formData.get('name') as string)?.trim()
-  if (!name) return
+    const name = (formData.get('name') as string)?.trim()
+    if (!name) {
+      return { success: false, message: 'Session name is required' }
+    }
 
-  const { error } = await supabase.from('academic_sessions').insert({
-    organization_id: orgId,
-    instructor_id: orgId ? null : user.id,
-    name,
-    is_active: true,
-  })
+    console.log('Creating session for:', { userId: user.id, orgId })
 
-  if (error) console.error('Error creating session:', error)
-  revalidatePath('/settings/academic')
+    const { data: session, error } = await supabase.from('academic_sessions').insert({
+      organization_id: orgId,
+      instructor_id: orgId ? null : user.id,
+      name,
+      is_active: true,
+      created_by: user.id,
+    }).select().single()
+
+    if (error) {
+      console.error('Error creating session:', error)
+      return { success: false, message: error.message }
+    }
+
+    console.log('Session created:', session)
+    revalidatePath('/settings/academic')
+    return { success: true, session }
+  } catch (error) {
+    console.error('Create session error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to create session' }
+  }
 }
 
 export async function createTerm(formData: FormData) {
-  const { user, orgId } = await getContext()
-  const supabase = await createClient()
+  try {
+    const { user, orgId } = await getContext()
+    const supabase = await createClient()
 
-  const sessionId = formData.get('session_id') as string
-  const name = (formData.get('name') as string)?.trim()
-  if (!sessionId || !name) return
+    const sessionId = formData.get('session_id') as string
+    const name = (formData.get('name') as string)?.trim()
+    
+    if (!sessionId) {
+      return { success: false, message: 'Session ID is required' }
+    }
+    if (!name) {
+      return { success: false, message: 'Term name is required' }
+    }
 
-  const { error } = await supabase.from('terms').insert({
-    organization_id: orgId,
-    instructor_id: orgId ? null : user.id,
-    session_id: sessionId,
-    name,
-    is_active: true,
-  })
+    console.log('Creating term for:', { userId: user.id, orgId, sessionId })
 
-  if (error) console.error('Error creating term:', error)
-  revalidatePath('/settings/academic')
+    const { data: term, error } = await supabase.from('terms').insert({
+      organization_id: orgId,
+      instructor_id: orgId ? null : user.id,
+      session_id: sessionId,
+      name,
+      is_active: true,
+      created_by: user.id,
+    }).select().single()
+
+    if (error) {
+      console.error('Error creating term:', error)
+      return { success: false, message: error.message }
+    }
+
+    console.log('Term created:', term)
+    revalidatePath('/settings/academic')
+    return { success: true, term }
+  } catch (error) {
+    console.error('Create term error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to create term' }
+  }
 }
 
 export async function deleteSession(formData: FormData) {
-  await getContext()
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  if (!id) return
+  try {
+    await getContext()
+    const supabase = await createClient()
+    const id = formData.get('id') as string
+    if (!id) {
+      return { success: false, message: 'Session ID is required' }
+    }
 
-  await supabase.from('terms').delete().eq('session_id', id)
-  await supabase.from('academic_sessions').delete().eq('id', id)
-  revalidatePath('/settings/academic')
+    // Delete all terms in this session first
+    await supabase.from('terms').delete().eq('session_id', id)
+    const { error } = await supabase.from('academic_sessions').delete().eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting session:', error)
+      return { success: false, message: error.message }
+    }
+
+    revalidatePath('/settings/academic')
+    return { success: true }
+  } catch (error) {
+    console.error('Delete session error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete session' }
+  }
 }
 
 export async function deleteTerm(formData: FormData) {
-  await getContext()
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  if (!id) return
+  try {
+    await getContext()
+    const supabase = await createClient()
+    const id = formData.get('id') as string
+    if (!id) {
+      return { success: false, message: 'Term ID is required' }
+    }
 
-  await supabase.from('terms').delete().eq('id', id)
-  revalidatePath('/settings/academic')
+    const { error } = await supabase.from('terms').delete().eq('id', id)
+    if (error) {
+      console.error('Error deleting term:', error)
+      return { success: false, message: error.message }
+    }
+
+    revalidatePath('/settings/academic')
+    return { success: true }
+  } catch (error) {
+    console.error('Delete term error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete term' }
+  }
 }
 
 export async function setCurrentTerm(formData: FormData) {
-  const { user, orgId } = await getContext()
-  const supabase = await createClient()
-  const termId = formData.get('term_id') as string
+  try {
+    const { user, orgId } = await getContext()
+    const supabase = await createClient()
+    const termId = formData.get('term_id') as string
 
-  if (orgId) {
-    await supabase.from('organizations').update({ current_term_id: termId || null }).eq('id', orgId)
-  } else {
-    await supabase.from('users').update({ current_term_id: termId || null }).eq('id', user.id)
+    console.log('Setting current term:', { userId: user.id, orgId, termId })
+
+    if (orgId) {
+      const { error } = await supabase
+        .from('organizations')
+        .update({ current_term_id: termId || null })
+        .eq('id', orgId)
+      
+      if (error) {
+        console.error('Error updating organization term:', error)
+        return { success: false, message: error.message }
+      }
+    } else {
+      const { error } = await supabase
+        .from('users')
+        .update({ current_term_id: termId || null })
+        .eq('id', user.id)
+      
+      if (error) {
+        console.error('Error updating user term:', error)
+        return { success: false, message: error.message }
+      }
+    }
+
+    revalidatePath('/settings/academic')
+    revalidatePath('/reports/generate')
+    return { success: true }
+  } catch (error) {
+    console.error('Set current term error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to set current term' }
   }
-
-  revalidatePath('/settings/academic')
-  revalidatePath('/reports/generate')
 }
