@@ -31,6 +31,7 @@ export default function ReportLifecycleActions({ reportId, reportStatus, canSubm
     router.refresh()
   }
 
+  // Early return for archived reports - this guarantees we never reach the JSX below when archived
   if (reportStatus === 'archived') {
     return <span className="text-xs text-ink-faint italic">This report is archived</span>
   }
@@ -78,7 +79,8 @@ export default function ReportLifecycleActions({ reportId, reportStatus, canSubm
         </span>
       )}
 
-      {canPublish && reportStatus !== 'archived' && (
+      {/* Removed the redundant '&& reportStatus !== 'archived'' check since the early return above guarantees we never reach here when archived */}
+      {canPublish && (
         <button
           onClick={() => { if (confirm('Archive this report? It will be hidden from the main list.')) run(archiveReport, 'archive') }}
           disabled={loading !== null}
