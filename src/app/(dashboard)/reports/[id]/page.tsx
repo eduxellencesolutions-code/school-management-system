@@ -72,6 +72,19 @@ export default async function ReportDetailPage({ params }: Props) {
   const learners = data.learners ?? []
   const subjects = data.subjects ?? []
 
+  // Build component columns for each subject
+  const subjectComponents = subjects.map((subject: any) => {
+    // Get component names from the first learner that has data
+    const firstLearner = learners.find((l: any) => 
+      l.subject_details?.find((s: any) => s.subject_id === subject.id)
+    )
+    const comps = firstLearner?.subject_details?.find((s: any) => s.subject_id === subject.id)?.component_scores || []
+    return {
+      subject,
+      components: comps.map((c: any) => c.name)
+    }
+  })
+
   const statusBadge: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700',
     submitted: 'bg-amber-100 text-amber-800',
@@ -93,7 +106,7 @@ export default async function ReportDetailPage({ params }: Props) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="page-title">{group?.name}</h1>
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${statusBadge[report.report_status] ?? statusBadge.draft}`}>
+            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${statusBadge[report.report_status ?? 'draft']}`}>
               {report.report_status ?? 'draft'}
             </span>
           </div>
@@ -153,9 +166,19 @@ export default async function ReportDetailPage({ params }: Props) {
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-0 bg-surface-100 z-10">#</th>
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase min-w-[140px] sticky left-8 bg-surface-100 z-10">Student</th>
                   <th className="text-left px-3 py-2.5 font-semibold text-ink-muted uppercase sticky left-[7.5rem] bg-surface-100 z-10">Adm. No</th>
-                  {subjects.map((s: any) => (
-                    <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap">{s.name}</th>
-                  ))}
+                  {subjects.map((s: any) => {
+                    const comps = subjectComponents.find(sc => sc.subject.id === s.id)?.components || []
+                    return (
+                      <th key={s.id} className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center whitespace-nowrap min-w-[100px]">
+                        {s.name}
+                        {comps.length > 0 && (
+                          <div className="font-normal text-[9px] text-ink-faint uppercase tracking-wider mt-0.5">
+                            {comps.join(' · ')}
+                          </div>
+                        )}
+                      </th>
+                    )
+                  })}
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Total</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">%</th>
                   <th className="px-3 py-2.5 font-semibold text-ink-muted uppercase text-center">Grade</th>
@@ -163,20 +186,44 @@ export default async function ReportDetailPage({ params }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {learners.map((row: any, i: number) => (
-                  <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
-                    <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit z-10">{i + 1}</td>
-                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{row.last_name} {row.first_name}</td>
-                    <td className="px-3 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10">{row.admission_number ?? '—'}</td>
-                    {subjects.map((s: any) => (
-                      <td key={s.id} className="px-3 py-2 text-center font-mono">{row.subject_totals?.[s.id] ?? '—'}</td>
-                    ))}
-                    <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
-                    <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
-                    <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
-                    <td className="px-3 py-2 text-center font-bold">{row.position}</td>
-                  </tr>
-                ))}
+                {learners.map((row: any, i: number) => {
+                  // Get subject details for this learner
+                  const subjectDetails = row.subject_details || []
+                  
+                  return (
+                    <tr key={row.learner_id} className={i % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
+                      <td className="px-3 py-2 text-ink-muted sticky left-0 bg-inherit z-10">{i + 1}</td>
+                      <td className="px-3 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{row.last_name} {row.first_name}</td>
+                      <td className="px-3 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10">{row.admission_number ?? '—'}</td>
+                      
+                      {subjects.map((s: any) => {
+                        const detail = subjectDetails.find((d: any) => d.subject_id === s.id)
+                        const total = detail?.total ?? '—'
+                        const components = detail?.component_scores || []
+                        
+                        return (
+                          <td key={s.id} className="px-3 py-2 text-center">
+                            <span className="font-mono font-bold">{total}</span>
+                            {components.length > 0 && (
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                {components.map((comp: any, idx: number) => (
+                                  <span key={idx} className="text-[9px] text-ink-faint">
+                                    {comp.name}: {comp.score}/{comp.max_score}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        )
+                      })}
+                      
+                      <td className="px-3 py-2 text-center font-bold font-mono">{row.overall_total}</td>
+                      <td className="px-3 py-2 text-center font-mono text-ink-muted">{row.percentage}%</td>
+                      <td className="px-3 py-2 text-center font-bold">{row.grade}</td>
+                      <td className="px-3 py-2 text-center font-bold">{row.position}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
