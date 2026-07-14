@@ -4,31 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-async function requireAdminOrSolo(reportId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase
-    .from('users').select('organization_id, role').eq('id', user.id).single()
-
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
-  const isSolo = !profile?.organization_id
-
-  if (!isAdmin && !isSolo) {
-    return { allowed: false, user }
-  }
-
-  // Solo teachers can only manage their own reports
-  if (isSolo) {
-    const { data: report } = await supabase.from('reports').select('created_by').eq('id', reportId).single()
-    if (report?.created_by !== user.id) return { allowed: false, user }
-  }
-
-  return { allowed: true, user }
-}
-
-async function canEditReport(reportId: string) {
+async function getReportContext(reportId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -37,31 +13,33 @@ async function canEditReport(reportId: string) {
     .from('users').select('organization_id, role').eq('id', user.id).single()
 
   const { data: report } = await supabase
-    .from('reports').select('group_id, organization_id, locked').eq('id', reportId).single()
+    .from('reports').select('group_id, organization_id, created_by, report_status').eq('id', reportId).single()
 
-  if (!report) return { allowed: false }
-  if (report.locked) return { allowed: false, locked: true }
+  if (!report) return { report: null, user, isAdmin: false, isSolo: false, isClassTeacher: false }
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
   const isSolo = !profile?.organization_id
 
-  if (isSolo || isAdmin) return { allowed: true, user }
+  let isClassTeacher = false
+  if (!isSolo && !isAdmin) {
+    const { data: assignment } = await supabase
+      .from('teacher_assignments')
+      .select('id')
+      .eq('teacher_id', user.id)
+      .eq('class_id', report.group_id)
+      .eq('role', 'class_teacher')
+      .maybeSingle()
+    isClassTeacher = !!assignment
+  }
 
-  const { data: assignment } = await supabase
-    .from('teacher_assignments')
-    .select('id')
-    .eq('teacher_id', user.id)
-    .eq('class_id', report.group_id)
-    .eq('role', 'class_teacher')
-    .maybeSingle()
-
-  return { allowed: !!assignment, user }
+  return { report, user, isAdmin, isSolo, isClassTeacher }
 }
 
 export async function saveStudentRemarks(reportId: string, remarks: Record<string, { teacher_remark?: string; principal_remark?: string }>) {
-  const { allowed, locked } = await canEditReport(reportId)
-  if (locked) return { error: 'This report is locked and cannot be edited. Ask an administrator to unlock it.' }
-  if (!allowed) return { error: 'You are not allowed to edit remarks for this report' }
+  const { report, isAdmin, isSolo, isClassTeacher } = await getReportContext(reportId)
+  if (!report) return { error: 'Report not found' }
+  if (report.report_status === 'published') return { error: 'This report is published and locked. Ask an administrator to unlock it.' }
+  if (!isAdmin && !isSolo && !isClassTeacher) return { error: 'You are not allowed to edit remarks for this report' }
 
   const supabase = await createClient()
   const { error } = await supabase.from('reports').update({ student_remarks: remarks }).eq('id', reportId)
@@ -75,12 +53,81 @@ export async function saveStudentRemarks(reportId: string, remarks: Record<strin
   return { success: true }
 }
 
+export async function submitReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isAdmin, isSolo, isClassTeacher, user } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo && !isClassTeacher) return { success: false, message: 'You are not allowed to submit this report' }
+  if (report.report_status !== 'draft') return { success: false, message: 'Only draft reports can be submitted' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('reports')
+    .update({ report_status: 'submitted', submitted_by: user!.id, submitted_at: new Date().toISOString() })
+    .eq('id', reportId)
+
+  if (error) return { success: false, message: 'Failed to submit report' }
+
+  revalidatePath(`/reports/${reportId}`)
+  return { success: true }
+}
+
+export async function publishReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can publish reports' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('reports')
+    .update({ report_status: 'published', published_by: user!.id, published_at: new Date().toISOString() })
+    .eq('id', reportId)
+
+  if (error) return { success: false, message: 'Failed to publish report' }
+
+  revalidatePath(`/reports/${reportId}`)
+  return { success: true }
+}
+
+export async function unpublishReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isAdmin, isSolo } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can unlock reports' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('reports')
+    .update({ report_status: 'submitted', published_by: null, published_at: null })
+    .eq('id', reportId)
+
+  if (error) return { success: false, message: 'Failed to unlock report' }
+
+  revalidatePath(`/reports/${reportId}`)
+  return { success: true }
+}
+
+export async function archiveReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isAdmin, isSolo } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can archive reports' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('reports').update({ report_status: 'archived' }).eq('id', reportId)
+  if (error) return { success: false, message: 'Failed to archive report' }
+
+  revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')
+  return { success: true }
+}
+
 export async function softDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
-  if (!reportId) return { success: false, message: 'Report ID is required' }
-
-  const { allowed, user } = await requireAdminOrSolo(reportId)
-  if (!allowed) return { success: false, message: 'Only administrators can delete generated reports' }
+  const { report, isAdmin, isSolo, isClassTeacher, user } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo && !isClassTeacher) return { success: false, message: 'You do not have permission to delete this report' }
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -88,10 +135,7 @@ export async function softDeleteReport(formData: FormData) {
     .update({ deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString() })
     .eq('id', reportId)
 
-  if (error) {
-    console.error('Error deleting report:', error)
-    return { success: false, message: 'Failed to delete report' }
-  }
+  if (error) return { success: false, message: 'Failed to delete report' }
 
   revalidatePath('/reports')
   revalidatePath('/dashboard')
@@ -100,10 +144,9 @@ export async function softDeleteReport(formData: FormData) {
 
 export async function restoreReport(formData: FormData) {
   const reportId = formData.get('id') as string
-  if (!reportId) return { success: false, message: 'Report ID is required' }
-
-  const { allowed } = await requireAdminOrSolo(reportId)
-  if (!allowed) return { success: false, message: 'Only administrators can restore reports' }
+  const { report, isAdmin, isSolo } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can restore reports' }
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -111,38 +154,22 @@ export async function restoreReport(formData: FormData) {
     .update({ deleted: false, deleted_by: null, deleted_at: null })
     .eq('id', reportId)
 
-  if (error) {
-    console.error('Error restoring report:', error)
-    return { success: false, message: 'Failed to restore report' }
-  }
+  if (error) return { success: false, message: 'Failed to restore report' }
 
   revalidatePath('/reports')
   return { success: true }
 }
 
-export async function toggleReportLock(formData: FormData) {
+export async function permanentlyDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
-  const lock = formData.get('lock') === 'true'
-  if (!reportId) return { success: false, message: 'Report ID is required' }
-
-  const { allowed, user } = await requireAdminOrSolo(reportId)
-  if (!allowed) return { success: false, message: 'Only administrators can lock or unlock reports' }
+  const { report, isAdmin, isSolo } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can permanently delete reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('reports')
-    .update(
-      lock
-        ? { locked: true, locked_by: user!.id, locked_at: new Date().toISOString() }
-        : { locked: false, locked_by: null, locked_at: null }
-    )
-    .eq('id', reportId)
+  const { error } = await supabase.from('reports').delete().eq('id', reportId)
+  if (error) return { success: false, message: 'Failed to permanently delete report' }
 
-  if (error) {
-    console.error('Error toggling report lock:', error)
-    return { success: false, message: 'Failed to update lock status' }
-  }
-
-  revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')
   return { success: true }
 }
