@@ -25,10 +25,10 @@ export default async function ReportsPage() {
   const { data: reports } = await (orgId
     ? supabase.from('reports')
         .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
-        .eq('organization_id', orgId).order('created_at', { ascending: false })
+        .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
     : supabase.from('reports')
         .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
-        .eq('created_by', authUser.id).order('created_at', { ascending: false })
+        .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
   )
 
   // ✅ FIXED: Fetch classes - removed !inner from both queries
