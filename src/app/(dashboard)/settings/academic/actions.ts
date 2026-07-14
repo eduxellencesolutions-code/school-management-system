@@ -36,7 +36,7 @@ export async function createSession(formData: FormData): Promise<void> {
       instructor_id: orgId ? null : user.id,
       name,
       is_active: true,
-      created_by: user.id,
+      // Remove created_by - column doesn't exist
     })
 
     if (error) {
@@ -76,7 +76,7 @@ export async function createTerm(formData: FormData): Promise<void> {
       session_id: sessionId,
       name,
       is_active: true,
-      created_by: user.id,
+      // Remove created_by - column doesn't exist
     })
 
     if (error) {
