@@ -2,6 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get('host') || ''
+
+  // Handle admin subdomain - check BEFORE auth logic
+  if (hostname.startsWith('admin.')) {
+    const url = request.nextUrl.clone()
+    // Rewrite to /super-admin route group
+    url.pathname = `/super-admin${url.pathname}`
+    return NextResponse.rewrite(url)
+  }
+
   try {
     return await updateSession(request)
   } catch (error) {
