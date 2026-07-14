@@ -21,13 +21,27 @@ export default async function ReportsPage() {
   const isInstitution = profile?.organization?.type === 'school' &&
     profile?.organization?.subscription_status === 'active'
 
+  // Determine delete permissions
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isSolo = !profile?.organization_id
+
+  let myClassTeacherOf: string[] = []
+  if (!isSolo && !isAdmin) {
+    const { data: assignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id')
+      .eq('teacher_id', authUser.id)
+      .eq('role', 'class_teacher')
+    myClassTeacherOf = (assignments ?? []).map(a => a.class_id).filter(Boolean)
+  }
+
   // Fetch reports — institution sees org reports, solo teacher sees own
   const { data: reports } = await (orgId
     ? supabase.from('reports')
-        .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
+        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users(name)')
         .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
     : supabase.from('reports')
-        .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
+        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users(name)')
         .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
   )
 
@@ -105,6 +119,11 @@ export default async function ReportsPage() {
             {reports.map((report) => {
               const groupName = (report.group as { name: string } | null)?.name || '—'
               const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
+              
+              // Determine if user can delete this report
+              const groupId = (report.group as { id: string } | null)?.id
+              const canDelete = isAdmin || isSolo || (groupId ? myClassTeacherOf.includes(groupId) : false)
+              
               return (
                 <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
                   <div className="flex items-center gap-4">
@@ -132,7 +151,11 @@ export default async function ReportsPage() {
                     )}
                     {/* FIX: Changed from /reports/preview?id= to /reports/ for the consolidated view */}
                     <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
-                    <DeleteReportButton reportId={report.id} reportName={groupName} />
+                    <DeleteReportButton 
+                      reportId={report.id} 
+                      reportName={groupName} 
+                      canDelete={canDelete}
+                    />
                   </div>
                 </div>
               )
