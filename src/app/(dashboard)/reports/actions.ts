@@ -69,7 +69,7 @@ export async function generateReport(formData: FormData) {
         session_id: sessionId,
         type,
         status: 'ready',
-        report_status: 'draft', // ✅ Added draft status
+        report_status: 'draft',
         completed_at: new Date().toISOString(),
         filters: {},
         created_by: user.id,
@@ -78,7 +78,16 @@ export async function generateReport(formData: FormData) {
       .select()
       .single()
 
-    if (insertError) throw new Error('Failed to save report')
+    // ✅ FIX: Detailed error logging
+    if (insertError) {
+      console.error('Report insert error:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details,
+        hint: insertError.hint,
+      })
+      throw new Error(insertError.message || 'Failed to save report')
+    }
 
     revalidatePath('/reports')
     revalidatePath('/dashboard')
