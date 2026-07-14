@@ -69,6 +69,7 @@ export async function generateReport(formData: FormData) {
         session_id: sessionId,
         type,
         status: 'ready',
+        report_status: 'draft', // ✅ Added draft status
         completed_at: new Date().toISOString(),
         filters: {},
         created_by: user.id,
