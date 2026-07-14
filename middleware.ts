@@ -7,8 +7,12 @@ export async function middleware(request: NextRequest) {
   // Handle admin subdomain - check BEFORE auth logic
   if (hostname.startsWith('admin.')) {
     const url = request.nextUrl.clone()
-    // Rewrite to /super-admin route group
-    url.pathname = `/super-admin${url.pathname}`
+    // Handle root path specifically
+    if (url.pathname === '/') {
+      url.pathname = '/super-admin/overview'
+    } else {
+      url.pathname = `/super-admin${url.pathname}`
+    }
     return NextResponse.rewrite(url)
   }
 
