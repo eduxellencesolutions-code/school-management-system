@@ -18,41 +18,40 @@ async function getContext() {
   return { user, orgId: profile?.organization_id ?? null }
 }
 
-export async function createSession(formData: FormData) {
+export async function createSession(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
 
     const name = (formData.get('name') as string)?.trim()
     if (!name) {
-      return { success: false, message: 'Session name is required' }
+      console.error('Session name is required')
+      return
     }
 
     console.log('Creating session for:', { userId: user.id, orgId })
 
-    const { data: session, error } = await supabase.from('academic_sessions').insert({
+    const { error } = await supabase.from('academic_sessions').insert({
       organization_id: orgId,
       instructor_id: orgId ? null : user.id,
       name,
       is_active: true,
       created_by: user.id,
-    }).select().single()
+    })
 
     if (error) {
       console.error('Error creating session:', error)
-      return { success: false, message: error.message }
+      return
     }
 
-    console.log('Session created:', session)
+    console.log('Session created successfully')
     revalidatePath('/settings/academic')
-    return { success: true, session }
   } catch (error) {
     console.error('Create session error:', error)
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to create session' }
   }
 }
 
-export async function createTerm(formData: FormData) {
+export async function createTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
@@ -61,44 +60,45 @@ export async function createTerm(formData: FormData) {
     const name = (formData.get('name') as string)?.trim()
     
     if (!sessionId) {
-      return { success: false, message: 'Session ID is required' }
+      console.error('Session ID is required')
+      return
     }
     if (!name) {
-      return { success: false, message: 'Term name is required' }
+      console.error('Term name is required')
+      return
     }
 
     console.log('Creating term for:', { userId: user.id, orgId, sessionId })
 
-    const { data: term, error } = await supabase.from('terms').insert({
+    const { error } = await supabase.from('terms').insert({
       organization_id: orgId,
       instructor_id: orgId ? null : user.id,
       session_id: sessionId,
       name,
       is_active: true,
       created_by: user.id,
-    }).select().single()
+    })
 
     if (error) {
       console.error('Error creating term:', error)
-      return { success: false, message: error.message }
+      return
     }
 
-    console.log('Term created:', term)
+    console.log('Term created successfully')
     revalidatePath('/settings/academic')
-    return { success: true, term }
   } catch (error) {
     console.error('Create term error:', error)
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to create term' }
   }
 }
 
-export async function deleteSession(formData: FormData) {
+export async function deleteSession(formData: FormData): Promise<void> {
   try {
     await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
     if (!id) {
-      return { success: false, message: 'Session ID is required' }
+      console.error('Session ID is required')
+      return
     }
 
     // Delete all terms in this session first
@@ -107,41 +107,38 @@ export async function deleteSession(formData: FormData) {
     
     if (error) {
       console.error('Error deleting session:', error)
-      return { success: false, message: error.message }
+      return
     }
 
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error) {
     console.error('Delete session error:', error)
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete session' }
   }
 }
 
-export async function deleteTerm(formData: FormData) {
+export async function deleteTerm(formData: FormData): Promise<void> {
   try {
     await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
     if (!id) {
-      return { success: false, message: 'Term ID is required' }
+      console.error('Term ID is required')
+      return
     }
 
     const { error } = await supabase.from('terms').delete().eq('id', id)
     if (error) {
       console.error('Error deleting term:', error)
-      return { success: false, message: error.message }
+      return
     }
 
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error) {
     console.error('Delete term error:', error)
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to delete term' }
   }
 }
 
-export async function setCurrentTerm(formData: FormData) {
+export async function setCurrentTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
@@ -157,7 +154,7 @@ export async function setCurrentTerm(formData: FormData) {
       
       if (error) {
         console.error('Error updating organization term:', error)
-        return { success: false, message: error.message }
+        return
       }
     } else {
       const { error } = await supabase
@@ -167,15 +164,13 @@ export async function setCurrentTerm(formData: FormData) {
       
       if (error) {
         console.error('Error updating user term:', error)
-        return { success: false, message: error.message }
+        return
       }
     }
 
     revalidatePath('/settings/academic')
     revalidatePath('/reports/generate')
-    return { success: true }
   } catch (error) {
     console.error('Set current term error:', error)
-    return { success: false, message: error instanceof Error ? error.message : 'Failed to set current term' }
   }
 }
