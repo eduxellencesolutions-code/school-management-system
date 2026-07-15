@@ -63,7 +63,10 @@ export default async function ArchivedReportsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Link href={`/reports/${report.id}`} className="btn-secondary btn-sm btn">View</Link>
-                  <form action={unarchiveReport}>
+                  <form action={async (formData) => {
+                    'use server'
+                    await unarchiveReport(formData)
+                  }}>
                     <input type="hidden" name="id" value={report.id} />
                     <button type="submit" className="btn-primary btn-sm btn">Restore</button>
                   </form>
