@@ -39,25 +39,32 @@ export default async function ReportsPage() {
   let reports, reportsError
 
   if (orgId && isAdmin) {
-    // Admin sees all reports in the organization
-    const res = await supabase.from('reports')
-      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
-      .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
-    reports = res.data; reportsError = res.error
-  } else if (orgId && !isAdmin) {
-    // Institution teacher (non-admin) sees: reports they created + reports for classes they're class teacher of
+    // Admin sees all reports in the organization (excluding archived)
     const res = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
       .eq('organization_id', orgId)
       .eq('deleted', false)
+      .neq('report_status', 'archived')
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else if (orgId && !isAdmin) {
+    // Institution teacher (non-admin) sees: reports they created + reports for classes they're class teacher of (excluding archived)
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .neq('report_status', 'archived')
       .or(`created_by.eq.${authUser.id},group_id.in.(${myClassTeacherOf.length > 0 ? myClassTeacherOf.join(',') : '00000000-0000-0000-0000-000000000000'})`)
       .order('created_at', { ascending: false })
     reports = res.data; reportsError = res.error
   } else {
-    // Solo teacher sees only their own reports
+    // Solo teacher sees only their own reports (excluding archived)
     const res = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
-      .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
+      .eq('created_by', authUser.id)
+      .eq('deleted', false)
+      .neq('report_status', 'archived')
+      .order('created_at', { ascending: false })
     reports = res.data; reportsError = res.error
   }
 
