@@ -133,6 +133,8 @@ export default function ReportDownloadButtons({
               subjects: subjectResults,
               grand_total: row.overall_total,
               max_possible: subjectResults.reduce((sum, s) => sum + s.max_score, 0),
+              // ✅ FIX: Added average field
+              average: row.average,
               percentage: row.percentage,
               grade: row.grade,
               position: row.position,
