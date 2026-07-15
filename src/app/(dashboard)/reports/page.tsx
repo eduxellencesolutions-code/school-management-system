@@ -36,12 +36,13 @@ export default async function ReportsPage() {
   }
 
   // Fetch reports — institution sees org reports, solo teacher sees own
+  // FIX: Qualified the foreign key explicitly to resolve ambiguity with multiple user FKs
   const { data: reports, error: reportsError } = await (orgId
     ? supabase.from('reports')
-        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users(name)')
+        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
         .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
     : supabase.from('reports')
-        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users(name)')
+        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
         .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
   )
 
