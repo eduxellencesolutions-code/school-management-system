@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, FileText, Download, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Plus, FileText, Download, Clock, CheckCircle, XCircle, Archive } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 export const runtime = 'nodejs'
@@ -127,11 +127,16 @@ export default async function ReportsPage() {
           <h1 className="page-title">Reports</h1>
           <p className="page-subtitle">View and manage all generated reports</p>
         </div>
-        {classes && classes.length > 0 && (
-          <Link href="/reports/generate" className="btn-primary btn">
-            <Plus size={15} /> Generate New Report
+        <div className="flex items-center gap-2">
+          {classes && classes.length > 0 && (
+            <Link href="/reports/generate" className="btn-primary btn">
+              <Plus size={15} /> Generate New Report
+            </Link>
+          )}
+          <Link href="/reports/archive" className="btn-secondary btn">
+            <Archive size={15} /> View Archive
           </Link>
-        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
