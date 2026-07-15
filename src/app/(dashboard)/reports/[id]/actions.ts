@@ -123,6 +123,21 @@ export async function archiveReport(formData: FormData) {
   return { success: true }
 }
 
+export async function unarchiveReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isAdmin, isSolo } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can restore archived reports' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('reports').update({ report_status: 'published' }).eq('id', reportId)
+  if (error) return { success: false, message: 'Failed to restore report' }
+
+  revalidatePath('/reports')
+  revalidatePath('/reports/archive')
+  return { success: true }
+}
+
 export async function softDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
   const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
