@@ -35,16 +35,31 @@ export default async function ReportsPage() {
     myClassTeacherOf = (assignments ?? []).map(a => a.class_id).filter(Boolean)
   }
 
-  // Fetch reports — institution sees org reports, solo teacher sees own
-  // FIX: Qualified the foreign key explicitly to resolve ambiguity with multiple user FKs
-  const { data: reports, error: reportsError } = await (orgId
-    ? supabase.from('reports')
-        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
-        .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
-    : supabase.from('reports')
-        .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
-        .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
-  )
+  // ✅ FIXED: Three-branch reports fetch with proper scoping
+  let reports, reportsError
+
+  if (orgId && isAdmin) {
+    // Admin sees all reports in the organization
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else if (orgId && !isAdmin) {
+    // Institution teacher (non-admin) sees: reports they created + reports for classes they're class teacher of
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .or(`created_by.eq.${authUser.id},group_id.in.(${myClassTeacherOf.length > 0 ? myClassTeacherOf.join(',') : '00000000-0000-0000-0000-000000000000'})`)
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else {
+    // Solo teacher sees only their own reports
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  }
 
   if (reportsError) {
     console.error('Error fetching reports:', reportsError)
@@ -129,9 +144,9 @@ export default async function ReportsPage() {
               const groupName = (report.group as { name: string } | null)?.name || '—'
               const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
               
-              // Determine if user can delete this report
+              // ✅ FIXED: Only admins and solo teachers can delete
               const groupId = (report.group as { id: string } | null)?.id
-              const canDelete = isAdmin || isSolo || (groupId ? myClassTeacherOf.includes(groupId) : false)
+              const canDelete = isAdmin || isSolo
               
               return (
                 <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
