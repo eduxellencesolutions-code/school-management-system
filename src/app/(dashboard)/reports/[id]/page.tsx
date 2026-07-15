@@ -87,10 +87,8 @@ export default async function ReportDetailPage({ params }: Props) {
   }
 
   const canPublish = isAdmin || isSolo
-  // ✅ FIX: Solo teachers don't need submit/publish workflow - removed isSolo
   const canSubmit = isAdmin || isClassTeacher
   const canDelete = isAdmin || isSolo
-  // ✅ FIX: Solo teachers don't need remarks editing - removed isSolo
   const canEditRemarks = (isAdmin || isClassTeacher) && report.report_status !== 'published'
 
   let orgFull = null
@@ -164,6 +162,7 @@ export default async function ReportDetailPage({ params }: Props) {
             reportStatus={report.report_status ?? 'draft'}
             canSubmit={canSubmit}
             canPublish={canPublish}
+            isSolo={isSolo}
           />
           <ReportDownloadButtons
             reportId={id}
