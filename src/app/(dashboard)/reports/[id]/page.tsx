@@ -88,7 +88,7 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const canPublish = isAdmin || isSolo
   const canSubmit = isAdmin || isSolo || isClassTeacher
-  const canDelete = isAdmin || isSolo || isClassTeacher
+  const canDelete = isAdmin || isSolo
   const canEditRemarks = (isAdmin || isSolo || isClassTeacher) && report.report_status !== 'published'
 
   let orgFull = null
@@ -201,47 +201,42 @@ export default async function ReportDetailPage({ params }: Props) {
             <p className="font-bold text-ink">{group?.name}</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
+            <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-surface-100 border-b-2 border-surface-200">
-                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase sticky left-0 bg-surface-100 z-10" rowSpan={2}>#</th>
-                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase min-w-[140px] sticky left-8 bg-surface-100 z-10" rowSpan={2}>Student</th>
-                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase sticky left-[7.5rem] bg-surface-100 z-10" rowSpan={2}>Adm. No</th>
-                  
+                  <th className="text-center px-2 py-2 font-semibold text-ink-muted uppercase text-xs w-8 sticky left-0 bg-surface-100 z-20" rowSpan={2}>#</th>
+                  <th className="text-left px-3 py-2 font-semibold text-ink-muted uppercase text-xs min-w-[150px] sticky left-8 bg-surface-100 z-20" rowSpan={2}>Student</th>
+                  <th className="text-left px-2 py-2 font-semibold text-ink-muted uppercase text-xs sticky left-[9.5rem] bg-surface-100 z-20" rowSpan={2}>Adm. No</th>
+
                   {subjects.map((subject: Subject) => {
                     const comps = subjectComponentsMap[subject.id] || []
-                    // Count how many component columns we need
-                    const totalCols = comps.length + 1 // components + total
                     return (
-                      <th key={subject.id} colSpan={totalCols} className="px-2 py-2 font-semibold text-ink-muted uppercase text-center border-x border-surface-200">
+                      <th key={subject.id} colSpan={comps.length + 1} className="px-2 py-2 font-semibold text-ink-muted uppercase text-xs text-center border-l-2 border-surface-200 whitespace-nowrap">
                         {subject.name}
                       </th>
                     )
                   })}
-                  
-                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Total</th>
-                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>%</th>
-                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Grade</th>
-                  <th className="px-2 py-2 font-semibold text-ink-muted uppercase text-center" rowSpan={2}>Pos.</th>
+
+                  <th className="px-3 py-2 font-semibold text-ink-muted uppercase text-xs text-center border-l-2 border-surface-200" rowSpan={2}>Total</th>
+                  <th className="px-3 py-2 font-semibold text-ink-muted uppercase text-xs text-center" rowSpan={2}>Average</th>
+                  <th className="px-3 py-2 font-semibold text-ink-muted uppercase text-xs text-center" rowSpan={2}>Grade</th>
+                  <th className="px-3 py-2 font-semibold text-ink-muted uppercase text-xs text-center" rowSpan={2}>Pos.</th>
                 </tr>
-                
-                {/* Component headers row */}
-                <tr className="bg-surface-50 border-b border-surface-200">
+
+                <tr className="bg-surface-50 border-b-2 border-surface-200">
                   {subjects.map((subject: Subject) => {
                     const comps = subjectComponentsMap[subject.id] || []
                     return (
-                      <th key={`${subject.id}-comps`} colSpan={comps.length + 1} className="px-1 py-1 text-center">
-                        <div className="flex justify-center items-center gap-1">
-                          {comps.map((compName: string, idx: number) => (
-                            <span key={idx} className="text-[9px] font-medium text-ink-muted uppercase tracking-wider px-1">
-                              {compName}
-                            </span>
-                          ))}
-                          <span className="text-[9px] font-bold text-ink-muted uppercase tracking-wider px-1 border-l border-surface-300 pl-2">
-                            Tot
-                          </span>
-                        </div>
-                      </th>
+                      <>
+                        {comps.map((compName: string, idx: number) => (
+                          <th key={`${subject.id}-${idx}`} className="px-2 py-1.5 text-center text-[10px] font-semibold text-ink-faint uppercase tracking-wide border-l border-surface-100 whitespace-nowrap">
+                            {compName}
+                          </th>
+                        ))}
+                        <th className="px-2 py-1.5 text-center text-[10px] font-bold text-ink-muted uppercase tracking-wide bg-surface-100 border-l border-surface-200 whitespace-nowrap">
+                          Total
+                        </th>
+                      </>
                     )
                   })}
                 </tr>
@@ -249,42 +244,64 @@ export default async function ReportDetailPage({ params }: Props) {
               <tbody>
                 {learners.map((learner: Learner, index: number) => {
                   const subjectDetails = learner.subject_details || []
-                  
                   return (
                     <tr key={learner.learner_id} className={index % 2 === 0 ? 'bg-white border-b border-surface-100' : 'bg-surface-50/50 border-b border-surface-100'}>
-                      <td className="px-2 py-2 text-ink-muted sticky left-0 bg-inherit z-10 text-center">{index + 1}</td>
-                      <td className="px-2 py-2 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
-                      <td className="px-2 py-2 font-mono text-ink-muted sticky left-[7.5rem] bg-inherit z-10 text-center">{learner.admission_number ?? '—'}</td>
-                      
+                      <td className="px-2 py-2.5 text-center text-ink-muted font-mono sticky left-0 bg-inherit z-10">{index + 1}</td>
+                      <td className="px-3 py-2.5 font-medium text-ink whitespace-nowrap sticky left-8 bg-inherit z-10">{learner.last_name} {learner.first_name}</td>
+                      <td className="px-2 py-2.5 font-mono text-ink-muted sticky left-[9.5rem] bg-inherit z-10">{learner.admission_number ?? '—'}</td>
+
                       {subjects.map((subject: Subject) => {
                         const detail = subjectDetails.find((d: SubjectDetail) => d.subject_id === subject.id)
                         const components = detail?.component_scores || []
                         const total = detail?.total ?? '—'
-                        
                         return (
                           <>
-                            {/* Render each component score */}
                             {components.map((component: ComponentScore, idx: number) => (
-                              <td key={`${subject.id}-comp-${idx}`} className="px-2 py-1 text-center font-mono text-xs border-x border-surface-100">
+                              <td key={`${subject.id}-comp-${idx}`} className="px-2 py-2.5 text-center font-mono border-l border-surface-100">
                                 {component.score}
                               </td>
                             ))}
-                            {/* Render total */}
-                            <td className="px-2 py-1 text-center font-bold font-mono text-xs border-x border-surface-100">
+                            <td className="px-2 py-2.5 text-center font-bold font-mono bg-surface-50 border-l border-surface-200">
                               {total}
                             </td>
                           </>
                         )
                       })}
-                      
-                      <td className="px-2 py-2 text-center font-bold font-mono">{learner.overall_total}</td>
-                      <td className="px-2 py-2 text-center font-mono text-ink-muted">{learner.percentage}%</td>
-                      <td className="px-2 py-2 text-center font-bold">{learner.grade}</td>
-                      <td className="px-2 py-2 text-center font-bold">{learner.position}</td>
+
+                      <td className="px-3 py-2.5 text-center font-bold font-mono text-ink border-l-2 border-surface-200">{learner.overall_total}</td>
+                      <td className="px-3 py-2.5 text-center font-mono text-ink-muted">{learner.average}</td>
+                      <td className="px-3 py-2.5 text-center font-bold">{learner.grade}</td>
+                      <td className="px-3 py-2.5 text-center font-bold">{learner.position}</td>
                     </tr>
                   )
                 })}
               </tbody>
+              <tfoot>
+                <tr className="bg-surface-100 border-t-2 border-surface-300 font-semibold">
+                  <td colSpan={3} className="px-3 py-2.5 text-xs text-ink-muted uppercase sticky left-0 bg-surface-100 z-10">Class Average</td>
+                  {subjects.map((subject: Subject) => {
+                    const comps = subjectComponentsMap[subject.id] || []
+                    const subjectTotals = learners
+                      .map((l: Learner) => l.subject_details?.find((d: SubjectDetail) => d.subject_id === subject.id)?.total)
+                      .filter((v): v is number => v !== undefined)
+                    const subjectAvg = subjectTotals.length > 0
+                      ? (subjectTotals.reduce((a, b) => a + b, 0) / subjectTotals.length).toFixed(1)
+                      : '—'
+                    return (
+                      <td key={subject.id} colSpan={comps.length + 1} className="px-2 py-2.5 text-center font-mono text-ink border-l-2 border-surface-200">
+                        {subjectAvg}
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-2.5 text-center font-mono text-ink border-l-2 border-surface-200">
+                    {(learners.reduce((sum: number, l: Learner) => sum + l.overall_total, 0) / (learners.length || 1)).toFixed(1)}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-mono text-ink">
+                    {(learners.reduce((sum: number, l: Learner) => sum + l.average, 0) / (learners.length || 1)).toFixed(1)}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
