@@ -9,11 +9,12 @@ import { submitReport, publishReport, unpublishReport, archiveReport } from '@/a
 interface Props {
   reportId: string
   reportStatus: 'draft' | 'submitted' | 'published' | 'archived'
-  canSubmit: boolean   // class teacher, solo, or admin
-  canPublish: boolean  // admin or solo only
+  canSubmit: boolean   // class teacher or admin
+  canPublish: boolean  // admin only
+  isSolo: boolean      // solo teacher - hide all lifecycle actions
 }
 
-export default function ReportLifecycleActions({ reportId, reportStatus, canSubmit, canPublish }: Props) {
+export default function ReportLifecycleActions({ reportId, reportStatus, canSubmit, canPublish, isSolo }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -30,6 +31,9 @@ export default function ReportLifecycleActions({ reportId, reportStatus, canSubm
     toast.success('Done')
     router.refresh()
   }
+
+  // ✅ Solo teachers don't need submit/publish/archive workflow
+  if (isSolo) return null
 
   // Early return for archived reports - this guarantees we never reach the JSX below when archived
   if (reportStatus === 'archived') {
