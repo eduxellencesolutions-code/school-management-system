@@ -297,16 +297,32 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
 }
 
 export async function getReport(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
 
-  const { data: report, error } = await supabase
-    .from('reports')
-    .select(`*, group:groups(id, name, code), term:terms(id, name)`)
-    .eq('id', id)
-    .single()
+    console.log('Fetching report:', id)
 
-  if (error || !report) throw new Error('Report not found')
-  return report
+    const { data: report, error } = await supabase
+      .from('reports')
+      .select(`*, group:groups(id, name, code), term:terms(id, name)`)
+      .eq('id', id)
+      .single()
+
+    if (error) {
+      console.error('Error fetching report:', error)
+      throw new Error('Report not found')
+    }
+    if (!report) {
+      console.error('Report not found for ID:', id)
+      throw new Error('Report not found')
+    }
+
+    console.log('Report fetched successfully:', report.id)
+    return report
+  } catch (error) {
+    console.error('getReport error:', error)
+    throw error
+  }
 }
