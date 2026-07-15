@@ -90,8 +90,9 @@ export default function ReportDownloadButtons({
 
     try {
       const pdfBlobs: { name: string; blob: Blob }[] = []
+      // ✅ FIX: Class average should average each student's average, not their grand total
       const classAverage = learners.length > 0
-        ? learners.reduce((sum: number, l: any) => sum + (l.overall_total ?? 0), 0) / learners.length
+        ? learners.reduce((sum: number, l: any) => sum + (l.average ?? 0), 0) / learners.length
         : undefined
 
       for (let i = 0; i < learners.length; i++) {
