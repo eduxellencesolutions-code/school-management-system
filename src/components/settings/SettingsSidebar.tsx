@@ -27,18 +27,18 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
     { label: 'Notifications', href: '/settings/notifications', icon: Bell },
   ]
 
-  // ✅ Institution-admin-ONLY features
+  // ✅ Institution-admin-ONLY features (includes Remarks)
   if (isInstitution && isAdmin) {
     items.push(
       { label: 'Institution', href: '/settings/institution', icon: Building },
       { label: 'Teachers', href: '/settings/teachers', icon: Users },
+      { label: 'Remarks', href: '/settings/remarks', icon: MessageSquare },
     )
   }
 
   // ✅ Features for BOTH solo teachers AND institution admins
   items.push(
     { label: 'Templates', href: '/settings/templates', icon: FileText },
-    { label: 'Remarks', href: '/settings/remarks', icon: MessageSquare },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
     { label: 'Academic Periods', href: '/settings/academic', icon: Calendar },
     { label: 'Billing', href: '/settings#billing', icon: CreditCard },
