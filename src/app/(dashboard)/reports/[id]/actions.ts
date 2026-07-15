@@ -125,9 +125,10 @@ export async function archiveReport(formData: FormData) {
 
 export async function softDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
-  const { report, isAdmin, isSolo, isClassTeacher, user } = await getReportContext(reportId)
+  const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
-  if (!isAdmin && !isSolo && !isClassTeacher) return { success: false, message: 'You do not have permission to delete this report' }
+  // ✅ FIX: Only admins and solo teachers can delete reports
+  if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can delete generated reports' }
 
   const supabase = await createClient()
   const { error } = await supabase
