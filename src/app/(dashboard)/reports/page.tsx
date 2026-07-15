@@ -36,7 +36,7 @@ export default async function ReportsPage() {
   }
 
   // Fetch reports — institution sees org reports, solo teacher sees own
-  const { data: reports } = await (orgId
+  const { data: reports, error: reportsError } = await (orgId
     ? supabase.from('reports')
         .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users(name)')
         .eq('organization_id', orgId).eq('deleted', false).order('created_at', { ascending: false })
@@ -45,8 +45,12 @@ export default async function ReportsPage() {
         .eq('created_by', authUser.id).eq('deleted', false).order('created_at', { ascending: false })
   )
 
+  if (reportsError) {
+    console.error('Error fetching reports:', reportsError)
+  }
+
   // ✅ FIXED: Fetch classes - removed !inner from both queries
-  const { data: classes } = await (orgId
+  const { data: classes, error: classesError } = await (orgId
     ? supabase.from('groups').select(`
         id, 
         name, 
@@ -62,6 +66,10 @@ export default async function ReportsPage() {
       `)
         .eq('instructor_id', authUser.id).eq('is_active', true).order('name')
   )
+
+  if (classesError) {
+    console.error('Error fetching classes:', classesError)
+  }
 
   // Transform the data to extract the first item from arrays
   const transformedClasses = (classes || []).map((cls: any) => ({
