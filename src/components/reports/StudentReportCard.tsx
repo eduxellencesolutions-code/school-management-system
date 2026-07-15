@@ -91,15 +91,17 @@ interface School {
   address?: string
 }
 
+// ✅ FIX 1: Updated Results interface with average field
 interface Results {
   subjects: SubjectResult[]
   grand_total: number
   max_possible: number
-  percentage: number
+  average: number        // ✅ new: total ÷ number of subjects
+  percentage: number     // kept internally for grade-color logic only, not displayed
   grade: string
   position: number
   class_size?: number
-  class_average?: number
+  class_average?: number // average of students' grand totals
 }
 
 interface Attendance {
@@ -284,14 +286,15 @@ export function StudentReportCard({
           ))}
         </View>
 
+        {/* ✅ FIX 2: Updated summary box - display Average instead of Percentage */}
         <View style={styles.summary}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{results.grand_total}</Text>
             <Text style={styles.summaryLabel}>Grand Total</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>{results.percentage.toFixed(1)}%</Text>
-            <Text style={styles.summaryLabel}>Percentage</Text>
+            <Text style={styles.summaryValue}>{results.average.toFixed(1)}</Text>
+            <Text style={styles.summaryLabel}>Average</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: gradeColor(results.grade) }]}>{results.grade}</Text>
@@ -303,6 +306,7 @@ export function StudentReportCard({
           </View>
         </View>
 
+        {/* ✅ FIX 3: Updated class stats label */}
         {showClassStats && results.class_average !== undefined && (
           <View style={styles.classStats}>
             <View style={styles.classStatsItem}>
@@ -311,7 +315,7 @@ export function StudentReportCard({
             </View>
             <View style={styles.classStatsItem}>
               <Text style={styles.classStatsValue}>{results.class_average.toFixed(1)}</Text>
-              <Text style={styles.classStatsLabel}>Class Average</Text>
+              <Text style={styles.classStatsLabel}>Class Avg. Total</Text>
             </View>
           </View>
         )}
