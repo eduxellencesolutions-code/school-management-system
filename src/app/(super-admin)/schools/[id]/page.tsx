@@ -26,18 +26,45 @@ export default async function SchoolDetailPage({ params }: Props) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: org } = await admin.from('organizations').select('*').eq('id', id).single()
+  const { data: org, error: orgError } = await admin
+    .from('organizations')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (orgError) {
+    console.error('Error fetching organization:', orgError)
+    notFound()
+  }
   if (!org) notFound()
 
-  const { data: users } = await admin
-    .from('users').select('id, name, email, role, created_at')
-    .eq('organization_id', id).order('created_at')
+  const { data: users, error: usersError } = await admin
+    .from('users')
+    .select('id, name, email, role, created_at')
+    .eq('organization_id', id)
+    .order('created_at')
 
-  const { data: groups } = await admin
-    .from('groups').select('id', { count: 'exact', head: true }).eq('organization_id', id)
+  if (usersError) {
+    console.error('Error fetching users:', usersError)
+  }
 
-  const { data: learners } = await admin
-    .from('learners').select('id', { count: 'exact', head: true }).eq('organization_id', id)
+  const { count: groupsCount, error: groupsError } = await admin
+    .from('groups')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', id)
+
+  if (groupsError) {
+    console.error('Error fetching groups count:', groupsError)
+  }
+
+  const { count: learnersCount, error: learnersError } = await admin
+    .from('learners')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', id)
+
+  if (learnersError) {
+    console.error('Error fetching learners count:', learnersError)
+  }
 
   const currentAdmin = users?.find(u => u.role === 'admin' || u.role === 'school_admin')
   const teachers = users?.filter(u => u.role === 'teacher') ?? []
@@ -47,6 +74,7 @@ export default async function SchoolDetailPage({ params }: Props) {
     inactive: 'bg-gray-100 text-gray-700',
     suspended: 'bg-red-100 text-red-800',
     trial: 'bg-amber-100 text-amber-800',
+    cancelled: 'bg-gray-100 text-gray-700',
   }
 
   return (
@@ -81,14 +109,14 @@ export default async function SchoolDetailPage({ params }: Props) {
         <div className="card p-4 flex items-center gap-3">
           <BookOpen size={18} className="text-green-600" />
           <div>
-            <p className="text-lg font-bold text-ink">{groups?.length ?? 0}</p>
+            <p className="text-lg font-bold text-ink">{groupsCount ?? 0}</p>
             <p className="text-xs text-ink-muted">Classes</p>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-3">
           <Calendar size={18} className="text-amber-600" />
           <div>
-            <p className="text-lg font-bold text-ink">{learners?.length ?? 0}</p>
+            <p className="text-lg font-bold text-ink">{learnersCount ?? 0}</p>
             <p className="text-xs text-ink-muted">Students</p>
           </div>
         </div>
