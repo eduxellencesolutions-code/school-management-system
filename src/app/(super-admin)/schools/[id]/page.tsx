@@ -1,0 +1,140 @@
+import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { redirect, notFound } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft, Building, Users, BookOpen, Calendar, ShieldAlert } from 'lucide-react'
+import SchoolStatusActions from '@/components/super-admin/SchoolStatusActions'
+import ReassignAdminForm from '@/components/super-admin/ReassignAdminForm'
+import DeleteSchoolForm from '@/components/super-admin/DeleteSchoolForm'
+
+export const dynamic = 'force-dynamic'
+
+interface Props { params: Promise<{ id: string }> }
+
+export default async function SchoolDetailPage({ params }: Props) {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  if (!isSuperAdmin) redirect('/dashboard')
+
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  const { data: org } = await admin.from('organizations').select('*').eq('id', id).single()
+  if (!org) notFound()
+
+  const { data: users } = await admin
+    .from('users').select('id, name, email, role, created_at')
+    .eq('organization_id', id).order('created_at')
+
+  const { data: groups } = await admin
+    .from('groups').select('id', { count: 'exact', head: true }).eq('organization_id', id)
+
+  const { data: learners } = await admin
+    .from('learners').select('id', { count: 'exact', head: true }).eq('organization_id', id)
+
+  const currentAdmin = users?.find(u => u.role === 'admin' || u.role === 'school_admin')
+  const teachers = users?.filter(u => u.role === 'teacher') ?? []
+
+  const statusStyle: Record<string, string> = {
+    active: 'bg-green-100 text-green-800',
+    inactive: 'bg-gray-100 text-gray-700',
+    suspended: 'bg-red-100 text-red-800',
+    trial: 'bg-amber-100 text-amber-800',
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-4xl">
+      <Link href="/schools" className="text-sm text-ink-muted hover:text-ink flex items-center gap-1">
+        <ArrowLeft size={14} /> All Schools
+      </Link>
+
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Building size={20} className="text-ink-faint" />
+            <h1 className="text-xl font-bold text-ink">{org.name}</h1>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[org.subscription_status] ?? statusStyle.inactive}`}>
+              {org.subscription_status ?? 'inactive'}
+            </span>
+          </div>
+          <p className="text-sm text-ink-muted">
+            Plan: {org.subscription_plan ?? '—'} · Signed up {new Date(org.created_at).toLocaleDateString('en-NG')}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card p-4 flex items-center gap-3">
+          <Users size={18} className="text-brand-500" />
+          <div>
+            <p className="text-lg font-bold text-ink">{users?.length ?? 0}</p>
+            <p className="text-xs text-ink-muted">Users</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <BookOpen size={18} className="text-green-600" />
+          <div>
+            <p className="text-lg font-bold text-ink">{groups?.length ?? 0}</p>
+            <p className="text-xs text-ink-muted">Classes</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <Calendar size={18} className="text-amber-600" />
+          <div>
+            <p className="text-lg font-bold text-ink">{learners?.length ?? 0}</p>
+            <p className="text-xs text-ink-muted">Students</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <h2 className="font-semibold text-sm text-ink mb-3">Subscription & Status</h2>
+        <SchoolStatusActions
+          orgId={org.id}
+          currentStatus={org.subscription_status ?? 'inactive'}
+          currentExpiry={org.subscription_expires_at}
+        />
+      </div>
+
+      <div className="card p-5">
+        <h2 className="font-semibold text-sm text-ink mb-3">School Administrator</h2>
+        <p className="text-sm text-ink-muted mb-3">
+          {currentAdmin ? `${currentAdmin.name} (${currentAdmin.email})` : 'No admin currently assigned'}
+        </p>
+        <ReassignAdminForm orgId={org.id} teachers={teachers} currentAdminId={currentAdmin?.id} />
+      </div>
+
+      <div className="card p-5">
+        <h2 className="font-semibold text-sm text-ink mb-3">All Users</h2>
+        <div className="divide-y divide-surface-200">
+          {(users ?? []).map(u => (
+            <div key={u.id} className="py-2.5 flex items-center justify-between text-sm">
+              <div>
+                <p className="text-ink font-medium">{u.name}</p>
+                <p className="text-xs text-ink-faint">{u.email}</p>
+              </div>
+              <span className="text-xs text-ink-muted capitalize">{u.role}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card p-5 border-red-200">
+        <h2 className="font-semibold text-sm text-red-600 mb-3 flex items-center gap-2">
+          <ShieldAlert size={15} /> Danger Zone
+        </h2>
+        <p className="text-sm text-ink-muted mb-3">
+          Permanently delete this school and all its data. This cannot be undone.
+        </p>
+        <DeleteSchoolForm orgId={org.id} orgName={org.name} />
+      </div>
+    </div>
+  )
+}
