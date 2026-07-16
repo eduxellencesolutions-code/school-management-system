@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building } from 'lucide-react'
+import { LayoutDashboard, Building, Users } from 'lucide-react'
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -21,6 +21,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
           </Link>
           <Link href="/schools" className="text-sm text-ink-muted hover:text-ink flex items-center gap-1.5">
             <Building size={15} /> Schools
+          </Link>
+          <Link href="/solo-teachers" className="text-sm text-ink-muted hover:text-ink flex items-center gap-1.5">
+            <Users size={15} /> Solo Teachers
           </Link>
         </nav>
       </header>
