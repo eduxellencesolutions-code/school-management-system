@@ -21,20 +21,32 @@ export default async function SchoolsListPage() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: orgs } = await adminClient
+  const { data: orgs, error: orgsError } = await adminClient
     .from('organizations')
     .select('id, name, subscription_plan, subscription_status, subscription_expires_at, created_at')
     .order('created_at', { ascending: false })
 
+  if (orgsError) {
+    console.error('Error fetching organizations:', orgsError)
+  }
+
   const orgIds = (orgs ?? []).map(o => o.id)
 
-  const { data: userCounts } = orgIds.length > 0
+  const { data: userCounts, error: userCountsError } = orgIds.length > 0
     ? await adminClient.from('users').select('organization_id').in('organization_id', orgIds)
-    : { data: [] }
+    : { data: [], error: null }
 
-  const { data: groupCounts } = orgIds.length > 0
+  if (userCountsError) {
+    console.error('Error fetching user counts:', userCountsError)
+  }
+
+  const { data: groupCounts, error: groupCountsError } = orgIds.length > 0
     ? await adminClient.from('groups').select('organization_id').in('organization_id', orgIds)
-    : { data: [] }
+    : { data: [], error: null }
+
+  if (groupCountsError) {
+    console.error('Error fetching group counts:', groupCountsError)
+  }
 
   const userCountMap: Record<string, number> = {}
   ;(userCounts ?? []).forEach(u => { userCountMap[u.organization_id] = (userCountMap[u.organization_id] ?? 0) + 1 })
