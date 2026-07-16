@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { LayoutDashboard, Building, Users } from 'lucide-react'
-import LogoutButton from '@/components/admin/LogoutButton'
+import LogoutButton from '@/components/super-admin/LogoutButton'
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
