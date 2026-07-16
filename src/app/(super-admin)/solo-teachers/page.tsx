@@ -19,19 +19,25 @@ export default async function SoloTeachersPage() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // ✅ FIX: Exclude super admins from the solo teachers list
   const { data: soloTeachers, error } = await admin
     .from('users')
     .select('id, name, email, created_at, is_active')
     .is('organization_id', null)
+    .eq('is_super_admin', false)
     .order('created_at', { ascending: false })
 
   if (error) console.error('Error fetching solo teachers:', error)
 
   const teacherIds = (soloTeachers ?? []).map(t => t.id)
 
-  const { data: groupCounts } = teacherIds.length > 0
+  const { data: groupCounts, error: groupCountsError } = teacherIds.length > 0
     ? await admin.from('groups').select('instructor_id').in('instructor_id', teacherIds)
-    : { data: [] }
+    : { data: [], error: null }
+
+  if (groupCountsError) {
+    console.error('Error fetching group counts:', groupCountsError)
+  }
 
   const groupCountMap: Record<string, number> = {}
   ;(groupCounts ?? []).forEach(g => { groupCountMap[g.instructor_id] = (groupCountMap[g.instructor_id] ?? 0) + 1 })
