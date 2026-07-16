@@ -32,6 +32,24 @@ async function getSuperAdminContext() {
 
 type ActionResult = { success: boolean; error?: string }
 
+// Helper to create service client
+function serviceClient() {
+  const { createClient: createServiceClient } = require('@supabase/supabase-js')
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
+async function requireSuperAdmin() {
+  try {
+    await getSuperAdminContext()
+  } catch (error) {
+    throw new Error('Not authorized: super admin access required')
+  }
+}
+
 // ---- Activate ----
 // Full paid access. Used for: new school going live, or reinstating
 // a previously expired/cancelled/suspended school.
@@ -209,4 +227,72 @@ export async function setSubscriptionExpiry(formData: FormData): Promise<ActionR
     console.error('Set subscription expiry error:', error)
     return { success: false, error: error.message ?? 'Something went wrong' }
   }
+}
+
+// ✅ FIXED: Update school status with proper validation and date stamps
+export async function updateSchoolStatus(formData: FormData) {
+  await requireSuperAdmin()
+  const orgId = formData.get('org_id') as string
+  const status = formData.get('status') as string
+  if (!orgId || !status) return { success: false, message: 'Missing data' }
+
+  const validStatuses = ['trial', 'active', 'expired', 'suspended', 'cancelled']
+  if (!validStatuses.includes(status)) {
+    return { success: false, message: `Invalid status: ${status}` }
+  }
+
+  const admin = serviceClient()
+
+  const updates: Record<string, unknown> = { subscription_status: status }
+
+  if (status === 'suspended') {
+    updates.suspended_at = new Date().toISOString()
+  } else if (status === 'cancelled') {
+    updates.cancelled_at = new Date().toISOString()
+  } else if (status === 'active') {
+    // reinstating from suspended/cancelled — clear those markers
+    updates.suspended_at = null
+    updates.cancelled_at = null
+  }
+
+  const { error } = await admin
+    .from('organizations')
+    .update(updates)
+    .eq('id', orgId)
+
+  if (error) {
+    console.error('Error updating school status:', error)
+    return { success: false, message: 'Failed to update status' }
+  }
+
+  revalidatePath(`/schools/${orgId}`)
+  revalidatePath('/schools')
+  return { success: true }
+}
+
+// ✅ FIXED: Extend subscription with proper status update
+export async function extendSubscription(formData: FormData) {
+  await requireSuperAdmin()
+  const orgId = formData.get('org_id') as string
+  const newExpiry = formData.get('expires_at') as string
+  if (!orgId || !newExpiry) return { success: false, message: 'Missing data' }
+
+  const admin = serviceClient()
+  const { error } = await admin
+    .from('organizations')
+    .update({
+      subscription_expires_at: newExpiry,
+      subscription_status: 'active',
+      suspended_at: null,
+      cancelled_at: null,
+    })
+    .eq('id', orgId)
+
+  if (error) {
+    console.error('Error extending subscription:', error)
+    return { success: false, message: 'Failed to extend subscription' }
+  }
+
+  revalidatePath(`/schools/${orgId}`)
+  return { success: true }
 }
