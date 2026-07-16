@@ -10,9 +10,7 @@ export async function middleware(request: NextRequest) {
   if (hostname.startsWith('admin.')) {
     const url = request.nextUrl.clone()
     if (url.pathname === '/' || url.pathname === '/dashboard') {
-      url.pathname = '/super-admin/overview'
-    } else if (!url.pathname.startsWith('/super-admin')) {
-      url.pathname = `/super-admin${url.pathname}`
+      url.pathname = '/overview'
     }
     return NextResponse.rewrite(url)
   }
