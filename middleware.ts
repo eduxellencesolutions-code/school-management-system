@@ -9,22 +9,9 @@ export async function middleware(request: NextRequest) {
 
   // Handle admin subdomain - check BEFORE auth logic
   if (hostname.startsWith('admin.')) {
-    console.log('🔍 Admin subdomain detected:', { hostname, pathname })
-    const url = request.nextUrl.clone()
-    
-    // Handle root and dashboard paths - redirect to overview
-    if (url.pathname === '/' || url.pathname === '/dashboard') {
-      url.pathname = '/super-admin/overview'
-      console.log('🔍 Redirecting to overview:', url.pathname)
-    } else if (!url.pathname.startsWith('/super-admin')) {
-      // Prepend /super-admin to all other paths
-      url.pathname = `/super-admin${url.pathname}`
-      console.log('🔍 Rewriting to super-admin:', url.pathname)
-    } else {
-      console.log('🔍 Already on super-admin path:', url.pathname)
-    }
-    
-    return NextResponse.rewrite(url)
+    console.log('🔍 Admin subdomain detected - REDIRECTING TO EXAMPLE.COM')
+    // ⚠️ TEMPORARY TEST - Redirect to a nonsense path to visually confirm middleware is running
+    return NextResponse.redirect(new URL('https://example.com/MIDDLEWARE-IS-WORKING', request.url))
   }
 
   try {
