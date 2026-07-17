@@ -3,7 +3,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import SoloTeacherStatusActions from '@/components/admin/SoloTeacherStatusActions'
+// ✅ FIX: Changed from '@/components/admin/' to '@/components/super-admin/'
+import SoloTeacherStatusActions from '@/components/super-admin/SoloTeacherStatusActions'
 
 export const dynamic = 'force-dynamic'
 
