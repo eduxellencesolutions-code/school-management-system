@@ -94,14 +94,26 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   const { data: learners } = await query
 
-  // ✅ Handle delete success/error messages
+  // ✅ Handle all success/error messages from actions
   let message = null
   if (params.success === 'deleted') {
     message = { type: 'success', text: 'Student deleted successfully!' }
+  } else if (params.success === 'added') {
+    message = { type: 'success', text: 'Student added successfully!' }
   } else if (params.error === 'delete_failed') {
     message = { type: 'error', text: 'Failed to delete student. Please try again.' }
   } else if (params.error === 'unexpected') {
     message = { type: 'error', text: 'Something went wrong. Please try again.' }
+  } else if (params.error === 'no_id') {
+    message = { type: 'error', text: 'Student ID is required.' }
+  } else if (params.error === 'no_class') {
+    message = { type: 'error', text: 'Please select a class.' }
+  } else if (params.error === 'missing_name') {
+    message = { type: 'error', text: 'First name and last name are required.' }
+  } else if (params.error && params.error.includes('Admission number already exists')) {
+    message = { type: 'error', text: 'Admission number already exists. Please use a unique admission number.' }
+  } else if (params.error && params.error.includes('Failed to add student')) {
+    message = { type: 'error', text: 'Failed to add student. Please try again.' }
   }
 
   return (
