@@ -1,50 +1,45 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
-import { createStudent } from './actions'
+import { createStudent } from '../actions'
 
 const schema = z.object({
-  first_name:       z.string().min(1, 'First name is required'),
-  last_name:        z.string().min(1, 'Last name is required'),
-  other_names:      z.string().optional(),
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  other_names: z.string().optional(),
   admission_number: z.string().optional(),
-  gender:           z.enum(['M', 'F', 'Other']).optional(),
-  date_of_birth:    z.string().optional(),
-  guardian_name:    z.string().optional(),
-  guardian_phone:   z.string().optional(),
-  email:            z.string().email().optional().or(z.literal('')),
-  phone:            z.string().optional(),
-  group_id:         z.string().min(1, 'Please select a class'),
+  gender: z.enum(['M', 'F', 'Other']).optional(),
+  date_of_birth: z.string().optional(),
+  guardian_name: z.string().optional(),
+  guardian_phone: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional(),
+  group_id: z.string().min(1, 'Please select a class'),
 })
 type FormData = z.infer<typeof schema>
 
 interface Group { id: string; name: string }
 
 export default function NewStudentPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
-  const [loading, setLoading] = useState(false)
   const [groups, setGroups] = useState<Group[]>([])
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, getValues } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { group_id: searchParams.get('class') ?? '' },
   })
 
-  // Load groups on mount
   useState(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const { data: profile } = await supabase
         .from('users')
         .select('organization_id')
@@ -56,38 +51,21 @@ export default function NewStudentPage() {
         .select('id, name')
         .eq('is_active', true)
         .order('name')
+      
+      query = profile?.organization_id
+        ? query.eq('organization_id', profile.organization_id)
+        : query.eq('instructor_id', user.id)
 
-      if (profile?.organization_id) {
-        query = query.eq('organization_id', profile.organization_id)
-      } else {
-        query = query.eq('instructor_id', user.id)
-      }
-
-      const { data: grps, error } = await query
-      if (error) console.error('Error loading classes:', error)
-
+      const { data: grps } = await query
       setGroups(grps ?? [])
     }
     load()
   })
 
-  async function onSubmit(data: FormData) {
-    setLoading(true)
-    try {
-      const result = await createStudent(data)
-
-      if (!result.success) {
-        toast.error(result.error ?? 'Failed to add student')
-        return
-      }
-
-      toast.success(`${data.first_name} ${data.last_name} enrolled!`)
-      router.push(`/students?class=${result.groupId}`)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add student')
-    } finally {
-      setLoading(false)
-    }
+  function onValidSubmit() {
+    // React Hook Form has validated client-side; now submit the real <form> to the server action
+    const formEl = document.getElementById('student-form') as HTMLFormElement
+    formEl.requestSubmit()
   }
 
   return (
@@ -105,7 +83,12 @@ export default function NewStudentPage() {
         {' '}instead.
       </p>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+      <form
+        id="student-form"
+        action={createStudent}
+        onSubmit={handleSubmit(onValidSubmit)}
+        className="flex flex-col gap-6"
+      >
         <div className="card p-5 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-ink">Class assignment</h2>
           <div>
@@ -179,9 +162,7 @@ export default function NewStudentPage() {
         </div>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={loading} className="btn-primary btn flex-1">
-            {loading ? 'Saving…' : 'Add student'}
-          </button>
+          <button type="submit" className="btn-primary btn flex-1">Add student</button>
           <Link href="/students" className="btn-secondary btn">Cancel</Link>
         </div>
       </form>
