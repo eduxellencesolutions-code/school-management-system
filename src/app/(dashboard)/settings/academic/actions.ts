@@ -31,18 +31,25 @@ async function getActingPlan(userId: string, orgId: string | null): Promise<{ pl
   return { plan: data?.subscription_plan ?? 'free', ref: { type: 'solo', userId } }
 }
 
-export async function createSession(formData: FormData): Promise<{ success: boolean; error?: string }> {
+// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
+export async function createSession(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
 
     const name = (formData.get('name') as string)?.trim()
-    if (!name) return { success: false, error: 'Session name is required' }
+    if (!name) {
+      console.error('Session name is required')
+      return
+    }
 
     // ✅ GATE: Check if user can create a new academic session
     const { plan, ref } = await getActingPlan(user.id, orgId)
     const gate = await canCreateAcademicSession(plan, ref)
-    if (!gate.allowed) return { success: false, error: gate.reason }
+    if (!gate.allowed) {
+      console.error('Session limit gate blocked creation:', gate.reason)
+      return
+    }
 
     const { error } = await supabase.from('academic_sessions').insert({
       organization_id: orgId,
@@ -53,20 +60,19 @@ export async function createSession(formData: FormData): Promise<{ success: bool
 
     if (error) {
       console.error('Error creating session:', error)
-      return { success: false, error: error.message }
+      return
     }
 
     console.log('Session created successfully')
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error: any) {
     console.error('Create session error:', error)
-    return { success: false, error: error.message ?? 'Something went wrong' }
   }
 }
 
 // ✅ Terms are NOT capped by plan limits - no gate needed
-export async function createTerm(formData: FormData): Promise<{ success: boolean; error?: string }> {
+// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
+export async function createTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
@@ -74,8 +80,14 @@ export async function createTerm(formData: FormData): Promise<{ success: boolean
     const sessionId = formData.get('session_id') as string
     const name = (formData.get('name') as string)?.trim()
     
-    if (!sessionId) return { success: false, error: 'Session ID is required' }
-    if (!name) return { success: false, error: 'Term name is required' }
+    if (!sessionId) {
+      console.error('Session ID is required')
+      return
+    }
+    if (!name) {
+      console.error('Term name is required')
+      return
+    }
 
     console.log('Creating term for:', { userId: user.id, orgId, sessionId })
 
@@ -89,24 +101,25 @@ export async function createTerm(formData: FormData): Promise<{ success: boolean
 
     if (error) {
       console.error('Error creating term:', error)
-      return { success: false, error: error.message }
+      return
     }
 
     console.log('Term created successfully')
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error: any) {
     console.error('Create term error:', error)
-    return { success: false, error: error.message ?? 'Something went wrong' }
   }
 }
 
-export async function deleteSession(formData: FormData): Promise<{ success: boolean; error?: string }> {
+export async function deleteSession(formData: FormData): Promise<void> {
   try {
     await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
-    if (!id) return { success: false, error: 'Session ID is required' }
+    if (!id) {
+      console.error('Session ID is required')
+      return
+    }
 
     // Delete all terms in this session first
     await supabase.from('terms').delete().eq('session_id', id)
@@ -114,39 +127,37 @@ export async function deleteSession(formData: FormData): Promise<{ success: bool
     
     if (error) {
       console.error('Error deleting session:', error)
-      return { success: false, error: error.message }
+      return
     }
 
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error: any) {
     console.error('Delete session error:', error)
-    return { success: false, error: error.message ?? 'Something went wrong' }
   }
 }
 
-export async function deleteTerm(formData: FormData): Promise<{ success: boolean; error?: string }> {
+export async function deleteTerm(formData: FormData): Promise<void> {
   try {
     await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
-    if (!id) return { success: false, error: 'Term ID is required' }
+    if (!id) {
+      console.error('Term ID is required')
+      return
+    }
 
     const { error } = await supabase.from('terms').delete().eq('id', id)
     if (error) {
       console.error('Error deleting term:', error)
-      return { success: false, error: error.message }
+      return
     }
 
     revalidatePath('/settings/academic')
-    return { success: true }
   } catch (error: any) {
     console.error('Delete term error:', error)
-    return { success: false, error: error.message ?? 'Something went wrong' }
   }
 }
 
-// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
 export async function setCurrentTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
