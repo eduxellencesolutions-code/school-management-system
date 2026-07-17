@@ -4,18 +4,21 @@ import { PlanKey, getPlanConfig } from './config'
 const PLAN_RANK: PlanKey[] = ['free', 'small_school', 'standard_school', 'premium_school']
 const SOLO_PLAN_RANK: PlanKey[] = ['free', 'solo_teacher_pro']
 
-function getRankList(currentPlan: PlanKey): PlanKey[] {
-  return currentPlan === 'free' || currentPlan === 'solo_teacher_pro' ? SOLO_PLAN_RANK : PLAN_RANK
+function getRankList(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+  // If it's an institution, use institution hierarchy
+  if (isInstitution) return PLAN_RANK
+  // For solo teachers, use solo hierarchy
+  return SOLO_PLAN_RANK
 }
 
-export function getUpgradeOptions(currentPlan: PlanKey): PlanKey[] {
-  const list = getRankList(currentPlan)
+export function getUpgradeOptions(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+  const list = getRankList(currentPlan, isInstitution)
   const idx = list.indexOf(currentPlan)
   return list.slice(idx + 1)
 }
 
-export function getDowngradeOptions(currentPlan: PlanKey): PlanKey[] {
-  const list = getRankList(currentPlan)
+export function getDowngradeOptions(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+  const list = getRankList(currentPlan, isInstitution)
   const idx = list.indexOf(currentPlan)
   // Never allow downgrading to 'free' — only to a lower PAID tier
   return list.slice(1, idx).filter(p => p !== 'free')
