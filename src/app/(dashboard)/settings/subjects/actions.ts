@@ -178,3 +178,61 @@ export async function updateSubject(formData: FormData) {
   revalidatePath(`/classes/${groupId}`)
   redirect('/settings/subjects')
 }
+
+// ✅ NEW: Delete subject function
+export async function deleteSubject(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const subjectId = formData.get('id') as string
+  if (!subjectId) {
+    console.error('Subject ID is required')
+    return
+  }
+
+  // Verify user has permission to delete this subject
+  const { data: profile } = await supabase
+    .from('users').select('organization_id').eq('id', user.id).single()
+
+  // Get the existing subject
+  const { data: existingSubject } = await supabase
+    .from('subjects')
+    .select('organization_id, instructor_id, group_id')
+    .eq('id', subjectId)
+    .single()
+
+  if (!existingSubject) {
+    console.error('Subject not found:', subjectId)
+    return
+  }
+
+  // Check ownership/permission
+  if (profile?.organization_id) {
+    // Institution: subject must belong to the same org
+    if (existingSubject.organization_id !== profile.organization_id) {
+      console.error('Subject does not belong to this organization')
+      return
+    }
+  } else {
+    // Solo teacher: subject must belong to them
+    if (existingSubject.instructor_id !== user.id) {
+      console.error('Subject does not belong to this teacher')
+      return
+    }
+  }
+
+  // Delete the subject (soft delete - set inactive)
+  const { error } = await supabase
+    .from('subjects')
+    .update({ is_active: false })
+    .eq('id', subjectId)
+
+  if (error) {
+    console.error('Error deleting subject:', error)
+    return
+  }
+
+  revalidatePath('/settings/subjects')
+  redirect('/settings/subjects')
+}
