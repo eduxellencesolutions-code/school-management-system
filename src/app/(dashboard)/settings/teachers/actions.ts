@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { hasFeature, canAddTeacher, getPlanConfig } from '@/lib/plans/gating'
+import { hasFeature, canAddTeacher } from '@/lib/plans/gating'
+import { getPlanConfig } from '@/lib/plans/config'
 
 // Check if user is an institution
 async function checkInstitutionAccess() {
