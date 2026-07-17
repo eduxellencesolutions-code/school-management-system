@@ -27,6 +27,9 @@ export default async function SettingsPage() {
 
   const isAdmin = profile?.role === 'admin'
 
+  // Max plan for each account type
+  const maxPlan = isInstitution ? 'premium_school' : 'solo_teacher_pro'
+
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
       <div>
@@ -196,7 +199,7 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* ✅ Billing Section - Now shows for BOTH institutions AND solo teachers */}
+      {/* ✅ Billing Section - Shows for BOTH institutions AND solo teachers */}
       <div id="billing" className="card scroll-mt-20">
         <div className="card-header flex items-center justify-between">
           <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
@@ -217,7 +220,7 @@ export default async function SettingsPage() {
             )}
           </div>
 
-          {/* Feature checklist — driven entirely by the plan config, not a separate PLAN_LIMITS table */}
+          {/* Feature checklist — driven entirely by the plan config */}
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: `${config.limits.maxClasses === 'unlimited' ? 'Unlimited' : config.limits.maxClasses} classes`, enabled: true },
@@ -243,12 +246,15 @@ export default async function SettingsPage() {
             ))}
           </div>
 
-          {/* Upgrade options */}
-          {currentPlan !== 'premium_school' && (
+          {/* ✅ Upgrade options - branched for institutions vs solo teachers */}
+          {currentPlan !== maxPlan && (
             <div className="border-t border-surface-200 pt-4">
               <p className="text-sm font-medium text-ink mb-3">Upgrade your plan</p>
               <div className="flex flex-col gap-3">
-                {(['small_school', 'standard_school', 'premium_school'] as const)
+                {(isInstitution
+                  ? (['small_school', 'standard_school', 'premium_school'] as const)
+                  : (['solo_teacher_pro'] as const)
+                )
                   .filter(key => key !== currentPlan)
                   .map(key => (
                     <PlanUpgradeCard
