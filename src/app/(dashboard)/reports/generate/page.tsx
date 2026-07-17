@@ -38,14 +38,38 @@ export default function GenerateReportPage() {
       if (!userData.user) return
 
       const { data: profile } = await supabase
-        .from('users').select('organization_id, current_term_id').eq('id', userData.user.id).single()
+        .from('users').select('organization_id, role, current_term_id').eq('id', userData.user.id).single()
 
       const orgId = profile?.organization_id
+      const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
       setIsInstitution(!!orgId)
 
-      const { data: classData } = orgId
-        ? await supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name')
-        : await supabase.from('groups').select('id, name').eq('instructor_id', userData.user.id).eq('is_active', true).order('name')
+      let classData: { id: string; name: string }[] | null = null
+
+      if (orgId && isAdmin) {
+        // ✅ Admin sees all classes in the organization
+        const res = await supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name')
+        classData = res.data
+      } else if (orgId && !isAdmin) {
+        // ✅ Non-admin teacher: only classes where they are the CLASS TEACHER
+        const { data: assignments } = await supabase
+          .from('teacher_assignments')
+          .select('class_id')
+          .eq('teacher_id', userData.user.id)
+          .eq('role', 'class_teacher')
+
+        const classIds = [...new Set((assignments ?? []).map(a => a.class_id).filter(Boolean))]
+        if (classIds.length > 0) {
+          const res = await supabase.from('groups').select('id, name').in('id', classIds).eq('is_active', true).order('name')
+          classData = res.data
+        } else {
+          classData = []
+        }
+      } else {
+        // ✅ Solo teacher: only their own classes
+        const res = await supabase.from('groups').select('id, name').eq('instructor_id', userData.user.id).eq('is_active', true).order('name')
+        classData = res.data
+      }
 
       setClasses(classData || [])
       if (!preSelectedClassId && classData && classData.length > 0) setSelectedClass(classData[0].id)
@@ -217,8 +241,12 @@ export default function GenerateReportPage() {
         <div className="px-5 py-4">
           {classes.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-ink-muted mb-2">No classes available</p>
-              <Link href="/classes/new" className="btn-primary btn-sm btn">Create a class first</Link>
+              <p className="text-sm text-ink-muted mb-2">No classes available to generate reports for</p>
+              {isInstitution ? (
+                <p className="text-xs text-ink-faint">Only classes where you are the class teacher are shown</p>
+              ) : (
+                <Link href="/classes/new" className="btn-primary btn-sm btn">Create a class first</Link>
+              )}
             </div>
           ) : (
             <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
