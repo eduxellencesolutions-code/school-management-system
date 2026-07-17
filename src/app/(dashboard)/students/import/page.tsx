@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { generateLearnerCSVTemplate, cn } from '@/lib/utils'
 import { Upload, Download, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { importStudents } from './actions'
 
 interface CSVRow {
   first_name: string
@@ -173,50 +174,37 @@ export default function ImportStudentsPage() {
     if (file) handleFile(file)
   }
 
+  // ✅ UPDATED: Uses server action with proper gating
   async function runImport() {
     if (!selectedGroup) { toast.error('Select a class first'); return }
     const validRows = parsed.filter(r => r._status === 'valid')
     if (validRows.length === 0) { toast.error('No valid rows to import'); return }
 
     setImporting(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
 
-    let success = 0
-    let failed = 0
+    const rows = validRows.map(r => ({
+      first_name: r.first_name,
+      last_name: r.last_name,
+      other_names: r.other_names,
+      admission_number: r.admission_number,
+      gender: r.gender,
+      date_of_birth: r.date_of_birth,
+      guardian_name: r.guardian_name,
+      guardian_phone: r.guardian_phone,
+      email: r.email,
+    }))
 
-    const batches = []
-    for (let i = 0; i < validRows.length; i += 50) batches.push(validRows.slice(i, i + 50))
+    const result = await importStudents(selectedGroup, rows)
+    setImporting(false)
 
-    for (const batch of batches) {
-      const inserts = batch.map(r => ({
-        organization_id:  profile?.organization_id ?? null,
-        group_id:         selectedGroup,
-        first_name:       r.first_name.trim(),
-        last_name:        r.last_name.trim(),
-        other_names:      r.other_names?.trim() || null,
-        admission_number: r.admission_number?.trim() || null,
-        gender:           r.gender || null,
-        date_of_birth:    r.date_of_birth || null,
-        guardian_name:    r.guardian_name?.trim() || null,
-        guardian_phone:   r.guardian_phone?.trim() || null,
-        email:            r.email?.trim() || null,
-        enrollment_date:  new Date().toISOString().split('T')[0],
-        is_active:        true,
-      }))
-
-      const { error, data } = await supabase
-        .from('learners')
-        .insert(inserts)
-        .select()
-
-      if (error) { failed += batch.length } else { success += data?.length ?? batch.length }
+    if (!result.success) {
+      toast.error(result.error ?? 'Import failed')
+      return
     }
 
-    setImportResults({ success, failed })
-    setImporting(false)
-    if (success > 0) toast.success(`${success} student${success !== 1 ? 's' : ''} imported!`)
-    if (failed > 0) toast.error(`${failed} row${failed !== 1 ? 's' : ''} failed`)
+    setImportResults({ success: result.imported, failed: result.failed })
+    if (result.imported > 0) toast.success(`${result.imported} student${result.imported !== 1 ? 's' : ''} imported!`)
+    if (result.failed > 0) toast.error(`${result.failed} row${result.failed !== 1 ? 's' : ''} failed`)
   }
 
   const validCount = parsed.filter(r => r._status === 'valid').length
