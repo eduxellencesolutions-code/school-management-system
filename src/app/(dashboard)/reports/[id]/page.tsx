@@ -6,6 +6,7 @@ import ReportDownloadButtons from '@/components/reports/ReportDownloadButtons'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import ReportLifecycleActions from '@/components/reports/ReportLifecycleActions'
 import RemarksEditor from '@/components/reports/RemarksEditor'
+import { hasFeature } from '@/lib/plans/gating'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -110,6 +111,18 @@ export default async function ReportDetailPage({ params }: Props) {
   }
 
   const showPrincipalRemark = orgFull?.report_card_settings?.show_class_teacher_comment ?? false
+
+  // ✅ Get current plan for AI remarks feature
+  let currentPlan = 'free'
+  if (profile?.organization_id) {
+    const { data: org } = await supabase
+      .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+    currentPlan = org?.subscription_plan ?? 'free'
+  } else {
+    const { data: soloProfile } = await supabase
+      .from('users').select('subscription_plan').eq('id', user.id).single()
+    currentPlan = soloProfile?.subscription_plan ?? 'free'
+  }
 
   const group = report.group as { id: string; name: string; code?: string } | null
   const data = report.report_data ?? {}
@@ -319,10 +332,18 @@ export default async function ReportDetailPage({ params }: Props) {
             last_name: learner.last_name,
             percentage: learner.percentage,
             grade: learner.grade,
+            subjectBreakdown: subjects.map((subject: Subject) => {
+              const detail = learner.subject_details?.find((d: SubjectDetail) => d.subject_id === subject.id)
+              return {
+                name: subject.name,
+                percentage: detail?.percentage ?? 0,
+              }
+            }),
           }))}
           templates={remarkTemplates}
           initialRemarks={report.student_remarks ?? {}}
           showPrincipalRemark={showPrincipalRemark}
+          hasAIRemarks={hasFeature(currentPlan, 'aiGeneratedRemarks')}
         />
       )}
     </div>
