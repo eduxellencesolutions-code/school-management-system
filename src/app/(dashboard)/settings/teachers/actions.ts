@@ -361,8 +361,11 @@ export async function uploadTeachers(formData: FormData) {
     const newTeacherCount = teachers.filter(t => !existingEmails.has(t.email)).length
 
     const projectedTotal = (currentTeacherCount ?? 0) + newTeacherCount
-    if (config.limits.maxTeachers !== 'unlimited' && projectedTotal > config.limits.maxTeachers) {
-      console.error(`Upload would exceed teacher limit: ${projectedTotal} > ${config.limits.maxTeachers}`)
+    
+    // ✅ FIXED: Properly handle 'unlimited' type check
+    const maxTeachers = config.limits.maxTeachers
+    if (maxTeachers !== 'unlimited' && projectedTotal > maxTeachers) {
+      console.error(`Upload would exceed teacher limit: ${projectedTotal} > ${maxTeachers}`)
       return
     }
 
