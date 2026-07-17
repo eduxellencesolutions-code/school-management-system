@@ -30,11 +30,12 @@ export default async function ClassDetailPage({ params }: Props) {
 
   console.log('Fetching group with ID:', id)
 
+  // ✅ FIXED: Explicit foreign key for instructor embed
   const { data: group, error: groupError } = await supabase
     .from('groups')
     .select(`
       *,
-      instructor:users(id, name, email),
+      instructor:users!groups_instructor_id_fkey(id, name, email),
       session:academic_sessions(name),
       term:terms(name)
     `)
@@ -72,9 +73,11 @@ export default async function ClassDetailPage({ params }: Props) {
       .eq('group_id', id)
       .eq('is_active', true)
       .order('name'),
+    // ✅ FIXED: Templates query with organization filter
     supabase
       .from('assessment_templates')
       .select('id, name')
+      .or(`organization_id.eq.${group.organization_id ?? 'null'},organization_id.is.null`)
       .order('name'),
   ])
 

@@ -10,29 +10,59 @@ export default async function TemplatesPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id').eq('id', user.id).single()
+    .from('users').select('organization_id, role').eq('id', user.id).single()
   const orgId = profile?.organization_id
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isAssigned = !!orgId && !isAdmin
 
-  // Build query based on user type
-  let query = supabase
-    .from('assessment_templates')
-    .select('id, name, description, is_default, created_at')
-    .order('created_at')
+  console.log('🔍 TEMPLATES PAGE - User:', user.id, 'Organization:', orgId, 'isAdmin:', isAdmin, 'isAssigned:', isAssigned)
+
+  let templates: any[] = []
 
   if (orgId) {
-    // Institution user: filter by organization_id
-    query = query.eq('organization_id', orgId)
+    // ✅ Institution user: filter by organization_id
+    const { data: orgTemplates } = await supabase
+      .from('assessment_templates')
+      .select('id, name, description, is_default, created_at')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+    
+    templates = orgTemplates || []
+    console.log('🏫 Institution templates found:', templates.length)
   } else {
-    // Individual teacher: filter by instructor_id
-    query = query.eq('instructor_id', user.id)
+    // ✅ Solo teacher: fetch templates with organization_id = null OR instructor_id = user.id
+    const { data: nullTemplates } = await supabase
+      .from('assessment_templates')
+      .select('id, name, description, is_default, created_at')
+      .is('organization_id', null)
+      .order('created_at', { ascending: false })
+
+    // ✅ Also check for instructor_id (if the column exists)
+    const { data: instructorTemplates } = await supabase
+      .from('assessment_templates')
+      .select('id, name, description, is_default, created_at')
+      .eq('instructor_id', user.id)
+      .order('created_at', { ascending: false })
+
+    // ✅ Combine and deduplicate templates
+    const combined = [...(nullTemplates || []), ...(instructorTemplates || [])]
+    const uniqueIds = new Set()
+    templates = combined.filter(t => {
+      if (uniqueIds.has(t.id)) return false
+      uniqueIds.add(t.id)
+      return true
+    })
+
+    console.log('👨‍🏫 Solo teacher templates found:', templates.length)
+    console.log('  - organization_id = null:', nullTemplates?.length || 0)
+    console.log('  - instructor_id = user.id:', instructorTemplates?.length || 0)
   }
 
-  const { data: templates } = await query
-
+  // ✅ Fetch components for all templates
   const { data: components } = await supabase
     .from('assessment_components')
     .select('id, template_id, name, max_score, sequence')
-    .in('template_id', templates?.map(t => t.id) ?? [])
+    .in('template_id', templates.map(t => t.id) ?? [])
     .order('sequence')
 
   const componentsByTemplate = (components ?? []).reduce<Record<string, typeof components>>((acc, c) => {
@@ -59,9 +89,12 @@ export default async function TemplatesPage() {
             Each subject is assigned one template.
           </p>
         </div>
-        <Link href="/settings/templates/new" className="btn-primary btn shrink-0">
-          <Plus size={14} /> New template
-        </Link>
+        {/* ✅ Hide New Template button for assigned teachers */}
+        {!isAssigned && (
+          <Link href="/settings/templates/new" className="btn-primary btn shrink-0">
+            <Plus size={14} /> New template
+          </Link>
+        )}
       </div>
 
       {templates && templates.length > 0 ? (
@@ -79,20 +112,23 @@ export default async function TemplatesPage() {
                     </div>
                     {t.description && <p className="text-xs text-ink-muted">{t.description}</p>}
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Link href={`/settings/templates/${t.id}`} className="btn-secondary btn-sm btn">
-                      <Pencil size={12} /> Edit
-                    </Link>
-                    <form action={deleteTemplate}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <button
-                        type="submit"
-                        className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
-                      >
-                        Delete
-                      </button>
-                    </form>
-                  </div>
+                  {/* ✅ Hide Edit/Delete buttons for assigned teachers */}
+                  {!isAssigned && (
+                    <div className="flex gap-2 shrink-0">
+                      <Link href={`/settings/templates/${t.id}`} className="btn-secondary btn-sm btn">
+                        <Pencil size={12} /> Edit
+                      </Link>
+                      <form action={deleteTemplate}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <button
+                          type="submit"
+                          className="btn btn-sm text-red-600 hover:bg-red-50 border border-red-200"
+                        >
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </div>
 
                 {comps.length > 0 ? (
@@ -122,11 +158,16 @@ export default async function TemplatesPage() {
           <FileSliders size={40} className="text-surface-200 mb-4" />
           <h3 className="font-semibold text-ink mb-1">No templates yet</h3>
           <p className="text-sm text-ink-muted mb-6 max-w-xs">
-            Create your first assessment template to define how scores are structured for your school.
+            {isAssigned
+              ? 'No templates are available. Contact your administrator.'
+              : 'Create your first assessment template to define how scores are structured.'}
           </p>
-          <Link href="/settings/templates/new" className="btn-primary btn">
-            <Plus size={14} /> Create first template
-          </Link>
+          {/* ✅ Hide Create First Template button for assigned teachers */}
+          {!isAssigned && (
+            <Link href="/settings/templates/new" className="btn-primary btn">
+              <Plus size={14} /> Create first template
+            </Link>
+          )}
         </div>
       )}
     </div>

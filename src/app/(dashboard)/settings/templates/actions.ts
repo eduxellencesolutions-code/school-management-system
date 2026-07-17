@@ -52,14 +52,14 @@ export async function createTemplate(formData: FormData) {
     metadata: {},
   }
 
-  // If user belongs to an organization, use organization_id
-  // Otherwise, use instructor_id for individual teachers
+  // FIX: Restored instructor_id for solo teachers
   if (profile?.organization_id) {
     insertData.organization_id = profile.organization_id
     console.log('Inserting for institution with organization_id:', profile.organization_id)
   } else {
+    // Solo teachers need instructor_id set for RLS policy
     insertData.instructor_id = user.id
-    console.log('Inserting for individual teacher with instructor_id:', user.id)
+    console.log('Inserting for solo teacher with instructor_id:', user.id)
   }
 
   console.log('Final insert data:', insertData)
@@ -175,12 +175,21 @@ export async function updateTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(formData: FormData) {
+  // FIX: Added auth check for security
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
   const id = formData.get('id') as string
   if (!id) return
 
-  await supabase.from('assessment_components').delete().eq('template_id', id)
-  await supabase.from('assessment_templates').delete().eq('id', id)
+  console.log('Deleting template:', id, 'by user:', user.id)
+
+  const { error: compError } = await supabase.from('assessment_components').delete().eq('template_id', id)
+  if (compError) console.error('Error deleting components:', compError)
+
+  const { error: templateError } = await supabase.from('assessment_templates').delete().eq('id', id)
+  if (templateError) console.error('Error deleting template:', templateError)
 
   revalidatePath('/settings/templates')
   redirect('/settings/templates')

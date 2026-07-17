@@ -2,238 +2,311 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
+import { User, Mail, Phone, Upload, Save, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
+import { createTeacher } from '@/app/(dashboard)/settings/teachers/actions'
 
 interface Props {
   classes: { id: string; name: string }[]
-  subjects: { id: string; name: string; group_id: string }[]
+  subjects: { id: string; name: string; group_id: string; group?: { name: string } | null }[]
+  orgId: string
 }
 
-export default function TeacherForm({ classes, subjects }: Props) {
+export default function TeacherForm({ classes, subjects, orgId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState('subject_teacher')
-  const [assignments, setAssignments] = useState<{ classId: string; subjectId: string }[]>([
-    { classId: '', subjectId: '' }
-  ])
+  const [uploadingSig, setUploadingSig] = useState(false)
+  const [sigPreview, setSigPreview] = useState<string | null>(null)
+  const [sigUrl, setSigUrl] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'teacher' as 'teacher' | 'lecturer' | 'assistant',
+    password: '',
+    selectedClasses: [] as string[],
+    selectedSubjects: [] as string[],
+    isClassTeacher: false,
+    classTeacherOf: '',
+  })
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+    }))
+  }
+
+  const handleClassToggle = (classId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedClasses: prev.selectedClasses.includes(classId)
+        ? prev.selectedClasses.filter(id => id !== classId)
+        : [...prev.selectedClasses, classId],
+    }))
+  }
+
+  const handleSubjectToggle = (subjectId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedSubjects: prev.selectedSubjects.includes(subjectId)
+        ? prev.selectedSubjects.filter(id => id !== subjectId)
+        : [...prev.selectedSubjects, subjectId],
+    }))
+  }
+
+  const handleSignatureUpload = async (file: File) => {
+    setUploadingSig(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `signatures/${orgId}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('signatures').upload(path, file, { upsert: true })
+      if (error) throw error
+      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
+      setSigUrl(publicUrl)
+      setSigPreview(URL.createObjectURL(file))
+      toast.success('Signature uploaded')
+    } catch {
+      toast.error('Failed to upload signature')
+    } finally {
+      setUploadingSig(false)
+    }
+  }
+
+  // ✅ UPDATED: handleSubmit now uses the server action
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !email.trim()) {
-      toast.error('Name and email are required')
+    
+    // ✅ Name is required
+    if (!formData.name.trim()) {
+      toast.error('Teacher name is required')
+      return
+    }
+    
+    // ✅ Email is required
+    if (!formData.email.trim()) {
+      toast.error('Email address is required')
+      return
+    }
+    
+    // ✅ Password is required (admin sets it)
+    if (!formData.password.trim()) {
+      toast.error('Please set a temporary password')
+      return
+    }
+    if (formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters')
       return
     }
 
     setLoading(true)
+    try {
+      const subjectGroupMap: Record<string, string> = {}
+      subjects.forEach(s => { subjectGroupMap[s.id] = s.group_id })
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase
-      .from('users').select('organization_id').eq('id', user!.id).single()
-
-    // Create teacher user
-    const { data: teacher, error: userError } = await supabase
-      .from('users')
-      .insert({
-        name: name.trim(),
-        email: email.trim(),
-        role: role,
-        organization_id: profile?.organization_id,
-        is_active: true
+      const result = await createTeacher({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        role: formData.role,
+        password: formData.password,
+        signatureUrl: sigUrl,
+        selectedClasses: formData.selectedClasses,
+        selectedSubjects: formData.selectedSubjects,
+        isClassTeacher: formData.isClassTeacher,
+        classTeacherOf: formData.classTeacherOf,
+        subjectGroupMap,
       })
-      .select('id')
-      .single()
 
-    if (userError) {
-      toast.error('Failed to create teacher: ' + userError.message)
-      setLoading(false)
-      return
-    }
-
-    // Create assignments
-    for (const assign of assignments) {
-      if (assign.classId || assign.subjectId) {
-        await supabase
-          .from('teacher_assignments')
-          .insert({
-            organization_id: profile?.organization_id,
-            teacher_id: teacher.id,
-            class_id: assign.classId || null,
-            subject_id: assign.subjectId || null,
-            role: role,
-            is_active: true
-          })
+      if (result.error) {
+        toast.error(result.error)
+        return
       }
+
+      toast.success(`Teacher ${result.teacherName} added successfully!`)
+      router.push('/settings/teachers')
+      router.refresh()
+    } catch (err) {
+      console.error('Error adding teacher:', err)
+      toast.error('Failed to add teacher')
+    } finally {
+      setLoading(false)
     }
-
-    toast.success('Teacher created successfully!')
-    router.push('/settings/teachers')
-    router.refresh()
-    setLoading(false)
   }
 
-  function addAssignment() {
-    setAssignments(prev => [...prev, { classId: '', subjectId: '' }])
-  }
-
-  function removeAssignment(index: number) {
-    setAssignments(prev => prev.filter((_, i) => i !== index))
-  }
-
-  function updateAssignment(index: number, field: 'classId' | 'subjectId', value: string) {
-    setAssignments(prev => prev.map((a, i) => 
-      i === index ? { ...a, [field]: value } : a
-    ))
-  }
-
-  // Get subjects for a specific class
-  const getClassSubjects = (classId: string) => {
-    return subjects.filter(s => s.group_id === classId)
-  }
+  // Filter subjects by selected classes
+  const availableSubjects = formData.selectedClasses.length > 0
+    ? subjects.filter(s => formData.selectedClasses.includes(s.group_id))
+    : subjects
 
   return (
-    <form onSubmit={handleSubmit} className="card p-6 flex flex-col gap-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">
-            Full Name *
-          </label>
-          <input
-            type="text"
-            className="input"
-            placeholder="e.g. John Doe"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-ink mb-1">
-            Email *
-          </label>
-          <input
-            type="email"
-            className="input"
-            placeholder="e.g. john@school.com"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
-        </div>
-      </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-2xl">
 
-      <div>
-        <label className="block text-xs font-medium text-ink mb-1">
-          Role *
-        </label>
-        <select
-          className="input max-w-xs"
-          value={role}
-          onChange={e => setRole(e.target.value)}
-          required
-        >
-          <option value="subject_teacher">Subject Teacher</option>
-          <option value="class_teacher">Class Teacher</option>
-          <option value="assistant">Assistant</option>
-        </select>
-      </div>
+      {/* Basic Info */}
+      <div className="card p-6 flex flex-col gap-4">
+        <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+          <User size={15} className="text-brand-500" /> Teacher Information
+        </h2>
 
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <label className="block text-xs font-medium text-ink">
-            Assignments
-          </label>
-          <button
-            type="button"
-            onClick={addAssignment}
-            className="btn-secondary btn-sm btn"
-          >
-            <Plus size={13} /> Add Assignment
-          </button>
-        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-ink mb-1">Full name *</label>
+            <input name="name" type="text" value={formData.name} onChange={handleChange}
+              className="input" placeholder="e.g. Amara Okafor" required />
+          </div>
 
-        <div className="flex flex-col gap-3">
-          {assignments.map((assign, index) => (
-            <div key={index} className="flex gap-3 items-end">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Class
-                </label>
-                <select
-                  className="input"
-                  value={assign.classId}
-                  onChange={e => {
-                    updateAssignment(index, 'classId', e.target.value)
-                    // Clear subject if class changes
-                    if (assign.subjectId) {
-                      const classSubjects = getClassSubjects(e.target.value)
-                      if (!classSubjects.find(s => s.id === assign.subjectId)) {
-                        updateAssignment(index, 'subjectId', '')
-                      }
-                    }
-                  }}
-                >
-                  <option value="">No class</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-ink mb-1">
-                  Subject
-                </label>
-                <select
-                  className="input"
-                  value={assign.subjectId}
-                  onChange={e => updateAssignment(index, 'subjectId', e.target.value)}
-                  disabled={!assign.classId}
-                >
-                  <option value="">No subject</option>
-                  {assign.classId ? (
-                    getClassSubjects(assign.classId).map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))
-                  ) : (
-                    subjects.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} {s.group_id ? `(${classes.find(c => c.id === s.group_id)?.name || ''})` : ''}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Email address *</label>
+            <input name="email" type="email" value={formData.email} onChange={handleChange}
+              className="input" placeholder="teacher@school.com" required />
+            <p className="text-xs text-ink-faint mt-1">Teacher will use this email to log in</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Phone <span className="text-ink-faint">(optional)</span></label>
+            <input name="phone" type="tel" value={formData.phone} onChange={handleChange}
+              className="input" placeholder="08012345678" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Role</label>
+            <select name="role" value={formData.role} onChange={handleChange} className="input">
+              <option value="teacher">Teacher</option>
+              <option value="lecturer">Lecturer</option>
+              <option value="assistant">Assistant</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Temporary password *</label>
+            <div className="relative">
+              <input 
+                name="password" 
+                type={showPassword ? 'text' : 'password'} 
+                value={formData.password} 
+                onChange={handleChange}
+                className="input pr-10" 
+                placeholder="Min. 8 characters" 
+                required 
+                minLength={8} 
+              />
               <button
                 type="button"
-                onClick={() => removeAssignment(index)}
-                disabled={assignments.length === 1}
-                className="p-2 text-ink-faint hover:text-red-500 transition-colors disabled:opacity-30"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
               >
-                <Trash2 size={16} />
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-          ))}
+            <p className="text-xs text-ink-faint mt-1">Teacher must change this after first login</p>
+          </div>
         </div>
-        <p className="text-xs text-ink-muted mt-2">
-          Each teacher can be assigned to multiple classes and subjects.
+      </div>
+
+      {/* Signature */}
+      <div className="card p-6 flex flex-col gap-3">
+        <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+          <Upload size={15} className="text-brand-500" /> Teacher Signature <span className="text-ink-faint font-normal text-xs">(optional)</span>
+        </h2>
+        <div className="flex items-center gap-4">
+          <div className="w-32 h-20 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-surface-50">
+            {sigPreview
+              ? <img src={sigPreview} alt="Signature" className="w-full h-full object-contain" />
+              : <span className="text-xs text-ink-faint">No signature</span>}
+          </div>
+          <div>
+            <label className="btn-secondary btn-sm btn cursor-pointer">
+              {uploadingSig ? 'Uploading…' : 'Upload signature'}
+              <input type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleSignatureUpload(f) }}
+                disabled={uploadingSig} />
+            </label>
+            <p className="text-xs text-ink-muted mt-1">PNG or JPG, transparent background preferred</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Class Assignment */}
+      <div className="card p-6 flex flex-col gap-3">
+        <h2 className="font-semibold text-sm text-ink">Class Assignment</h2>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="isClassTeacher" checked={formData.isClassTeacher}
+            onChange={handleChange} className="w-4 h-4 rounded border-surface-300 text-brand-500" />
+          <span className="text-sm text-ink">Assign as Class Teacher</span>
+        </label>
+
+        {formData.isClassTeacher && (
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Class teacher of</label>
+            <select name="classTeacherOf" value={formData.classTeacherOf} onChange={handleChange} className="input max-w-xs">
+              <option value="">Select class…</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-medium text-ink mb-2">
+            Classes this teacher has access to
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {classes.map(c => (
+              <label key={c.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs cursor-pointer transition-colors
+                ${formData.selectedClasses.includes(c.id)
+                  ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-surface-200 text-ink-muted hover:border-brand-300'}`}>
+                <input type="checkbox" className="sr-only"
+                  checked={formData.selectedClasses.includes(c.id)}
+                  onChange={() => handleClassToggle(c.id)} />
+                {c.name}
+              </label>
+            ))}
+            {classes.length === 0 && <p className="text-xs text-ink-faint">No classes yet — create a class first</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Subject Assignment */}
+      <div className="card p-6 flex flex-col gap-3">
+        <h2 className="font-semibold text-sm text-ink">Subject Assignment</h2>
+        <p className="text-xs text-ink-muted">
+          {formData.selectedClasses.length > 0
+            ? 'Showing subjects from selected classes'
+            : 'Select classes above to filter subjects, or assign from all subjects'}
         </p>
+        <div className="flex flex-wrap gap-2">
+          {availableSubjects.map(s => (
+            <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs cursor-pointer transition-colors
+              ${formData.selectedSubjects.includes(s.id)
+                ? 'border-green-500 bg-green-50 text-green-700'
+                : 'border-surface-200 text-ink-muted hover:border-green-300'}`}>
+              <input type="checkbox" className="sr-only"
+                checked={formData.selectedSubjects.includes(s.id)}
+                onChange={() => handleSubjectToggle(s.id)} />
+              {s.name}
+              {s.group?.name && <span className="text-ink-faint ml-1">({s.group.name})</span>}
+            </label>
+          ))}
+          {availableSubjects.length === 0 && (
+            <p className="text-xs text-ink-faint">No subjects available</p>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary btn"
-        >
-          {loading ? 'Creating...' : 'Create Teacher'}
-        </button>
         <Link href="/settings/teachers" className="btn-secondary btn">
-          Cancel
+          <ArrowLeft size={14} /> Cancel
         </Link>
+        <button type="submit" disabled={loading} className="btn-primary btn">
+          <Save size={14} /> {loading ? 'Adding teacher…' : 'Add teacher'}
+        </button>
       </div>
     </form>
   )

@@ -12,24 +12,27 @@ export default async function NewTeacherPage() {
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', authUser.id).single()
 
-  // Get all classes
+  if (!profile?.organization_id) redirect('/dashboard')
+
   const { data: classes } = await supabase
     .from('groups')
     .select('id, name')
-    .eq('organization_id', profile?.organization_id)
+    .eq('organization_id', profile.organization_id)
     .eq('is_active', true)
     .order('name')
 
-  // Get all subjects
   const { data: subjects } = await supabase
     .from('subjects')
-    .select(`
-      id, name, group_id,
-      group:groups(name)
-    `)
-    .eq('organization_id', profile?.organization_id)
+    .select('id, name, group_id, group:groups(name)')
+    .eq('organization_id', profile.organization_id)
     .eq('is_active', true)
     .order('name')
+
+  // Transform group array to single object
+  const transformedSubjects = (subjects || []).map(s => ({
+    ...s,
+    group: Array.isArray(s.group) ? (s.group[0] ?? null) : s.group,
+  }))
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
@@ -40,15 +43,17 @@ export default async function NewTeacherPage() {
         <span className="text-ink-faint">/</span>
         <span className="text-ink font-medium">Add Teacher</span>
       </div>
-
       <div>
         <h1 className="page-title">Add New Teacher</h1>
         <p className="page-subtitle">
           Create a teacher account and assign them to classes and subjects.
         </p>
       </div>
-
-      <TeacherForm classes={classes || []} subjects={subjects || []} />
+      <TeacherForm
+        classes={classes || []}
+        subjects={transformedSubjects}
+        orgId={profile.organization_id}
+      />
     </div>
   )
 }

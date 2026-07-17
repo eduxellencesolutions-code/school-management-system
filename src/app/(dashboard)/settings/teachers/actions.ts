@@ -1,8 +1,10 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { hasFeature, canAddTeacher, getPlanConfig } from '@/lib/plans/gating'
 
 // Check if user is an institution
 async function checkInstitutionAccess() {
@@ -24,6 +26,111 @@ async function checkInstitutionAccess() {
   return { user, profile }
 }
 
+// ✅ NEW: Create teacher function
+interface CreateTeacherInput {
+  name: string
+  email: string
+  phone: string
+  role: 'teacher' | 'lecturer' | 'assistant'
+  password: string
+  signatureUrl: string | null
+  selectedClasses: string[]
+  selectedSubjects: string[]
+  isClassTeacher: boolean
+  classTeacherOf: string
+  subjectGroupMap: Record<string, string>
+}
+
+export async function createTeacher(input: CreateTeacherInput) {
+  const { profile } = await checkInstitutionAccess()
+  const orgId = profile?.organization_id
+
+  if (!orgId) {
+    return { error: 'Not authorized' }
+  }
+
+  // ✅ Check teacher management feature
+  const supabase = await createClient()
+  const { data: org } = await supabase
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    return { error: 'Teacher management is not available on your current plan. Please upgrade to add teachers.' }
+  }
+
+  // ✅ GATE: Check numeric teacher limit before creating
+  const gate = await canAddTeacher(plan, { type: 'org', orgId })
+  if (!gate.allowed) {
+    return { error: gate.reason }
+  }
+
+  const adminClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+    email: input.email.trim(),
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { name: input.name.trim(), role: input.role, organization_id: orgId },
+  })
+
+  if (createError || !newUser.user) {
+    return { error: createError?.message ?? 'Failed to create teacher account' }
+  }
+
+  const userId = newUser.user.id
+
+  const { error: updateError } = await adminClient
+    .from('users')
+    .update({
+      name: input.name.trim(),
+      phone: input.phone || null,
+      signature_url: input.signatureUrl || null,
+      organization_id: orgId,
+      role: input.role,
+    })
+    .eq('id', userId)
+
+  if (updateError) {
+    console.error('User update error:', updateError)
+  }
+
+  const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string; organization_id: string }[] = []
+
+  if (input.isClassTeacher && input.classTeacherOf) {
+    assignments.push({
+      teacher_id: userId,
+      class_id: input.classTeacherOf,
+      role: 'class_teacher',
+      organization_id: orgId,
+    })
+  }
+
+  input.selectedSubjects.forEach(subjectId => {
+    assignments.push({
+      teacher_id: userId,
+      class_id: input.subjectGroupMap[subjectId],
+      subject_id: subjectId,
+      role: 'subject_teacher',
+      organization_id: orgId,
+    })
+  })
+
+  if (assignments.length > 0) {
+    const { error: assignError } = await adminClient
+      .from('teacher_assignments')
+      .insert(assignments)
+    if (assignError) console.error('Assignment error:', assignError)
+  }
+
+  revalidatePath('/settings/teachers')
+  return { success: true, teacherName: input.name }
+}
+
 // Get all teachers in an organization
 export async function getTeachers() {
   const { profile } = await checkInstitutionAccess()
@@ -43,7 +150,7 @@ export async function getTeachers() {
       )
     `)
     .eq('organization_id', profile?.organization_id)
-    .neq('role', 'admin')
+    .eq('role', 'teacher')
     .order('name')
 
   return teachers || []
@@ -53,6 +160,7 @@ export async function getTeachers() {
 export async function assignTeacher(formData: FormData) {
   const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
+  const orgId = profile?.organization_id
 
   const teacherId = formData.get('teacher_id') as string
   const classId = formData.get('class_id') as string || null
@@ -66,6 +174,16 @@ export async function assignTeacher(formData: FormData) {
 
   if (!classId && !subjectId) {
     console.error('Must assign to at least one class or subject')
+    return
+  }
+
+  // ✅ GATE: Check if teacher management is available on this plan
+  const { data: org } = await supabase
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    console.error('Teacher management not available on this plan')
     return
   }
 
@@ -88,7 +206,7 @@ export async function assignTeacher(formData: FormData) {
   const { error } = await supabase
     .from('teacher_assignments')
     .insert({
-      organization_id: profile?.organization_id,
+      organization_id: orgId,
       teacher_id: teacherId,
       class_id: classId,
       subject_id: subjectId,
@@ -160,10 +278,27 @@ export async function removeAssignment(formData: FormData) {
   revalidatePath('/settings/teachers')
 }
 
-// Bulk upload teachers via CSV
+// ✅ UPDATED: Bulk upload teachers via CSV with proper auth creation and gate checks
 export async function uploadTeachers(formData: FormData) {
   const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
+  const orgId = profile?.organization_id
+
+  // ✅ GATE: Check teacher management feature availability
+  const { data: org } = await supabase
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    console.error('Teacher management not available on this plan')
+    return
+  }
+
+  const adminClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
 
   const file = formData.get('file') as File
   if (!file) {
@@ -174,8 +309,7 @@ export async function uploadTeachers(formData: FormData) {
   try {
     const text = await file.text()
     const lines = text.split('\n').filter(line => line.trim())
-    
-    // Parse headers
+
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
     const nameIndex = headers.indexOf('name')
     const emailIndex = headers.indexOf('email')
@@ -189,8 +323,7 @@ export async function uploadTeachers(formData: FormData) {
     }
 
     const teachers = []
-    
-    // Process each row
+
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim())
       const name = values[nameIndex]
@@ -201,14 +334,7 @@ export async function uploadTeachers(formData: FormData) {
 
       if (!name || !email) continue
 
-      teachers.push({
-        name,
-        email,
-        role,
-        className,
-        subjectName,
-        organization_id: profile?.organization_id
-      })
+      teachers.push({ name, email, role, className, subjectName })
     }
 
     if (teachers.length === 0) {
@@ -216,49 +342,82 @@ export async function uploadTeachers(formData: FormData) {
       return
     }
 
-    // Create users and assignments
+    // ✅ Gate: Check teacher limit before creating any accounts
+    const config = getPlanConfig(plan)
+    const { count: currentTeacherCount } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('role', 'teacher')
+
+    // Check how many of these are genuinely NEW users (existing emails don't count against the limit)
+    const emails = teachers.map(t => t.email)
+    const { data: existingUsers } = await supabase
+      .from('users')
+      .select('email')
+      .in('email', emails)
+    const existingEmails = new Set((existingUsers ?? []).map(u => u.email))
+    const newTeacherCount = teachers.filter(t => !existingEmails.has(t.email)).length
+
+    const projectedTotal = (currentTeacherCount ?? 0) + newTeacherCount
+    if (config.limits.maxTeachers !== 'unlimited' && projectedTotal > config.limits.maxTeachers) {
+      console.error(`Upload would exceed teacher limit: ${projectedTotal} > ${config.limits.maxTeachers}`)
+      return
+    }
+
     for (const teacher of teachers) {
-      // Check if user already exists
+      // ✅ Check if a users profile already exists for this email
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
         .eq('email', teacher.email)
         .maybeSingle()
 
-      let teacherId
+      let teacherId: string
 
       if (existingUser) {
         teacherId = existingUser.id
       } else {
-        // Create new user
-        const { data: newUser, error: userError } = await supabase
-          .from('users')
-          .insert({
-            name: teacher.name,
-            email: teacher.email,
-            role: teacher.role,
-            organization_id: teacher.organization_id,
-            is_active: true
+        // ✅ Create a real Supabase Auth account via admin API,
+        // and send the teacher an email invite to set their own password.
+        // This does NOT touch the admin's browser session — service-role
+        // client is fully separate from the cookie-based client.
+        const { data: newAuthUser, error: inviteError } =
+          await adminClient.auth.admin.inviteUserByEmail(teacher.email, {
+            data: { name: teacher.name, role: teacher.role, organization_id: orgId },
+            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/set-password`,
           })
-          .select('id')
-          .single()
 
-        if (userError) {
-          console.error('Error creating user:', userError)
+        if (inviteError || !newAuthUser.user) {
+          console.error(`Error inviting ${teacher.email}:`, inviteError)
           continue
         }
 
-        teacherId = newUser.id
+        teacherId = newAuthUser.user.id
+
+        // ✅ Create/update the corresponding profile row
+        const { error: profileError } = await adminClient
+          .from('users')
+          .update({
+            name: teacher.name,
+            role: teacher.role,
+            organization_id: orgId,
+          })
+          .eq('id', teacherId)
+
+        if (profileError) {
+          console.error(`Error updating profile for ${teacher.email}:`, profileError)
+        }
       }
 
       // Find or create class
-      let classId = null
+      let classId: string | null = null
       if (teacher.className) {
         const { data: existingClass } = await supabase
           .from('groups')
           .select('id')
           .eq('name', teacher.className)
-          .eq('organization_id', profile?.organization_id)
+          .eq('organization_id', orgId)
           .maybeSingle()
 
         if (existingClass) {
@@ -266,11 +425,7 @@ export async function uploadTeachers(formData: FormData) {
         } else {
           const { data: newClass, error: classError } = await supabase
             .from('groups')
-            .insert({
-              name: teacher.className,
-              organization_id: profile?.organization_id,
-              is_active: true
-            })
+            .insert({ name: teacher.className, organization_id: orgId, is_active: true })
             .select('id')
             .single()
 
@@ -283,14 +438,14 @@ export async function uploadTeachers(formData: FormData) {
       }
 
       // Find or create subject
-      let subjectId = null
+      let subjectId: string | null = null
       if (teacher.subjectName && classId) {
         const { data: existingSubject } = await supabase
           .from('subjects')
           .select('id')
           .eq('name', teacher.subjectName)
           .eq('group_id', classId)
-          .eq('organization_id', profile?.organization_id)
+          .eq('organization_id', orgId)
           .maybeSingle()
 
         if (existingSubject) {
@@ -298,12 +453,7 @@ export async function uploadTeachers(formData: FormData) {
         } else {
           const { data: newSubject, error: subjectError } = await supabase
             .from('subjects')
-            .insert({
-              name: teacher.subjectName,
-              group_id: classId,
-              organization_id: profile?.organization_id,
-              is_active: true
-            })
+            .insert({ name: teacher.subjectName, group_id: classId, organization_id: orgId, is_active: true })
             .select('id')
             .single()
 
@@ -320,12 +470,12 @@ export async function uploadTeachers(formData: FormData) {
         const { error: assignError } = await supabase
           .from('teacher_assignments')
           .insert({
-            organization_id: profile?.organization_id,
+            organization_id: orgId,
             teacher_id: teacherId,
             class_id: classId,
             subject_id: subjectId,
             role: teacher.role,
-            is_active: true
+            is_active: true,
           })
 
         if (assignError) {
@@ -388,6 +538,29 @@ export async function deleteTeacher(formData: FormData) {
     .from('users')
     .delete()
     .eq('id', teacherId)
+
+  revalidatePath('/settings/teachers')
+}
+
+// ✅ NEW: Update teacher signature
+export async function updateTeacherSignature(formData: FormData) {
+  await checkInstitutionAccess()
+  const supabase = await createClient()
+
+  const teacherId = formData.get('teacher_id') as string
+  const signatureUrl = formData.get('signature_url') as string
+
+  if (!teacherId || !signatureUrl) return
+
+  const { error } = await supabase
+    .from('users')
+    .update({ signature_url: signatureUrl })
+    .eq('id', teacherId)
+
+  if (error) {
+    console.error('Error updating signature:', error)
+    return
+  }
 
   revalidatePath('/settings/teachers')
 }

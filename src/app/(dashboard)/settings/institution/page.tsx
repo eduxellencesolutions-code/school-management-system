@@ -9,8 +9,9 @@ export default async function InstitutionSettingsPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // FIX: Added !users_organization_id_fkey to resolve ambiguous relation
   const { data: user } = await supabase
-    .from('users').select('*, organization:organizations(*)')
+    .from('users').select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
 

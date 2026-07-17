@@ -1,35 +1,33 @@
 'use client'
+
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { deleteReport } from '@/app/(dashboard)/reports/actions'
+import { softDeleteReport } from '@/app/(dashboard)/reports/[id]/actions'
 import toast from 'react-hot-toast'
 
 interface Props {
   reportId: string
   reportName: string
+  canDelete: boolean
 }
 
-export default function DeleteReportButton({ reportId, reportName }: Props) {
+export default function DeleteReportButton({ reportId, reportName, canDelete }: Props) {
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete this report for ${reportName}?`)) return
+  if (!canDelete) return null
 
+  const handleDelete = async () => {
+    if (!confirm(`Move the report for "${reportName}" to Trash? An administrator can restore it later.`)) return
     setIsDeleting(true)
     try {
       const formData = new FormData()
       formData.append('id', reportId)
-
-      const result = await deleteReport(formData)
-
+      const result = await softDeleteReport(formData)
       if (!result.success) {
         toast.error(result.message || 'Failed to delete report')
         return
       }
-
-      toast.success('Report deleted')
-      // Wait for server action + revalidation to complete, then reload
-      await new Promise(r => setTimeout(r, 500))
+      toast.success('Report moved to Trash')
       window.location.reload()
     } catch (error) {
       console.error('Delete error:', error)

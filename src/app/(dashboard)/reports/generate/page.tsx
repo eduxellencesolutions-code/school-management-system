@@ -4,18 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { generateReport } from '@/app/(dashboard)/reports/actions'
 import { ArrowLeft, Loader2, FileText, CheckCircle, AlertCircle, Users, BookOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Class { id: string; name: string }
-interface Subject {
-  id: string; name: string; code?: string
-  score_count: number; learner_count: number; is_complete: boolean
-}
-interface Learner {
-  id: string; first_name: string; last_name: string; admission_number: string
-  scores: { subject_id: string; score: number }[]
-}
+interface Subject { id: string; name: string; code?: string; template_id: string | null; score_count: number; learner_count: number; is_complete: boolean }
+interface Term { id: string; name: string; session_name?: string }
 
 export default function GenerateReportPage() {
   const router = useRouter()
@@ -23,71 +18,104 @@ export default function GenerateReportPage() {
   const preSelectedClassId = searchParams.get('class')
 
   const [classes, setClasses] = useState<Class[]>([])
-  const [selectedClass, setSelectedClass] = useState<string>(preSelectedClassId || '')
+  const [selectedClass, setSelectedClass] = useState(preSelectedClassId || '')
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [learners, setLearners] = useState<Learner[]>([])
+  const [learnerCount, setLearnerCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [hasScores, setHasScores] = useState(false)
-  const [profile, setProfile] = useState<{ organization_id: string | null } | null>(null)
+  const [isInstitution, setIsInstitution] = useState(false)
+  const [currentTermName, setCurrentTermName] = useState<string | null>(null)
+  const [currentTermId, setCurrentTermId] = useState<string | null>(null)
+  const [terms, setTerms] = useState<Term[]>([])
+  const [selectedTermId, setSelectedTermId] = useState('')
 
   const supabase = createClient()
 
   useEffect(() => {
-    async function fetchClasses() {
+    async function init() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) return
 
-      const { data: profileData } = await supabase
-        .from('users').select('organization_id').eq('id', userData.user.id).single()
+      const { data: profile } = await supabase
+        .from('users').select('organization_id, role, current_term_id').eq('id', userData.user.id).single()
 
-      setProfile(profileData)
+      const orgId = profile?.organization_id
+      const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+      setIsInstitution(!!orgId)
 
-      // ── Solo teacher vs institution ──
-      const { data } = profileData?.organization_id
-        ? await supabase.from('groups').select('id, name')
-            .eq('organization_id', profileData.organization_id)
-            .eq('is_active', true).order('name')
-        : await supabase.from('groups').select('id, name')
-            .eq('instructor_id', userData.user.id)
-            .eq('is_active', true).order('name')
+      let classData: { id: string; name: string }[] | null = null
 
-      setClasses(data || [])
-      if (!preSelectedClassId && data && data.length > 0) setSelectedClass(data[0].id)
+      if (orgId && isAdmin) {
+        // ✅ Admin sees all classes in the organization
+        const res = await supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name')
+        classData = res.data
+      } else if (orgId && !isAdmin) {
+        // ✅ Non-admin teacher: only classes where they are the CLASS TEACHER
+        const { data: assignments } = await supabase
+          .from('teacher_assignments')
+          .select('class_id')
+          .eq('teacher_id', userData.user.id)
+          .eq('role', 'class_teacher')
+
+        const classIds = [...new Set((assignments ?? []).map(a => a.class_id).filter(Boolean))]
+        if (classIds.length > 0) {
+          const res = await supabase.from('groups').select('id, name').in('id', classIds).eq('is_active', true).order('name')
+          classData = res.data
+        } else {
+          classData = []
+        }
+      } else {
+        // ✅ Solo teacher: only their own classes
+        const res = await supabase.from('groups').select('id, name').eq('instructor_id', userData.user.id).eq('is_active', true).order('name')
+        classData = res.data
+      }
+
+      setClasses(classData || [])
+      if (!preSelectedClassId && classData && classData.length > 0) setSelectedClass(classData[0].id)
+
+      if (orgId) {
+        const { data: org } = await supabase.from('organizations').select('current_term_id').eq('id', orgId).single()
+        if (org?.current_term_id) {
+          const { data: term } = await supabase.from('terms').select('id, name, session:academic_sessions(name)').eq('id', org.current_term_id).single()
+          setCurrentTermId(term?.id ?? null)
+          setCurrentTermName(term ? `${(term.session as any)?.name ?? ''} — ${term.name}` : null)
+        }
+      } else {
+        const { data: sessionsData } = await supabase
+          .from('academic_sessions').select('id, name').eq('instructor_id', userData.user.id).order('name', { ascending: false })
+        const sessionIds = (sessionsData ?? []).map(s => s.id)
+        if (sessionIds.length > 0) {
+          const { data: termsData } = await supabase
+            .from('terms').select('id, name, session_id').in('session_id', sessionIds).order('name')
+          const enriched = (termsData ?? []).map(t => ({
+            id: t.id, name: t.name,
+            session_name: sessionsData?.find(s => s.id === t.session_id)?.name,
+          }))
+          setTerms(enriched)
+        }
+        setSelectedTermId(profile?.current_term_id ?? '')
+      }
+
       setLoading(false)
     }
-    fetchClasses()
+    init()
   }, [])
 
   useEffect(() => {
     async function fetchClassData() {
-      if (!selectedClass) { setSubjects([]); setLearners([]); setHasScores(false); return }
+      if (!selectedClass) { setSubjects([]); setHasScores(false); return }
       setLoading(true)
       try {
-        const { data: userData } = await supabase.auth.getUser()
-        if (!userData.user) return
-
         const { data: learnersData } = await supabase
-          .from('learners').select('id, first_name, last_name, admission_number')
-          .eq('group_id', selectedClass).eq('is_active', true).order('last_name')
+          .from('learners').select('id').eq('group_id', selectedClass).eq('is_active', true)
+        setLearnerCount(learnersData?.length ?? 0)
 
-        setLearners((learnersData || []).map(l => ({ ...l, scores: [] })))
+        const { data: subjectsData } = await supabase
+          .from('subjects').select('id, name, code, template_id')
+          .eq('group_id', selectedClass).eq('is_active', true).order('name')
 
-        // Subjects — handle both solo teacher and institution
-        const subjectsQuery = profile?.organization_id
-          ? supabase.from('subjects').select('id, name, code')
-              .eq('group_id', selectedClass)
-              .eq('organization_id', profile.organization_id)
-              .eq('is_active', true).order('name')
-          : supabase.from('subjects').select('id, name, code')
-              .eq('group_id', selectedClass)
-              .eq('is_active', true).order('name')
-
-        const { data: subjectsData } = await subjectsQuery
-
-        if (!subjectsData || subjectsData.length === 0) {
-          setSubjects([]); setHasScores(false); setLoading(false); return
-        }
+        if (!subjectsData?.length) { setSubjects([]); setHasScores(false); setLoading(false); return }
 
         const subjectIds = subjectsData.map(s => s.id)
         const learnerIds = learnersData?.map(l => l.id) || []
@@ -113,13 +141,7 @@ export default function GenerateReportPage() {
 
         setSubjects(subjectsWithStats)
         setHasScores(scoresData.length > 0)
-
-        const learnersWithScores = (learnersData || []).map(learner => ({
-          ...learner,
-          scores: scoresData.filter(s => s.learner_id === learner.id).map(s => ({ subject_id: s.subject_id, score: s.score })),
-        }))
-        setLearners(learnersWithScores)
-      } catch (error) {
+      } catch {
         toast.error('Failed to load class data')
       } finally {
         setLoading(false)
@@ -128,34 +150,35 @@ export default function GenerateReportPage() {
     fetchClassData()
   }, [selectedClass])
 
-  const handleGenerateReport = async () => {
+  const missingTemplates = subjects.filter(s => !s.template_id)
+
+  async function handleGenerateReport() {
     if (!selectedClass) { toast.error('Please select a class'); return }
-    setGenerating(true)
-    try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) { toast.error('Please sign in'); return }
-
-      const { data: profileData } = await supabase
-        .from('users').select('id, organization_id').eq('id', userData.user.id).single()
-
-      const { data: report, error } = await supabase.from('reports').insert({
-        organization_id: profileData?.organization_id ?? null,
-        group_id: selectedClass,
-        type: 'broadsheet',
-        filters: { class_id: selectedClass },
-        status: 'processing',
-        created_by: userData.user.id,
-      }).select().single()
-
-      if (error) throw error
-
-      toast.success('Report generated successfully!')
-      router.push(`/reports/preview?id=${report.id}`)
-    } catch (error) {
-      toast.error('Failed to generate report')
-    } finally {
-      setGenerating(false)
+    if (missingTemplates.length > 0) {
+      toast.error(`Assign a template to: ${missingTemplates.map(s => s.name).join(', ')}`)
+      return
     }
+    if (!isInstitution && !selectedTermId) {
+      toast.error('Please select a term')
+      return
+    }
+
+    setGenerating(true)
+    const formData = new FormData()
+    formData.append('group_id', selectedClass)
+    formData.append('type', 'broadsheet')
+    if (!isInstitution) formData.append('term_id', selectedTermId)
+
+    const result = await generateReport(formData)
+    setGenerating(false)
+
+    if (!result.success) {
+      toast.error(result.message || 'Failed to generate report')
+      return
+    }
+
+    toast.success('Report generated!')
+    router.push(`/reports/${result.reportId}`)
   }
 
   if (loading && classes.length === 0) {
@@ -179,6 +202,36 @@ export default function GenerateReportPage() {
         </div>
       </div>
 
+      {isInstitution ? (
+        currentTermName ? (
+          <div className="card p-4 bg-brand-50 border-brand-200 flex items-center justify-between">
+            <p className="text-sm text-ink">Generating for term: <strong>{currentTermName}</strong></p>
+            <Link href="/settings/academic" className="text-xs text-brand-600 hover:underline">Change term</Link>
+          </div>
+        ) : (
+          <div className="card p-4 bg-amber-50 border-amber-200">
+            <p className="text-sm text-amber-700">
+              No current term set. Ask your administrator to set one in{' '}
+              <Link href="/settings/academic" className="underline">Settings → Academic Periods</Link>.
+            </p>
+          </div>
+        )
+      ) : (
+        <div className="card p-4">
+          <label className="block text-xs font-medium text-ink mb-1">Term</label>
+          {terms.length === 0 ? (
+            <p className="text-sm text-ink-muted">
+              No terms set up yet. <Link href="/settings/academic" className="text-brand-500 hover:underline">Add one first</Link>.
+            </p>
+          ) : (
+            <select value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)} className="input max-w-xs">
+              <option value="">Select a term…</option>
+              {terms.map(t => <option key={t.id} value={t.id}>{t.session_name} — {t.name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header">
           <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
@@ -188,8 +241,12 @@ export default function GenerateReportPage() {
         <div className="px-5 py-4">
           {classes.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-ink-muted mb-2">No classes available</p>
-              <Link href="/classes/new" className="btn-primary btn-sm btn">Create a class first</Link>
+              <p className="text-sm text-ink-muted mb-2">No classes available to generate reports for</p>
+              {isInstitution ? (
+                <p className="text-xs text-ink-faint">Only classes where you are the class teacher are shown</p>
+              ) : (
+                <Link href="/classes/new" className="btn-primary btn-sm btn">Create a class first</Link>
+              )}
             </div>
           ) : (
             <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
@@ -209,7 +266,7 @@ export default function GenerateReportPage() {
               <FileText size={16} className="text-ink-muted" /> Step 2: Review Scores
             </h2>
             <div className="flex items-center gap-4 text-xs text-ink-muted">
-              <span><Users size={14} className="inline mr-1" />{learners.length} students</span>
+              <span><Users size={14} className="inline mr-1" />{learnerCount} students</span>
               <span><BookOpen size={14} className="inline mr-1" />{subjects.length} subjects</span>
               <span><CheckCircle size={14} className="inline mr-1 text-green-600" />{subjects.filter(s => s.is_complete).length} complete</span>
             </div>
@@ -231,6 +288,7 @@ export default function GenerateReportPage() {
                 <thead>
                   <tr className="border-b border-surface-200">
                     <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Subject</th>
+                    <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Template</th>
                     <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Scores</th>
                     <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Students</th>
                     <th className="text-center px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Status</th>
@@ -243,21 +301,22 @@ export default function GenerateReportPage() {
                         {subject.name}
                         {subject.code && <span className="text-xs text-ink-faint ml-2 font-mono">{subject.code}</span>}
                       </td>
+                      <td className="px-4 py-2 text-center">
+                        {subject.template_id ? (
+                          <span className="text-xs text-green-600">✓ Assigned</span>
+                        ) : (
+                          <span className="text-xs text-red-600 font-medium">⚠ Missing</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-center font-mono">{subject.score_count}</td>
-                      <td className="px-4 py-2 text-center font-mono">{subject.learner_count}/{learners.length}</td>
+                      <td className="px-4 py-2 text-center font-mono">{subject.learner_count}/{learnerCount}</td>
                       <td className="px-4 py-2 text-center">
                         {subject.is_complete ? (
-                          <span className="text-xs text-green-600 font-medium flex items-center justify-center gap-1">
-                            <CheckCircle size={12} /> Complete
-                          </span>
+                          <span className="text-xs text-green-600 font-medium flex items-center justify-center gap-1"><CheckCircle size={12} /> Complete</span>
                         ) : subject.score_count > 0 ? (
-                          <span className="text-xs text-amber-600 font-medium flex items-center justify-center gap-1">
-                            <AlertCircle size={12} /> Partial
-                          </span>
+                          <span className="text-xs text-amber-600 font-medium flex items-center justify-center gap-1"><AlertCircle size={12} /> Partial</span>
                         ) : (
-                          <span className="text-xs text-ink-faint flex items-center justify-center gap-1">
-                            <AlertCircle size={12} /> No scores
-                          </span>
+                          <span className="text-xs text-ink-faint flex items-center justify-center gap-1"><AlertCircle size={12} /> No scores</span>
                         )}
                       </td>
                     </tr>
@@ -267,15 +326,24 @@ export default function GenerateReportPage() {
             </div>
           )}
 
+          {missingTemplates.length > 0 && (
+            <div className="px-5 py-3 bg-red-50 border-t border-red-100">
+              <p className="text-xs text-red-700">
+                Assign a template to {missingTemplates.map(s => s.name).join(', ')} in{' '}
+                <Link href="/settings/subjects" className="underline">Settings → Subjects</Link> before generating.
+              </p>
+            </div>
+          )}
+
           <div className="px-5 py-4 border-t border-surface-100 flex items-center justify-between">
             <span className={`text-xs font-medium flex items-center gap-1 ${hasScores ? 'text-green-600' : 'text-amber-600'}`}>
-              {hasScores
-                ? <><CheckCircle size={14} /> Scores found</>
-                : <><AlertCircle size={14} /> No scores found</>
-              }
+              {hasScores ? <><CheckCircle size={14} /> Scores found</> : <><AlertCircle size={14} /> No scores found</>}
             </span>
-            <button onClick={handleGenerateReport} disabled={generating || !hasScores || subjects.length === 0}
-              className="btn-primary btn flex items-center gap-2">
+            <button
+              onClick={handleGenerateReport}
+              disabled={generating || !hasScores || subjects.length === 0 || missingTemplates.length > 0 || (isInstitution && !currentTermName) || (!isInstitution && !selectedTermId)}
+              className="btn-primary btn flex items-center gap-2"
+            >
               {generating ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : <><FileText size={16} /> Generate Now</>}
             </button>
           </div>

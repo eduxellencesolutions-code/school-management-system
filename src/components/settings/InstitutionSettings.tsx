@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette } from 'lucide-react'
+import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette, PenTool } from 'lucide-react'
 
 interface Organization {
   id: string
@@ -14,6 +14,7 @@ interface Organization {
   motto: string | null
   logo_url: string | null
   principal_name: string | null
+  principal_title: string | null
   principal_signature_url: string | null
   teacher_signature_url: string | null
   address: string | null
@@ -54,6 +55,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     website: organization?.website || '',
     established_year: organization?.established_year || '',
     principal_name: organization?.principal_name || '',
+    principal_title: organization?.principal_title || 'Principal',
     primary_color: organization?.colors?.primary || '#1a56db',
     secondary_color: organization?.colors?.secondary || '#0f766e',
     show_attendance: organization?.report_card_settings?.show_attendance ?? true,
@@ -65,11 +67,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     pass_mark: organization?.report_card_settings?.pass_mark || 40,
   })
 
-  const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logo_url || null)
-  const [principalSigFile, setPrincipalSigFile] = useState<File | null>(null)
   const [principalSigPreview, setPrincipalSigPreview] = useState<string | null>(organization?.principal_signature_url || null)
-  const [teacherSigFile, setTeacherSigFile] = useState<File | null>(null)
   const [teacherSigPreview, setTeacherSigPreview] = useState<string | null>(organization?.teacher_signature_url || null)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -84,22 +83,38 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     if (!file) return
 
     setUploading(true)
+    const loadingToast = toast.loading(`Uploading ${type === 'logo' ? 'logo' : 'signature'}...`)
+
     try {
       const fileExt = file.name.split('.').pop()
-      const fileName = `${userId}/${type}_${Date.now()}.${fileExt}`
-      const filePath = `institutions/${organization.id}/${fileName}`
+      const fileName = `${type}_${Date.now()}.${fileExt}`
+      const filePath = `${organization.id}/${fileName}`
+
+      console.log('Uploading to path:', filePath)
 
       // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('institution-assets')
-        .upload(filePath, file)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        toast.dismiss(loadingToast)
+        toast.error('Upload failed: ' + uploadError.message)
+        return
+      }
+
+      console.log('Upload successful:', uploadData)
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('institution-assets')
         .getPublicUrl(filePath)
+
+      console.log('Public URL:', publicUrl)
 
       // Update organization
       const updateData: any = {}
@@ -119,13 +134,20 @@ export default function InstitutionSettings({ organization, userId }: Props) {
         .update(updateData)
         .eq('id', organization.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Update error:', updateError)
+        toast.dismiss(loadingToast)
+        toast.error('Failed to save URL: ' + updateError.message)
+        return
+      }
 
+      toast.dismiss(loadingToast)
       toast.success(`${type === 'logo' ? 'Logo' : 'Signature'} uploaded successfully!`)
       router.refresh()
     } catch (error) {
       console.error('Upload error:', error)
-      toast.error('Failed to upload file')
+      toast.dismiss(loadingToast)
+      toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setUploading(false)
     }
@@ -145,6 +167,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
         website: formData.website,
         established_year: formData.established_year ? parseInt(formData.established_year as string) : null,
         principal_name: formData.principal_name,
+        principal_title: formData.principal_title,
         colors: {
           primary: formData.primary_color,
           secondary: formData.secondary_color
@@ -346,8 +369,9 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) {
-                    setLogoFile(file)
-                    setLogoPreview(URL.createObjectURL(file))
+                    // Show preview immediately
+                    const previewUrl = URL.createObjectURL(file)
+                    setLogoPreview(previewUrl)
                     handleFileUpload(file, 'logo')
                   }
                 }}
@@ -394,8 +418,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        setPrincipalSigFile(file)
-                        setPrincipalSigPreview(URL.createObjectURL(file))
+                        const previewUrl = URL.createObjectURL(file)
+                        setPrincipalSigPreview(previewUrl)
                         handleFileUpload(file, 'principal_sig')
                       }
                     }}
@@ -435,8 +459,8 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (file) {
-                        setTeacherSigFile(file)
-                        setTeacherSigPreview(URL.createObjectURL(file))
+                        const previewUrl = URL.createObjectURL(file)
+                        setTeacherSigPreview(previewUrl)
                         handleFileUpload(file, 'teacher_sig')
                       }
                     }}
@@ -451,16 +475,35 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
-          <input
-            type="text"
-            name="principal_name"
-            value={formData.principal_name}
-            onChange={handleChange}
-            className="input max-w-md"
-            placeholder="e.g. Dr. John Doe"
-          />
+        {/* ✅ Updated: Two-column row for Principal's Name + Title */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
+            <input
+              type="text"
+              name="principal_name"
+              value={formData.principal_name}
+              onChange={handleChange}
+              className="input"
+              placeholder="e.g. Dr. John Doe"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink mb-1">Title</label>
+            <select
+              name="principal_title"
+              value={formData.principal_title}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="Principal">Principal</option>
+              <option value="Head Teacher">Head Teacher</option>
+              <option value="Headmaster">Headmaster</option>
+              <option value="Headmistress">Headmistress</option>
+              <option value="Proprietor">Proprietor</option>
+              <option value="Proprietress">Proprietress</option>
+            </select>
+          </div>
         </div>
       </div>
 

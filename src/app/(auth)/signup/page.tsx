@@ -8,14 +8,19 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { Eye, EyeOff } from 'lucide-react'
 
 const schema = z.object({
   name:         z.string().min(2, 'Enter your full name'),
   email:        z.string().email('Enter a valid email'),
   password:     z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string().min(8, 'Please confirm your password'),
   account_type: z.enum(['individual', 'organization']),
   org_name:     z.string().optional(),
   org_type:     z.enum(['school', 'university', 'centre']).optional(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword'],
 }).refine(data => {
   if (data.account_type === 'organization' && !data.org_name?.trim()) {
     return false
@@ -32,6 +37,8 @@ export default function SignupPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -39,20 +46,20 @@ export default function SignupPage() {
   })
 
   const accountType = watch('account_type')
+  const password = watch('password')
+  const confirmPassword = watch('confirmPassword')
 
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
       const supabase = createClient()
 
-      // ── Build metadata — trigger reads this to create org + set role ──
       const metadata: Record<string, string> = {
         name: data.name.trim(),
         role: data.account_type === 'organization' ? 'admin' : 'teacher',
       }
 
       if (data.account_type === 'organization' && data.org_name) {
-        // Trigger will create the org and link it to the user automatically
         metadata.organization_name = data.org_name.trim()
         metadata.organization_type = data.org_type ?? 'school'
       }
@@ -66,20 +73,17 @@ export default function SignupPage() {
       if (authError) throw new Error(authError.message)
       if (!authData.user) throw new Error('Signup failed — please try again')
 
-      // Check if email confirmation is required
       if (authData.session === null && authData.user.identities?.length === 0) {
         toast.error('An account with this email already exists.')
         return
       }
 
       if (authData.session === null) {
-        // Email confirmation required
         toast.success('Account created! Check your email to confirm before logging in.')
         router.push('/login?msg=confirm_email')
         return
       }
 
-      // Session created immediately (email confirmation disabled)
       toast.success(
         data.account_type === 'organization'
           ? `Welcome! Your school "${data.org_name}" has been set up.`
@@ -142,17 +146,61 @@ export default function SignupPage() {
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
             </div>
 
+            {/* ✅ Password with Eye Toggle */}
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Password</label>
-              <input type="password" placeholder="At least 8 characters" className="input" {...register('password')} />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="At least 8 characters"
+                  className="input pr-10"
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
+            </div>
+
+            {/* ✅ Confirm Password with Eye Toggle */}
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm your password"
+                  className="input pr-10"
+                  {...register('confirmPassword')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {errors.confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">{errors.confirmPassword.message}</p>
+              )}
+              {password && confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+              )}
+              {password && confirmPassword && password === confirmPassword && (
+                <p className="text-xs text-green-500 mt-1">✓ Passwords match</p>
+              )}
             </div>
 
             {accountType === 'organization' ? (
               <button
                 type="button"
                 onClick={async () => {
-                  const valid = await trigger(['name', 'email', 'password', 'account_type'])
+                  const valid = await trigger(['name', 'email', 'password', 'confirmPassword', 'account_type'])
                   if (valid) setStep(2)
                 }}
                 className="btn-primary btn mt-2"

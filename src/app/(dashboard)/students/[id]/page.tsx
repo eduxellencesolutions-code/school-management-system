@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import StudentEditForm from '@/components/students/StudentEditForm'
 import StudentScoreHistory from '@/components/students/StudentScoreHistory'
+import DeleteStudentButton from '@/components/students/DeleteStudentButton'
 
 interface Props { 
   params: Promise<{ id: string }> 
@@ -16,15 +17,22 @@ export default async function StudentDetailPage({ params }: Props) {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
-  const { data: learner } = await supabase
+  // FIX: Using correct foreign key names from the database
+  // - group:groups!learners_group_id_fkey (FK from learners.group_id → groups.id)
+  // - organization:organizations!learners_organization_id_fkey (FK from learners.organization_id → organizations.id)
+  const { data: learner, error: learnerError } = await supabase
     .from('learners')
     .select(`
       *,
-      group:groups(id, name, code),
-      organization:organizations(name)
+      group:groups!learners_group_id_fkey(id, name, code),
+      organization:organizations!learners_organization_id_fkey(name)
     `)
     .eq('id', id)
     .single()
+
+  if (learnerError) {
+    console.error('Error fetching learner:', learnerError)
+  }
 
   if (!learner) notFound()
 
@@ -92,12 +100,19 @@ export default async function StudentDetailPage({ params }: Props) {
             </span>
           </div>
         </div>
-        <Link
-          href={`/scores?class=${group?.id}&student=${learner.id}`}
-          className="btn-primary btn-sm btn shrink-0"
-        >
-          Enter scores
-        </Link>
+        {/* ✅ Updated: Added DeleteStudentButton next to Enter scores */}
+        <div className="flex gap-2 shrink-0">
+          <Link
+            href={`/scores?class=${group?.id}&student=${learner.id}`}
+            className="btn-primary btn-sm btn"
+          >
+            Enter scores
+          </Link>
+          <DeleteStudentButton
+            studentId={learner.id}
+            studentName={`${learner.first_name} ${learner.last_name}`}
+          />
+        </div>
       </div>
 
       {/* Quick stats */}

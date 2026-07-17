@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, FileText, Download, Clock, CheckCircle, XCircle } from 'lucide-react'
-import ReportGenerator from '@/components/reports/ReportGenerator'
+import { Plus, FileText, Download, Clock, CheckCircle, XCircle, Archive } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 
 export const runtime = 'nodejs'
@@ -12,8 +11,9 @@ export default async function ReportsPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // FIX: Added !users_organization_id_fkey to resolve ambiguous relation
   const { data: profile } = await supabase
-    .from('users').select('*, organization:organizations(*)')
+    .from('users').select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id).single()
 
   const orgId = profile?.organization_id
@@ -21,33 +21,78 @@ export default async function ReportsPage() {
   const isInstitution = profile?.organization?.type === 'school' &&
     profile?.organization?.subscription_status === 'active'
 
-  // Fetch reports — institution sees org reports, solo teacher sees own
-  const { data: reports } = await (orgId
-    ? supabase.from('reports')
-        .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
-        .eq('organization_id', orgId).order('created_at', { ascending: false })
-    : supabase.from('reports')
-        .select('*, group:groups(name), learner:learners(first_name, last_name), created_by_user:users(name)')
-        .eq('created_by', authUser.id).order('created_at', { ascending: false })
-  )
+  // Determine delete permissions
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isSolo = !profile?.organization_id
 
-  // Fetch classes - fix the nested relations
-  const { data: classes } = await (orgId
+  let myClassTeacherOf: string[] = []
+  if (!isSolo && !isAdmin) {
+    const { data: assignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id')
+      .eq('teacher_id', authUser.id)
+      .eq('role', 'class_teacher')
+    myClassTeacherOf = (assignments ?? []).map(a => a.class_id).filter(Boolean)
+  }
+
+  // ✅ FIXED: Three-branch reports fetch with proper scoping
+  let reports, reportsError
+
+  if (orgId && isAdmin) {
+    // Admin sees all reports in the organization (excluding archived)
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .neq('report_status', 'archived')
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else if (orgId && !isAdmin) {
+    // Institution teacher (non-admin) sees: reports they created + reports for classes they're class teacher of (excluding archived)
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .neq('report_status', 'archived')
+      .or(`created_by.eq.${authUser.id},group_id.in.(${myClassTeacherOf.length > 0 ? myClassTeacherOf.join(',') : '00000000-0000-0000-0000-000000000000'})`)
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else {
+    // Solo teacher sees only their own reports (excluding archived)
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('created_by', authUser.id)
+      .eq('deleted', false)
+      .neq('report_status', 'archived')
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  }
+
+  if (reportsError) {
+    console.error('Error fetching reports:', reportsError)
+  }
+
+  // ✅ FIXED: Fetch classes - removed !inner from both queries
+  const { data: classes, error: classesError } = await (orgId
     ? supabase.from('groups').select(`
         id, 
         name, 
-        session:academic_sessions!inner(name),
-        term:terms!inner(name)
+        session:academic_sessions(name),
+        term:terms(name)
       `)
         .eq('organization_id', orgId).eq('is_active', true).order('name')
     : supabase.from('groups').select(`
         id, 
         name, 
-        session:academic_sessions!inner(name),
-        term:terms!inner(name)
+        session:academic_sessions(name),
+        term:terms(name)
       `)
         .eq('instructor_id', authUser.id).eq('is_active', true).order('name')
   )
+
+  if (classesError) {
+    console.error('Error fetching classes:', classesError)
+  }
 
   // Transform the data to extract the first item from arrays
   const transformedClasses = (classes || []).map((cls: any) => ({
@@ -55,11 +100,6 @@ export default async function ReportsPage() {
     session: Array.isArray(cls.session) ? cls.session[0] : cls.session,
     term: Array.isArray(cls.term) ? cls.term[0] : cls.term,
   }))
-
-  // Fetch org for ReportGenerator
-  const { data: org } = orgId
-    ? await supabase.from('organizations').select('*').eq('id', orgId).single()
-    : { data: null }
 
   const totalReports = reports?.length ?? 0
   const completedReports = reports?.filter(r => r.status === 'ready').length ?? 0
@@ -87,11 +127,16 @@ export default async function ReportsPage() {
           <h1 className="page-title">Reports</h1>
           <p className="page-subtitle">View and manage all generated reports</p>
         </div>
-        {classes && classes.length > 0 && (
-          <Link href="/reports/generate" className="btn-primary btn">
-            <Plus size={15} /> Generate New Report
+        <div className="flex items-center gap-2">
+          {classes && classes.length > 0 && (
+            <Link href="/reports/generate" className="btn-primary btn">
+              <Plus size={15} /> Generate New Report
+            </Link>
+          )}
+          <Link href="/reports/archive" className="btn-secondary btn">
+            <Archive size={15} /> View Archive
           </Link>
-        )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -100,8 +145,6 @@ export default async function ReportsPage() {
         <div className="stat-card border-amber-200"><div className="stat-value text-amber-600">{processingReports}</div><div className="stat-label">Processing</div></div>
         <div className="stat-card border-red-200"><div className="stat-value text-red-600">{failedReports}</div><div className="stat-label">Failed</div></div>
       </div>
-
-      <ReportGenerator groups={transformedClasses || []} org={org || null} userId={authUser.id} userRole={userRole} />
 
       <div className="card">
         <div className="card-header">
@@ -112,6 +155,11 @@ export default async function ReportsPage() {
             {reports.map((report) => {
               const groupName = (report.group as { name: string } | null)?.name || '—'
               const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
+              
+              // ✅ FIXED: Only admins and solo teachers can delete
+              const groupId = (report.group as { id: string } | null)?.id
+              const canDelete = isAdmin || isSolo
+              
               return (
                 <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
                   <div className="flex items-center gap-4">
@@ -137,8 +185,13 @@ export default async function ReportsPage() {
                         <Download size={14} /> Download
                       </a>
                     )}
-                    <Link href={`/reports/preview?id=${report.id}`} className="btn-primary btn-sm btn">View</Link>
-                    <DeleteReportButton reportId={report.id} reportName={groupName} />
+                    {/* FIX: Changed from /reports/preview?id= to /reports/ for the consolidated view */}
+                    <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
+                    <DeleteReportButton 
+                      reportId={report.id} 
+                      reportName={groupName} 
+                      canDelete={canDelete}
+                    />
                   </div>
                 </div>
               )

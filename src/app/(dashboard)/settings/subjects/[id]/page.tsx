@@ -17,13 +17,28 @@ export default async function EditSubjectPage({ params }: Props) {
     .from('users').select('organization_id').eq('id', user.id).single()
   const orgId = profile?.organization_id
 
-  const [{ data: subject }, { data: groups }, { data: templates }] = await Promise.all([
-    supabase.from('subjects').select('*').eq('id', id).single(),
-    supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name'),
-    supabase.from('assessment_templates').select('id, name, is_default').eq('organization_id', orgId).order('name'),
-  ])
-
+  const { data: subject } = await supabase.from('subjects').select('*').eq('id', id).single()
   if (!subject) notFound()
+
+  let groups, templates
+
+  if (orgId) {
+    // ✅ Institution: scope to org
+    const [{ data: g }, { data: t }] = await Promise.all([
+      supabase.from('groups').select('id, name').eq('organization_id', orgId).eq('is_active', true).order('name'),
+      supabase.from('assessment_templates').select('id, name, is_default').eq('organization_id', orgId).order('name'),
+    ])
+    groups = g
+    templates = t
+  } else {
+    // ✅ Solo teacher: scope to their own classes, and templates with organization_id IS NULL
+    const [{ data: g }, { data: t }] = await Promise.all([
+      supabase.from('groups').select('id, name').eq('instructor_id', user.id).eq('is_active', true).order('name'),
+      supabase.from('assessment_templates').select('id, name, is_default').is('organization_id', null).order('name'),
+    ])
+    groups = g
+    templates = t
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">

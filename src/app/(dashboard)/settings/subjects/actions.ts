@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { canCreateSubject, AccountRef } from '@/lib/plans/gating'
 
 export async function createSubject(formData: FormData) {
   const supabase = await createClient()
@@ -9,61 +10,73 @@ export async function createSubject(formData: FormData) {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('organization_id').eq('id', user.id).single()
+    .from('users').select('organization_id, subscription_plan').eq('id', user.id).single()
 
   const name       = (formData.get('name') as string)?.trim()
   const code       = (formData.get('code') as string)?.trim()
   const groupId    = formData.get('group_id') as string
   const templateId = formData.get('template_id') as string
-
   if (!name || !groupId) return
 
-  await supabase.from('subjects').insert({
+  const { data: group } = await supabase
+    .from('groups')
+    .select('id, instructor_id, organization_id')
+    .eq('id', groupId)
+    .single()
+
+  if (!group) {
+    console.error('Group not found:', groupId)
+    return
+  }
+
+  if (profile?.organization_id) {
+    if (group.organization_id !== profile.organization_id) {
+      console.error('Group does not belong to this organization')
+      return
+    }
+  } else {
+    if (group.instructor_id !== user.id) {
+      console.error('Group does not belong to this teacher')
+      return
+    }
+  }
+
+  // Gate: check subject limit before inserting.
+  // Institutions use org-level plan, solo teachers use their own plan.
+  let plan: string
+  let ref: AccountRef
+  if (profile?.organization_id) {
+    const { data: org } = await supabase
+      .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+    plan = org?.subscription_plan ?? 'free'
+    ref = { type: 'org', orgId: profile.organization_id }
+  } else {
+    plan = profile?.subscription_plan ?? 'free'
+    ref = { type: 'solo', userId: user.id }
+  }
+
+  const gate = await canCreateSubject(plan, ref)
+  if (!gate.allowed) {
+    console.error('Subject limit gate blocked creation:', gate.reason)
+    redirect(`/settings/subjects?error=${encodeURIComponent(gate.reason ?? 'Limit reached')}`)
+  }
+
+  const { error } = await supabase.from('subjects').insert({
     organization_id: profile?.organization_id ?? null,
     group_id:        groupId,
     name,
     code:            code || null,
     template_id:     templateId || null,
-    // For solo teachers, store instructor_id for RLS
     instructor_id:   profile?.organization_id ? null : user.id,
     is_active:       true,
   })
 
-  revalidatePath('/settings/subjects')
-  revalidatePath(`/classes/${groupId}`)
-  redirect('/settings/subjects')
-}
-
-export async function updateSubject(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const id         = formData.get('id') as string
-  const name       = (formData.get('name') as string)?.trim()
-  const code       = (formData.get('code') as string)?.trim()
-  const groupId    = formData.get('group_id') as string
-  const templateId = formData.get('template_id') as string
-
-  if (!name || !groupId || !id) return
-
-  await supabase.from('subjects').update({
-    name,
-    code:        code || null,
-    group_id:    groupId,
-    template_id: templateId || null,
-  }).eq('id', id)
+  if (error) {
+    console.error('Error creating subject:', error)
+    return
+  }
 
   revalidatePath('/settings/subjects')
   revalidatePath(`/classes/${groupId}`)
-  redirect('/settings/subjects')
-}
-
-export async function deleteSubject(formData: FormData) {
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  if (!id) return
-  await supabase.from('subjects').update({ is_active: false }).eq('id', id)
-  revalidatePath('/settings/subjects')
   redirect('/settings/subjects')
 }

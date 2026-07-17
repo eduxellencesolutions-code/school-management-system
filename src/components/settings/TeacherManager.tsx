@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Trash2, Upload, Download, User, BookOpen, Users, Crown, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { Plus, Trash2, Upload, Download, User, BookOpen, Users, Crown, X, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createClient } from '@/lib/supabase/client'
 
 interface Teacher {
   id: string
   name: string
   email: string
   role: string
+  signature_url: string | null
   teacher_assignments: Assignment[]
 }
 
@@ -17,14 +20,14 @@ interface Assignment {
   class_id: string | null
   subject_id: string | null
   role: string
-  groups: { id: string; name: string } | null
-  subjects: { id: string; name: string } | null
+  groups: { id: string; name: string } | { id: string; name: string }[] | null
+  subjects: { id: string; name: string } | { id: string; name: string }[] | null
 }
 
 interface Props {
   teachers: Teacher[]
   classes: { id: string; name: string }[]
-  subjects: { id: string; name: string; group_id: string; group?: { name: string } }[]
+  subjects: { id: string; name: string; group_id: string; group: { name: string } | null }[]
 }
 
 export default function TeacherManager({ teachers, classes, subjects }: Props) {
@@ -35,26 +38,60 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
   const [role, setRole] = useState<string>('subject_teacher')
   const [uploading, setUploading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  const [localTeachers, setLocalTeachers] = useState<Teacher[]>(teachers)
+  const [loading, setLoading] = useState(false)
+
+  // ✅ Sync when props change
+  useEffect(() => {
+    setLocalTeachers(teachers)
+  }, [teachers])
 
   // Get subjects for a specific class
   const getClassSubjects = (classId: string) => {
     return subjects.filter(s => s.group_id === classId)
   }
 
+  // ✅ Signature upload handler
+  async function handleSignatureUpload(teacherId: string, file: File) {
+    const supabase = createClient()
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `signatures/staff/${teacherId}-${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('signatures')
+        .upload(path, file, { upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
+
+      const { updateTeacherSignature } = await import('@/app/(dashboard)/settings/teachers/actions')
+      const formData = new FormData()
+      formData.append('teacher_id', teacherId)
+      formData.append('signature_url', publicUrl)
+      await updateTeacherSignature(formData)
+
+      toast.success('Signature updated')
+      window.location.reload()
+    } catch (err) {
+      console.error('Signature upload error:', err)
+      toast.error('Failed to upload signature')
+    }
+  }
+
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault()
+    
     if (!selectedTeacher) return toast.error('Select a teacher')
 
-    // Validate: If role is class_teacher, must select a class
     if (role === 'class_teacher' && !selectedClass) {
       return toast.error('Class teacher must be assigned to a class')
     }
 
-    // Validate: If role is subject_teacher, must select a subject
     if (role === 'subject_teacher' && !selectedSubject) {
       return toast.error('Subject teacher must be assigned to a subject')
     }
 
+    setLoading(true)
     try {
       const formData = new FormData()
       formData.append('teacher_id', selectedTeacher)
@@ -62,18 +99,25 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       formData.append('subject_id', selectedSubject || '')
       formData.append('role', role)
 
+      // ✅ FIXED: Correct import path to actions file
       const { assignTeacher } = await import('@/app/(dashboard)/settings/teachers/actions')
       await assignTeacher(formData)
+      
       toast.success('Teacher assigned successfully!')
+      
+      // ✅ Refresh the page to show updated assignments
+      window.location.reload()
+      
       setIsAdding(false)
-      // Reset form
       setSelectedTeacher('')
       setSelectedClass('')
       setSelectedSubject('')
       setRole('subject_teacher')
     } catch (error) {
+      console.error('Assignment error:', error)
       toast.error('Failed to assign teacher')
-      console.error(error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -83,12 +127,18 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
     try {
       const formData = new FormData()
       formData.append('assignment_id', assignmentId)
+      
+      // ✅ FIXED: Correct import path to actions file
       const { removeAssignment } = await import('@/app/(dashboard)/settings/teachers/actions')
       await removeAssignment(formData)
+      
       toast.success('Assignment removed')
+      
+      // ✅ Refresh to show updated assignments
+      window.location.reload()
     } catch (error) {
+      console.error('Remove assignment error:', error)
       toast.error('Failed to remove assignment')
-      console.error(error)
     }
   }
 
@@ -101,15 +151,21 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       const formData = new FormData()
       formData.append('file', file)
 
+      // ✅ FIXED: Correct import path to actions file
       const { uploadTeachers } = await import('@/app/(dashboard)/settings/teachers/actions')
       await uploadTeachers(formData)
+      
       toast.success('Teachers uploaded successfully!')
       setShowUpload(false)
+      
+      // ✅ Refresh to show new teachers
+      window.location.reload()
     } catch (error) {
+      console.error('Upload error:', error)
       toast.error('Failed to upload teachers')
-      console.error(error)
+    } finally {
+      setUploading(false)
     }
-    setUploading(false)
   }
 
   async function handleDownloadTemplate() {
@@ -126,9 +182,27 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       URL.revokeObjectURL(url)
       toast.success('Template downloaded')
     } catch (error) {
+      console.error('Template download error:', error)
       toast.error('Failed to download template')
-      console.error(error)
     }
+  }
+
+  // ✅ Helper to get display name from groups
+  const getGroupDisplayName = (groups: any): string | null => {
+    if (!groups) return null
+    if (Array.isArray(groups)) {
+      return groups[0]?.name || null
+    }
+    return groups.name || null
+  }
+
+  // ✅ Helper to get display name from subjects
+  const getSubjectDisplayName = (subjects: any): string | null => {
+    if (!subjects) return null
+    if (Array.isArray(subjects)) {
+      return subjects[0]?.name || null
+    }
+    return subjects.name || null
   }
 
   return (
@@ -136,7 +210,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
       <div className="card-header flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="font-semibold text-sm text-ink">All Teachers</h2>
-          <p className="text-xs text-ink-muted">{teachers.length} teacher{teachers.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-ink-muted">{localTeachers.length} teacher{localTeachers.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -151,8 +225,11 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
           >
             <Upload size={13} /> Upload CSV
           </button>
-          <button onClick={() => setIsAdding(true)} className="btn-primary btn-sm btn">
-            <Plus size={13} /> Assign Teacher
+          <Link href="/settings/teachers/new" className="btn-primary btn-sm btn">
+            <Plus size={13} /> Add Teacher
+          </Link>
+          <button onClick={() => setIsAdding(!isAdding)} className="btn-primary btn-sm btn">
+            <Plus size={13} /> {isAdding ? 'Cancel' : 'Assign Teacher'}
           </button>
         </div>
       </div>
@@ -198,10 +275,13 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                 required
               >
                 <option value="">Select teacher…</option>
-                {teachers.map(t => (
+                {localTeachers.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
+              {localTeachers.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">⚠️ No teachers found. Add a teacher first.</p>
+              )}
             </div>
 
             <div>
@@ -227,7 +307,6 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                 value={selectedClass}
                 onChange={e => {
                   setSelectedClass(e.target.value)
-                  // Clear subject if class changes
                   if (selectedSubject) {
                     const classSubjects = getClassSubjects(e.target.value)
                     if (!classSubjects.find(s => s.id === selectedSubject)) {
@@ -278,7 +357,9 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
             </div>
 
             <div className="flex items-end gap-2">
-              <button type="submit" className="btn-primary btn-sm btn w-full">Assign</button>
+              <button type="submit" disabled={loading} className="btn-primary btn-sm btn w-full">
+                {loading ? 'Assigning...' : 'Assign'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -299,16 +380,16 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
 
       {/* Teacher List */}
       <div className="divide-y divide-surface-200">
-        {teachers.length === 0 ? (
+        {localTeachers.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <User size={40} className="text-surface-200 mx-auto mb-3" />
             <p className="text-sm text-ink-muted mb-2">No teachers added yet</p>
             <p className="text-xs text-ink-faint">
-              Upload a CSV file or assign teachers manually
+              Upload a CSV file or add teachers manually using the "Add Teacher" button.
             </p>
           </div>
         ) : (
-          teachers.map(teacher => {
+          localTeachers.map(teacher => {
             // Find if this teacher is a class teacher
             const classTeacherAssignment = teacher.teacher_assignments?.find(a => a.role === 'class_teacher')
             const subjectAssignments = teacher.teacher_assignments?.filter(a => a.role === 'subject_teacher') || []
@@ -316,8 +397,31 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
             return (
               <div key={teacher.id} className="px-5 py-4 hover:bg-surface-50 transition-colors">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
-                    {teacher.name.slice(0, 2).toUpperCase()}
+                  {/* ✅ Signature display with upload overlay */}
+                  <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 relative group/sig">
+                    {teacher.signature_url ? (
+                      <img 
+                        src={teacher.signature_url} 
+                        alt={`${teacher.name} signature`} 
+                        className="w-full h-full object-contain bg-white border border-surface-200 rounded" 
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">
+                        {teacher.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <label className="absolute inset-0 bg-black/50 opacity-0 group-hover/sig:opacity-100 transition-opacity flex items-center justify-center cursor-pointer rounded">
+                      <Upload size={12} className="text-white" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0]
+                          if (f) handleSignatureUpload(teacher.id, f)
+                        }}
+                      />
+                    </label>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-ink">{teacher.name}</p>
@@ -338,45 +442,54 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                   </div>
                 </div>
 
-                {/* Assignments */}
-                {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 && (
+                {/* ✅ Display Assignments */}
+                {teacher.teacher_assignments && teacher.teacher_assignments.length > 0 ? (
                   <div className="ml-13 flex flex-wrap gap-2">
-                    {teacher.teacher_assignments.map(assignment => (
-                      <div
-                        key={assignment.id}
-                        className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs border ${
-                          assignment.role === 'class_teacher' 
-                            ? 'bg-amber-50 border-amber-200' 
-                            : 'bg-surface-50 border-surface-200'
-                        }`}
-                      >
-                        {assignment.role === 'class_teacher' && (
-                          <Crown size={12} className="text-amber-500" />
-                        )}
-                        {assignment.role === 'subject_teacher' && (
-                          <BookOpen size={12} className="text-green-500" />
-                        )}
-                        {assignment.groups?.name && (
-                          <span className="font-medium">{assignment.groups.name}</span>
-                        )}
-                        {assignment.groups?.name && assignment.subjects?.name && (
-                          <span className="text-ink-faint">·</span>
-                        )}
-                        {assignment.subjects?.name && (
-                          <span>{assignment.subjects.name}</span>
-                        )}
-                        {assignment.role === 'class_teacher' && (
-                          <span className="text-[10px] text-amber-600 font-medium ml-1">(Class Teacher)</span>
-                        )}
-                        <button
-                          onClick={() => handleRemoveAssignment(assignment.id)}
-                          className="ml-1 p-0.5 text-ink-faint hover:text-red-500 transition-colors"
-                          title="Remove assignment"
+                    {teacher.teacher_assignments.map(assignment => {
+                      const groupName = getGroupDisplayName(assignment.groups)
+                      const subjectName = getSubjectDisplayName(assignment.subjects)
+
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs border ${
+                            assignment.role === 'class_teacher' 
+                              ? 'bg-amber-50 border-amber-200' 
+                              : 'bg-surface-50 border-surface-200'
+                          }`}
                         >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    ))}
+                          {assignment.role === 'class_teacher' && (
+                            <Crown size={12} className="text-amber-500" />
+                          )}
+                          {assignment.role === 'subject_teacher' && (
+                            <BookOpen size={12} className="text-green-500" />
+                          )}
+                          {groupName && (
+                            <span className="font-medium">{groupName}</span>
+                          )}
+                          {groupName && subjectName && (
+                            <span className="text-ink-faint">·</span>
+                          )}
+                          {subjectName && (
+                            <span>{subjectName}</span>
+                          )}
+                          {assignment.role === 'class_teacher' && (
+                            <span className="text-[10px] text-amber-600 font-medium ml-1">(Class Teacher)</span>
+                          )}
+                          <button
+                            onClick={() => handleRemoveAssignment(assignment.id)}
+                            className="ml-1 p-0.5 text-ink-faint hover:text-red-500 transition-colors"
+                            title="Remove assignment"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="ml-13 text-xs text-ink-faint italic">
+                    No assignments yet. Click "Assign Teacher" to add.
                   </div>
                 )}
               </div>

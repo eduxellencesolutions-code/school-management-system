@@ -83,7 +83,7 @@ export default async function TeacherDashboardPage() {
                   <div>
                     <p className="font-medium text-sm text-ink">{subj.name}</p>
                     <p className="text-xs text-ink-muted">
-                      {subj.group?.name || 'No class'} {subj.code && `· ${subj.code}`}
+                      {(Array.isArray(subj.group) ? (subj.group as any[])[0]?.name : (subj.group as any)?.name) || 'No class'} {subj.code && `· ${subj.code}`}
                     </p>
                   </div>
                   <div className="flex gap-2">

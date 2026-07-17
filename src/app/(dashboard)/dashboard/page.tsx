@@ -9,8 +9,9 @@ export default async function DashboardPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser()
   if (!authUser) redirect('/login')
 
+  // FIX: Added !users_organization_id_fkey to resolve ambiguous relation
   const { data: user } = await supabase
-    .from('users').select('*, organization:organizations(*)').eq('id', authUser.id).single()
+    .from('users').select('*, organization:organizations!users_organization_id_fkey(*)').eq('id', authUser.id).single()
 
   const orgId = user?.organization_id
   const userRole = user?.role || 'teacher'
@@ -207,6 +208,10 @@ export default async function DashboardPage() {
     assignedClasses = teacherData.classes || []
     assignedSubjects = teacherData.subjects || []
     
+    // ✅ Determine if teacher has only subjects (no classes)
+    const hasClassesAsTeacher = assignedClasses.length > 0
+    const hasSubjectsOnly = assignedClasses.length === 0 && assignedSubjects.length > 0
+    
     groupCount = assignedClasses.length
     learnerCount = 0
     scoreCount = 0
@@ -238,7 +243,7 @@ export default async function DashboardPage() {
       .eq('status', 'ready')
     reportCount = rCount || 0
 
-    // Recent groups (classes)
+    // Recent groups (classes) - only if they have classes
     recentGroups = assignedClasses.slice(0, 5)
 
     // Get report status for recent groups
@@ -288,11 +293,21 @@ export default async function DashboardPage() {
     }
   }
 
+  // ✅ Contextual stats for subjects-only teachers
+  const hasSubjectsOnly = isInstitutionTeacher && assignedClasses.length === 0 && assignedSubjects.length > 0
+
   const stats = [
-    { label: 'Classes',        value: groupCount   ?? 0, icon: BookOpen,      href: '/classes',  color: 'text-brand-500',  bg: 'bg-brand-50' },
-    { label: 'Students',       value: learnerCount ?? 0, icon: Users,         href: '/students', color: 'text-green-600',  bg: 'bg-green-50' },
-    { label: 'Scores entered', value: scoreCount   ?? 0, icon: ClipboardList, href: '/scores',   color: 'text-amber-600',  bg: 'bg-amber-50' },
-    { label: 'Reports ready',  value: reportCount  ?? 0, icon: FileText,      href: '/reports',  color: 'text-purple-600', bg: 'bg-purple-50' },
+    { 
+      label: hasSubjectsOnly ? 'Subjects' : 'Classes', 
+      value: hasSubjectsOnly ? assignedSubjects.length : (groupCount ?? 0), 
+      icon: BookOpen, 
+      href: hasSubjectsOnly ? '/settings/subjects' : '/classes', 
+      color: 'text-brand-500', 
+      bg: 'bg-brand-50' 
+    },
+    { label: 'Students', value: learnerCount ?? 0, icon: Users, href: '/students', color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Scores entered', value: scoreCount ?? 0, icon: ClipboardList, href: '/scores', color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Reports ready', value: reportCount ?? 0, icon: FileText, href: '/reports', color: 'text-purple-600', bg: 'bg-purple-50' },
   ]
 
   const greeting = (() => {
@@ -326,8 +341,11 @@ export default async function DashboardPage() {
         <div>
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
           <p className="page-subtitle">
-            {roleDisplay} • Here's what's happening with your classes today.
-            {isInstitutionTeacher && assignedSubjects.length > 0 && ` You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}.`}
+            {roleDisplay} • {hasSubjectsOnly 
+              ? `You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}`
+              : `Here's what's happening with your classes today.`
+            }
+            {isInstitutionTeacher && assignedSubjects.length > 0 && !hasSubjectsOnly && ` You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}.`}
           </p>
         </div>
         {(isSoloTeacher || isInstitutionAdmin) && (
@@ -353,11 +371,34 @@ export default async function DashboardPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card">
           <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-ink">Recent Classes</h2>
-            <Link href="/classes" className="text-xs text-brand-500 hover:underline">View all</Link>
+            <h2 className="font-semibold text-sm text-ink">
+              {hasSubjectsOnly ? 'My Subjects' : 'Recent Classes'}
+            </h2>
+            <Link href={hasSubjectsOnly ? '/settings/subjects' : '/classes'} className="text-xs text-brand-500 hover:underline">
+              View all
+            </Link>
           </div>
           <div className="divide-y divide-surface-200">
-            {recentGroups && recentGroups.length > 0 ? (
+            {hasSubjectsOnly ? (
+              // ✅ Show subjects for subject-only teachers
+              assignedSubjects.map((s: any) => (
+                <div key={s.id} className="px-5 py-3 flex items-center justify-between hover:bg-surface-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-green-50 text-green-600 text-xs font-bold flex items-center justify-center">
+                      {s.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-ink">{s.name}</p>
+                      <p className="text-xs text-ink-muted">{s.group?.name ?? 'Unassigned class'}</p>
+                    </div>
+                  </div>
+                  <Link href={`/scores?class=${s.group_id}&subject=${s.id}`} className="btn-primary btn-sm btn">
+                    Enter scores
+                  </Link>
+                </div>
+              ))
+            ) : recentGroups && recentGroups.length > 0 ? (
+              // ✅ Show classes for class teachers and others
               recentGroups.map((g) => {
                 const count = (g.learner_count as unknown as { count: number }[])?.[0]?.count ?? 0
                 const hasReport = completedGroupIds.has(g.id)
@@ -387,7 +428,7 @@ export default async function DashboardPage() {
               <div className="px-5 py-10 text-center">
                 <BookOpen size={32} className="text-surface-200 mx-auto mb-3" />
                 <p className="text-sm text-ink-muted mb-3">
-                  {isInstitutionTeacher ? 'No classes assigned to you yet' : 'No classes yet'}
+                  {isInstitutionTeacher ? 'No classes or subjects assigned to you yet' : 'No classes yet'}
                 </p>
                 {(isSoloTeacher || isInstitutionAdmin) && (
                   <Link href="/classes/new" className="btn-primary btn-sm btn">Create your first class</Link>
@@ -403,7 +444,10 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-2">
               {[
                 ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add a class', href: '/classes/new', icon: '📚' }] : []),
-                { label: 'Enrol students', href: '/students/new', icon: '👤' },
+                // ✅ Conditional swap: Enrol students vs View students
+                (isSoloTeacher || isInstitutionAdmin)
+                  ? { label: 'Enrol students', href: '/students/new', icon: '👤' }
+                  : { label: 'View students', href: '/students', icon: '👤' },
                 { label: 'Enter scores', href: '/scores', icon: '✏️' },
                 { label: 'View reports', href: '/reports', icon: '📄' },
                 ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add subjects', href: '/settings/subjects/new', icon: '📖' }] : []),

@@ -3,7 +3,17 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get('host') || ''
   const { pathname } = request.nextUrl
+
+  // ✅ Admin subdomain — route into the super-admin app, before anything else
+  if (hostname.startsWith('admin.')) {
+    const url = request.nextUrl.clone()
+    if (url.pathname === '/' || url.pathname === '/dashboard') {
+      url.pathname = '/overview'
+    }
+    return NextResponse.rewrite(url)
+  }
 
   // ✅ Let ALL public routes through immediately
   if (
@@ -23,7 +33,6 @@ export async function middleware(request: NextRequest) {
 
   // ✅ Only run session check for protected routes
   let response = NextResponse.next({ request })
-
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -42,7 +51,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // ✅ If no user, redirect to login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -51,14 +59,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // ✅ Only protect these routes
   matcher: [
-    '/dashboard/:path*',
-    '/classes/:path*',
-    '/students/:path*',
-    '/scores/:path*',
-    '/reports/:path*',
-    '/settings/:path*',
-    '/admin/:path*',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|api/parent|login|signup|auth/set-password|api/auth).*)',
   ],
 }

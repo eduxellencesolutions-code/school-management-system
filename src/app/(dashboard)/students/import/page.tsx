@@ -42,19 +42,34 @@ export default function ImportStudentsPage() {
   const [importResults, setImportResults] = useState<{ success: number; failed: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
+  // ✅ FIXED: Added dependency array and solo teacher branch
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-      const { data: grps } = await supabase
-        .from('groups').select('id, name')
-        .eq('organization_id', profile?.organization_id ?? '')
-        .eq('is_active', true).order('name')
+
+      const { data: profile } = await supabase
+        .from('users').select('organization_id').eq('id', user.id).single()
+
+      let query = supabase
+        .from('groups')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+
+      if (profile?.organization_id) {
+        // ✅ Institution: filter by organization_id
+        query = query.eq('organization_id', profile.organization_id)
+      } else {
+        // ✅ Solo teacher: filter by instructor_id
+        query = query.eq('instructor_id', user.id)
+      }
+
+      const { data: grps } = await query
       setGroups(grps ?? [])
     }
     load()
-  })
+  }, []) // ✅ Added dependency array
 
   function downloadTemplate() {
     const csv = generateLearnerCSVTemplate()

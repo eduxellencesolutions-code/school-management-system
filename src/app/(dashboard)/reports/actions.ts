@@ -10,53 +10,108 @@ export async function generateReport(formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('You must be logged in to generate reports')
 
-    const groupId    = formData.get('group_id') as string
-    const type       = formData.get('type') as string
-    const termId     = formData.get('term_id') as string
-    const templateId = formData.get('template_id') as string
+    const groupId = formData.get('group_id') as string
+    const type = formData.get('type') as string
+    const termIdOverride = formData.get('term_id') as string | null // solo teacher may override
 
-    if (!groupId)    throw new Error('Class is required')
-    if (!type)       throw new Error('Report type is required')
-    if (!termId)     throw new Error('Term is required')
-    if (!templateId) throw new Error('Assessment template is required')
+    if (!groupId) throw new Error('Class is required')
+    if (!type) throw new Error('Report type is required')
 
     const { data: profile } = await supabase
-      .from('users').select('organization_id').eq('id', user.id).single()
+      .from('users').select('organization_id, role').eq('id', user.id).single()
     if (!profile) throw new Error('User profile not found')
+
+    // ✅ Explicit authorization check — only admin, solo (own class), or the CLASS TEACHER may generate
+    const isAdmin = profile.role === 'admin' || profile.role === 'school_admin'
+    const isSolo = !profile.organization_id
+
+    if (!isAdmin && !isSolo) {
+      const { data: assignment } = await supabase
+        .from('teacher_assignments')
+        .select('id')
+        .eq('teacher_id', user.id)
+        .eq('class_id', groupId)
+        .eq('role', 'class_teacher')
+        .maybeSingle()
+
+      if (!assignment) {
+        throw new Error('Only the class teacher can generate a report for this class')
+      }
+    }
+
+    if (isSolo) {
+      const { data: ownGroup } = await supabase
+        .from('groups').select('id').eq('id', groupId).eq('instructor_id', user.id).maybeSingle()
+      if (!ownGroup) throw new Error('You can only generate reports for your own classes')
+    }
+
+    // Determine the term: institution uses org's current_term_id (no override),
+    // solo teacher uses their own current_term_id unless they picked a different one
+    let termId: string | null = null
+    if (profile.organization_id) {
+      const { data: org } = await supabase
+        .from('organizations').select('current_term_id').eq('id', profile.organization_id).single()
+      termId = org?.current_term_id ?? null
+      if (!termId) throw new Error('Your school has not set a current term yet. Ask your administrator to set one in Settings → Academic Periods.')
+    } else {
+      termId = termIdOverride || null
+      if (!termId) {
+        const { data: userRow } = await supabase
+          .from('users').select('current_term_id').eq('id', user.id).single()
+        termId = userRow?.current_term_id ?? null
+      }
+      if (!termId) throw new Error('Please select a term, or set a default term in Settings → Academic Periods.')
+    }
+
+    const { data: termRow } = await supabase
+      .from('terms').select('session_id').eq('id', termId).single()
+    const sessionId = termRow?.session_id ?? null
 
     const { data: existing } = await supabase
       .from('reports')
       .select('id, status, created_at')
       .eq('group_id', groupId)
+      .eq('term_id', termId)
       .eq('type', type)
-      .eq('created_by', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
 
-    if (existing?.status === 'pending') {
+    if (existing?.status === 'processing') {
       revalidatePath('/reports')
-      return { success: false, message: 'Report is already being generated' }
+      return { success: false, message: 'A report for this class and term is already being generated' }
     }
 
-    const reportData = await generateReportData(groupId, termId, templateId, supabase)
+    const reportData = await generateReportData(groupId, supabase)
 
     const { data: report, error: insertError } = await supabase
       .from('reports')
       .insert({
         organization_id: profile.organization_id,
-        group_id:        groupId,
+        group_id: groupId,
+        term_id: termId,
+        session_id: sessionId,
         type,
-        status:          'ready',          // ← was 'completed'
-        completed_at:    new Date().toISOString(),
-        filters:         { termId, templateId },
-        created_by:      user.id,
-        report_data:     reportData,
+        status: 'ready',
+        report_status: 'draft',
+        completed_at: new Date().toISOString(),
+        filters: {},
+        created_by: user.id,
+        report_data: reportData,
       })
       .select()
       .single()
 
-    if (insertError) throw new Error('Failed to save report')
+    // ✅ FIX: Detailed error logging
+    if (insertError) {
+      console.error('Report insert error:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details,
+        hint: insertError.hint,
+      })
+      throw new Error(insertError.message || 'Failed to save report')
+    }
 
     revalidatePath('/reports')
     revalidatePath('/dashboard')
@@ -68,13 +123,7 @@ export async function generateReport(formData: FormData) {
   }
 }
 
-async function generateReportData(
-  groupId: string,
-  termId: string,
-  templateId: string,
-  supabase: any
-) {
-  // Fetch learners
+async function generateReportData(groupId: string, supabase: any) {
   const { data: learners } = await supabase
     .from('learners')
     .select('id, first_name, last_name, admission_number')
@@ -82,7 +131,7 @@ async function generateReportData(
 
   if (!learners?.length) throw new Error('No learners found in this class')
 
-  // Fetch subjects
+  // ✅ Each subject uses its OWN assigned template — no single template picker
   const { data: subjects } = await supabase
     .from('subjects')
     .select('id, name, code, template_id')
@@ -90,70 +139,58 @@ async function generateReportData(
 
   if (!subjects?.length) throw new Error('No subjects found for this class')
 
-  // Fetch components
+  const missingTemplate = subjects.filter((s: any) => !s.template_id)
+  if (missingTemplate.length > 0) {
+    throw new Error(`These subjects have no assessment template assigned: ${missingTemplate.map((s: any) => s.name).join(', ')}. Assign one in Settings → Subjects first.`)
+  }
+
+  // Fetch components for every distinct template used across subjects
+  const templateIds = [...new Set(subjects.map((s: any) => s.template_id))]
   const { data: components } = await supabase
     .from('assessment_components')
-    .select('id, name, max_score, sequence')
-    .eq('template_id', templateId).order('sequence')
+    .select('id, name, max_score, template_id, sequence')
+    .in('template_id', templateIds)
+    .order('sequence')
 
-  if (!components?.length) throw new Error('No assessment components found for this template')
+  if (!components?.length) throw new Error('No assessment components found for the assigned templates')
 
-  // ✅ Fetch grading system from database
   const { data: gradingSystem } = await supabase
     .from('grading_systems')
     .select('*')
     .order('min_score', { ascending: false })
 
-  // ✅ Use fetched grading system or fallback to default
-  const grades = gradingSystem && gradingSystem.length > 0 
-    ? gradingSystem.map((g: any) => ({
-        min: g.min_score,
-        max: g.max_score,
-        grade: g.grade_letter,
-        remark: g.remark || ''
-      }))
+  const grades = gradingSystem && gradingSystem.length > 0
+    ? gradingSystem.map((g: any) => ({ min: g.min_score, max: g.max_score, grade: g.grade_letter, remark: g.remark || '' }))
     : [
         { min: 70, max: 100, grade: 'A', remark: 'Excellent' },
-        { min: 60, max: 69, grade: 'B', remark: 'Very Good' },
-        { min: 50, max: 59, grade: 'C', remark: 'Good' },
-        { min: 45, max: 49, grade: 'D', remark: 'Fair' },
-        { min: 40, max: 44, grade: 'E', remark: 'Pass' },
-        { min: 0, max: 39, grade: 'F', remark: 'Fail' },
+        { min: 60, max: 69,  grade: 'B', remark: 'Very Good' },
+        { min: 50, max: 59,  grade: 'C', remark: 'Good' },
+        { min: 45, max: 49,  grade: 'D', remark: 'Pass' },
+        { min: 40, max: 44,  grade: 'E', remark: 'Below Pass' },
+        { min: 0,  max: 39,  grade: 'F', remark: 'Fail' },
       ]
 
-  // ✅ Helper function to get grade
   const getGrade = (percentage: number) => {
     for (const g of grades) {
-      if (percentage >= g.min && percentage <= g.max) {
-        return { grade: g.grade, remark: g.remark || '' }
-      }
+      if (percentage >= g.min && percentage <= g.max) return { grade: g.grade, remark: g.remark || '' }
     }
     return { grade: 'F', remark: 'Fail' }
   }
 
-  // ✅ Build a map of component max scores per subject
+  // Components grouped per subject, based on that subject's OWN template
   const subjectComponentMap: Record<string, { id: string; name: string; max_score: number }[]> = {}
   subjects.forEach((subject: any) => {
     const comps = components.filter((c: any) => c.template_id === subject.template_id)
-    subjectComponentMap[subject.id] = comps.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      max_score: c.max_score
-    }))
+    subjectComponentMap[subject.id] = comps.map((c: any) => ({ id: c.id, name: c.name, max_score: c.max_score }))
   })
 
-  // ✅ Calculate max possible score per subject - FIXED: start reduce at 0, not 100
   const subjectMaxScore: Record<string, number> = {}
   subjects.forEach((subject: any) => {
     const comps = subjectComponentMap[subject.id] || []
-    subjectMaxScore[subject.id] = comps.length > 0 
-      ? comps.reduce((sum: number, c: any) => sum + c.max_score, 0)
-      : 100
+    subjectMaxScore[subject.id] = comps.length > 0 ? comps.reduce((sum: number, c: any) => sum + c.max_score, 0) : 100
   })
 
   const learnerIds = learners.map((l: any) => l.id)
-  
-  // ✅ Fetch scores with component_id
   const { data: scores } = await supabase
     .from('scores')
     .select('learner_id, subject_id, component_id, score')
@@ -164,45 +201,46 @@ async function generateReportData(
     const subjectTotals: Record<string, number> = {}
     let overallTotal = 0
 
-    // ✅ Build detailed subject scores with component breakdown
     const subjectDetails = subjects.map((subject: any) => {
       const subjectScoreData = learnerScores.filter((s: any) => s.subject_id === subject.id)
       const total = subjectScoreData.reduce((sum: number, s: any) => sum + (s.score || 0), 0)
       subjectTotals[subject.id] = total
       overallTotal += total
 
-      // ✅ Build component scores for this subject
-      const componentScores: Record<string, number> = {}
-      subjectScoreData.forEach((s: any) => {
-        const comp = components.find((c: any) => c.id === s.component_id)
-        if (comp) {
-          componentScores[comp.name] = s.score || 0
+      const comps = subjectComponentMap[subject.id] || []
+      const componentScores = comps.map((comp: any) => {
+        const scoreEntry = subjectScoreData.find((s: any) => s.component_id === comp.id)
+        const score = scoreEntry?.score ?? 0
+        return {
+          name: comp.name,
+          score,
+          max_score: comp.max_score,
+          weight: comp.max_score,
+          percentage: comp.max_score > 0 ? Math.round((score / comp.max_score) * 1000) / 10 : 0,
+          position: null,
+          teacher_comment: null,
         }
       })
 
       const maxScore = subjectMaxScore[subject.id] || 100
       const percentage = maxScore > 0 ? (total / maxScore) * 100 : 0
-
-      // ✅ Use database grading system for subject grade
       const gradeResult = getGrade(percentage)
 
       return {
         subject_id: subject.id,
         subject_name: subject.name,
-        total: total,
+        total,
         max_score: maxScore,
         percentage: Math.round(percentage * 10) / 10,
         grade: gradeResult.grade,
         remark: gradeResult.remark,
-        component_scores: componentScores
+        component_scores: componentScores,
       }
     })
 
-    const maxScore = components.reduce((sum: number, c: any) => sum + c.max_score, 0)
+    const overallMaxScore = subjects.reduce((sum: number, s: any) => sum + subjectMaxScore[s.id], 0)
     const average = subjects.length > 0 ? overallTotal / subjects.length : 0
-    const percentage = maxScore > 0 ? (overallTotal / maxScore) * 100 : 0
-
-    // ✅ Use database grading system for overall grade
+    const percentage = overallMaxScore > 0 ? (overallTotal / overallMaxScore) * 100 : 0
     const overallGradeResult = getGrade(percentage)
 
     return {
@@ -217,12 +255,10 @@ async function generateReportData(
       percentage: Math.round(percentage * 10) / 10,
       grade: overallGradeResult.grade,
       remark: overallGradeResult.remark,
-      scores: learnerScores,
       position: 0,
     }
   })
 
-  // ✅ Calculate positions
   const sorted = [...reportData].sort((a, b) => b.overall_total - a.overall_total)
   sorted.forEach((item, index) => {
     item.position = index > 0 && item.overall_total === sorted[index - 1].overall_total
@@ -230,26 +266,17 @@ async function generateReportData(
       : index + 1
   })
 
-  // ✅ Sort by position before returning
   const sortedByPosition = [...reportData].sort((a, b) => a.position - b.position)
 
   return {
-    learners: sortedByPosition,  // ✅ Sorted by position
-    subjects: subjects.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      code: s.code,
-      template_id: s.template_id
-    })),
-    components,
+    learners: sortedByPosition,
+    subjects: subjects.map((s: any) => ({ id: s.id, name: s.name, code: s.code, template_id: s.template_id })),
     grading_system: grades,
     generated_at: new Date().toISOString(),
     summary: {
       total_learners: learners.length,
       total_subjects: subjects.length,
-      total_components: components.length,
-      max_possible_score: components.reduce((sum: number, c: any) => sum + c.max_score, 0),
-    }
+    },
   }
 }
 
@@ -259,57 +286,33 @@ export async function markReportReady(reportId: string) {
   if (!user) throw new Error('Unauthorized')
 
   await supabase.from('reports')
-    .update({ status: 'ready', completed_at: new Date().toISOString() })  // ← was 'completed'
+    .update({ status: 'ready', completed_at: new Date().toISOString() })
     .eq('id', reportId)
 
   revalidatePath('/reports')
   revalidatePath('/dashboard')
 }
 
-// ✅ For client-side calls (returns data) - works for ANY status
 export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return { success: false, message: 'You must be logged in to delete reports' }
-    }
+    if (!user) return { success: false, message: 'You must be logged in to delete reports' }
 
     const id = formData.get('id') as string
-    if (!id) {
-      return { success: false, message: 'Report ID is required' }
-    }
+    if (!id) return { success: false, message: 'Report ID is required' }
 
-    // Check if the report exists - no status restriction
     const { data: existing, error: checkError } = await supabase
-      .from('reports')
-      .select('id, created_by, status')
-      .eq('id', id)
-      .single()
+      .from('reports').select('id, created_by, status').eq('id', id).single()
 
-    if (checkError || !existing) {
-      return { success: false, message: 'Report not found' }
-    }
+    if (checkError || !existing) return { success: false, message: 'Report not found' }
+    if (existing.created_by !== user.id) return { success: false, message: 'You do not have permission to delete this report' }
 
-    // Check if user owns this report (regardless of status)
-    if (existing.created_by !== user.id) {
-      return { success: false, message: 'You do not have permission to delete this report' }
-    }
-
-    // Delete the report - works for any status (pending, processing, completed, failed)
-    const { error: deleteError } = await supabase
-      .from('reports')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) {
-      return { success: false, message: 'Failed to delete report' }
-    }
+    const { error: deleteError } = await supabase.from('reports').delete().eq('id', id)
+    if (deleteError) return { success: false, message: 'Failed to delete report' }
 
     revalidatePath('/reports')
     revalidatePath('/dashboard')
-
     return { success: true }
   } catch (error) {
     console.error('Unexpected error in deleteReport:', error)
@@ -318,16 +321,32 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
 }
 
 export async function getReport(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
 
-  const { data: report, error } = await supabase
-    .from('reports')
-    .select(`*, group:groups(id, name, code), term:terms(id, name)`)
-    .eq('id', id)
-    .single()
+    console.log('Fetching report:', id)
 
-  if (error || !report) throw new Error('Report not found')
-  return report
+    const { data: report, error } = await supabase
+      .from('reports')
+      .select(`*, group:groups(id, name, code), term:terms(id, name)`)
+      .eq('id', id)
+      .single()
+
+    if (error) {
+      console.error('Error fetching report:', error)
+      throw new Error('Report not found')
+    }
+    if (!report) {
+      console.error('Report not found for ID:', id)
+      throw new Error('Report not found')
+    }
+
+    console.log('Report fetched successfully:', report.id)
+    return report
+  } catch (error) {
+    console.error('getReport error:', error)
+    throw error
+  }
 }
