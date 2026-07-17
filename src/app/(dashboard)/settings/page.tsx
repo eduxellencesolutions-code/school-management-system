@@ -4,6 +4,8 @@ import { getPlanConfig, PlanKey } from '@/lib/plans/config'
 import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown } from 'lucide-react'
 import Link from 'next/link'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
+import PlanDowngradeCard from '@/components/billing/PlanDowngradeCard'
+import { getUpgradeOptions, getDowngradeOptions } from '@/lib/plans/downgrade'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -26,9 +28,6 @@ export default async function SettingsPage() {
   const config = getPlanConfig(currentPlan)
 
   const isAdmin = profile?.role === 'admin'
-
-  // Max plan for each account type
-  const maxPlan = isInstitution ? 'premium_school' : 'solo_teacher_pro'
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
@@ -246,26 +245,41 @@ export default async function SettingsPage() {
             ))}
           </div>
 
-          {/* ✅ Upgrade options - branched for institutions vs solo teachers */}
-          {currentPlan !== maxPlan && (
-            <div className="border-t border-surface-200 pt-4">
-              <p className="text-sm font-medium text-ink mb-3">Upgrade your plan</p>
-              <div className="flex flex-col gap-3">
-                {(isInstitution
-                  ? (['small_school', 'standard_school', 'premium_school'] as const)
-                  : (['solo_teacher_pro'] as const)
-                )
-                  .filter(key => key !== currentPlan)
-                  .map(key => (
-                    <PlanUpgradeCard
-                      key={key}
-                      plan={key}
-                      label={getPlanConfig(key).label}
-                    />
-                  ))}
+          {/* ✅ Restructured upgrade/downgrade section */}
+          {(() => {
+            // Get upgrade and downgrade options specific to this account type
+            const allUpgrades = getUpgradeOptions(currentPlan, isInstitution)
+            const upgrades = allUpgrades.filter(k => k !== 'free')
+            const downgrades = getDowngradeOptions(currentPlan, isInstitution)
+
+            return (
+              <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
+                {upgrades.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-ink mb-3">Upgrade Available</p>
+                    <div className="flex flex-col gap-3">
+                      {upgrades.map(key => (
+                        <PlanUpgradeCard key={key} plan={key} label={getPlanConfig(key).label} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {downgrades.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-medium text-ink mb-3">Downgrade Available</p>
+                    <div className="flex flex-col gap-3">
+                      {downgrades.map(key => (
+                        <PlanDowngradeCard key={key} plan={key} label={getPlanConfig(key).label} />
+                      ))}
+                    </div>
+                  </div>
+                ) : currentPlan !== 'free' ? (
+                  <p className="text-xs text-ink-faint">No lower paid plan available.</p>
+                ) : null}
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       </div>
     </div>
