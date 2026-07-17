@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { updateSubject } from '../actions'
+import { updateSubject } from '@/app/(dashboard)/settings/subjects/actions'
 
 interface Props { params: Promise<{ id: string }> }
 
