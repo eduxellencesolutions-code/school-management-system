@@ -146,7 +146,8 @@ export async function deleteTerm(formData: FormData): Promise<{ success: boolean
   }
 }
 
-export async function setCurrentTerm(formData: FormData): Promise<{ success: boolean; error?: string }> {
+// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
+export async function setCurrentTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
     const supabase = await createClient()
@@ -162,7 +163,7 @@ export async function setCurrentTerm(formData: FormData): Promise<{ success: boo
       
       if (error) {
         console.error('Error updating organization term:', error)
-        return { success: false, error: error.message }
+        return
       }
     } else {
       const { error } = await supabase
@@ -172,15 +173,13 @@ export async function setCurrentTerm(formData: FormData): Promise<{ success: boo
       
       if (error) {
         console.error('Error updating user term:', error)
-        return { success: false, error: error.message }
+        return
       }
     }
 
     revalidatePath('/settings/academic')
     revalidatePath('/reports/generate')
-    return { success: true }
   } catch (error: any) {
     console.error('Set current term error:', error)
-    return { success: false, error: error.message ?? 'Something went wrong' }
   }
 }
