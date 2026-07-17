@@ -1,6 +1,6 @@
 export type BillingCycle = 'termly' | 'annual'
 export type Currency = 'NGN' | 'USD'
-export type PaidPlan = 'small_school' | 'standard_school' | 'premium_school'
+export type PaidPlan = 'small_school' | 'standard_school' | 'premium_school' | 'solo_teacher_pro'
 
 // Amounts are in the currency's smallest whole unit for display,
 // converted to kobo/cents at checkout time by each provider wrapper.
@@ -17,6 +17,10 @@ export const PRICING: Record<PaidPlan, Record<Currency, Record<BillingCycle, num
     NGN: { termly: 75000, annual: 210000 },
     USD: { termly: 75, annual: 210 },
   },
+  solo_teacher_pro: {
+    NGN: { termly: 3000, annual: 8000 },
+    USD: { termly: 3, annual: 8 },
+  },
 }
 
 export function getPrice(plan: PaidPlan, currency: Currency, cycle: BillingCycle): number {
@@ -27,4 +31,14 @@ export function getPrice(plan: PaidPlan, currency: Currency, cycle: BillingCycle
 // 1 term ≈ 1/3 of a school year.
 export function getCycleDurationDays(cycle: BillingCycle): number {
   return cycle === 'annual' ? 365 : 122
+}
+
+// ✅ Dynamically computed savings — never hardcode a percentage.
+// Compares the annual price against what 3 terms would cost if paid termly.
+export function getAnnualSavingsPercent(plan: PaidPlan, currency: Currency): number {
+  const termly = getPrice(plan, currency, 'termly')
+  const annual = getPrice(plan, currency, 'annual')
+  if (termly === 0 || annual === 0) return 0
+  const fullYearIfTermly = termly * 3
+  return Math.round(((fullYearIfTermly - annual) / fullYearIfTermly) * 100)
 }
