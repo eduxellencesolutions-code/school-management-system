@@ -46,8 +46,10 @@ export async function generateAIRemark(input: GenerateRemarkInput): Promise<{ su
   const tone = input.tone ?? 'encouraging'
 
   try {
-    // Use Gemini 1.5 Flash - fast, free tier available
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // ✅ FIX: Use the correct model name - gemini-pro or gemini-1.5-pro
+    // gemini-1.5-flash might not be available in all regions
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+    // Or try: 'gemini-pro' if 1.5-pro doesn't work
 
     const prompt = `Write a short, ${tone} school report card remark (2-3 sentences, no headings, no markdown) for a student named ${input.learnerFirstName}.
 Overall performance: ${input.percentage}% (Grade ${input.grade}).
