@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 
 export async function createTemplate(formData: FormData) {
   console.log('=== CREATE TEMPLATE STARTED ===')
@@ -14,6 +15,10 @@ export async function createTemplate(formData: FormData) {
     redirect('/login')
   }
   console.log('User ID:', user.id)
+
+  // ✅ Subscription gate — expired accounts cannot create templates
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
 
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
@@ -120,6 +125,10 @@ export async function updateTemplate(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // ✅ Subscription gate — expired accounts cannot update templates
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
 
@@ -179,6 +188,10 @@ export async function deleteTemplate(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  // ✅ Subscription gate — expired accounts cannot delete templates
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
 
   const id = formData.get('id') as string
   if (!id) return
