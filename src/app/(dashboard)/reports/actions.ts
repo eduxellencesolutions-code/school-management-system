@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 
 export async function generateReport(formData: FormData) {
   try {
@@ -20,6 +21,10 @@ export async function generateReport(formData: FormData) {
     const { data: profile } = await supabase
       .from('users').select('organization_id, role').eq('id', user.id).single()
     if (!profile) throw new Error('User profile not found')
+
+    // ✅ Subscription gate — expired accounts cannot generate new reports
+    const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+    if (!allowed) throw new Error(message)
 
     // ✅ Explicit authorization check — only admin, solo (own class), or the CLASS TEACHER may generate
     const isAdmin = profile.role === 'admin' || profile.role === 'school_admin'
