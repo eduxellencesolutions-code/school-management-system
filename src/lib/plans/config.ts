@@ -2,7 +2,7 @@
 // Everything else in the app should read from here — never hardcode
 // a limit or feature check anywhere else.
 
-export type PlanKey = 'free' | 'small_school' | 'standard_school' | 'premium_school'
+export type PlanKey = 'free' | 'solo_teacher_pro' | 'small_school' | 'standard_school' | 'premium_school'
 
 export type ApprovalWorkflow = 'none' | 'principal' | 'multi_level'
 export type AuditLogLevel = 'none' | 'basic' | 'advanced' | 'full'
@@ -32,7 +32,7 @@ export interface PlanConfig {
     excelImportExport: boolean
     attendanceManagement: boolean
     behaviouralPsychomotorAssessment: boolean
-    aiGeneratedRemarks: boolean  // ✅ DeepSeek AI Remarks
+    aiGeneratedRemarks: boolean
     studentPortal: boolean
     parentPortal: boolean
     teacherPortal: boolean
@@ -74,7 +74,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: false,
       behaviouralPsychomotorAssessment: false,
-      aiGeneratedRemarks: false,  // ❌ Free plan - no AI remarks
+      aiGeneratedRemarks: false,
       studentPortal: false,
       parentPortal: false,
       teacherPortal: false,
@@ -90,6 +90,46 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       resultHistory: 'current_session',
       priorityProcessing: false,
       prioritySupport: 'community',
+    },
+  },
+  solo_teacher_pro: {
+    label: 'Solo Teacher Pro',
+    limits: {
+      maxStudents: 150,
+      maxTeachers: 1,
+      maxAdmins: 1,
+      maxAcademicSessions: 'unlimited',
+      maxClasses: 'unlimited',
+      maxSubjects: 'unlimited',
+      maxCustomTemplates: 3,
+      maxTeacherSignatures: 1,
+    },
+    features: {
+      studentRegistration: true,
+      teacherManagement: false,
+      studentPromotion: true,
+      automaticResultComputation: true,
+      pdfReportCards: true,
+      broadsheetGeneration: true,
+      excelImportExport: true,
+      attendanceManagement: false,
+      behaviouralPsychomotorAssessment: false,
+      aiGeneratedRemarks: true,
+      studentPortal: false,
+      parentPortal: false,
+      teacherPortal: false,
+      onlineResultChecker: false,
+      schoolBranding: 'basic',
+      principalSignature: false,
+      resultApprovalWorkflow: 'none',
+      publishLockResults: false,
+      archiveAcademicSessions: true,
+      restoreArchivedReports: true,
+      auditLogs: 'none',
+      emailNotifications: false,
+      resultHistory: 'unlimited',
+      priorityProcessing: false,
+      prioritySupport: 'email',
     },
   },
   small_school: {
@@ -114,7 +154,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
+      aiGeneratedRemarks: true,
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
@@ -154,7 +194,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
+      aiGeneratedRemarks: true,
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
@@ -194,7 +234,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
+      aiGeneratedRemarks: true,
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
