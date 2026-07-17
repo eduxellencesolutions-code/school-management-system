@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { hasFeature, canAddTeacher, getPlanConfig } from '@/lib/plans/gating'
 
 // Check if user is an institution
 async function checkInstitutionAccess() {
@@ -46,6 +47,15 @@ export async function createTeacher(input: CreateTeacherInput) {
 
   if (!orgId) {
     return { error: 'Not authorized' }
+  }
+
+  // ✅ Check teacher management feature
+  const { data: org } = await createClient()
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    return { error: 'Teacher management is not available on your current plan. Please upgrade to add teachers.' }
   }
 
   const adminClient = createServiceClient(
@@ -143,6 +153,7 @@ export async function getTeachers() {
 export async function assignTeacher(formData: FormData) {
   const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
+  const orgId = profile?.organization_id
 
   const teacherId = formData.get('teacher_id') as string
   const classId = formData.get('class_id') as string || null
@@ -156,6 +167,16 @@ export async function assignTeacher(formData: FormData) {
 
   if (!classId && !subjectId) {
     console.error('Must assign to at least one class or subject')
+    return
+  }
+
+  // ✅ GATE: Check if teacher management is available on this plan
+  const { data: org } = await supabase
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    console.error('Teacher management not available on this plan')
     return
   }
 
@@ -178,7 +199,7 @@ export async function assignTeacher(formData: FormData) {
   const { error } = await supabase
     .from('teacher_assignments')
     .insert({
-      organization_id: profile?.organization_id,
+      organization_id: orgId,
       teacher_id: teacherId,
       class_id: classId,
       subject_id: subjectId,
@@ -250,11 +271,21 @@ export async function removeAssignment(formData: FormData) {
   revalidatePath('/settings/teachers')
 }
 
-// ✅ REPLACED: Bulk upload teachers via CSV with proper auth creation
+// ✅ UPDATED: Bulk upload teachers via CSV with proper auth creation and gate checks
 export async function uploadTeachers(formData: FormData) {
   const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
   const orgId = profile?.organization_id
+
+  // ✅ GATE: Check teacher management feature availability
+  const { data: org } = await supabase
+    .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  const plan = org?.subscription_plan ?? 'free'
+
+  if (!hasFeature(plan, 'teacherManagement')) {
+    console.error('Teacher management not available on this plan')
+    return
+  }
 
   const adminClient = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -301,6 +332,29 @@ export async function uploadTeachers(formData: FormData) {
 
     if (teachers.length === 0) {
       console.error('No valid teachers found in CSV')
+      return
+    }
+
+    // ✅ Gate: Check teacher limit before creating any accounts
+    const config = getPlanConfig(plan)
+    const { count: currentTeacherCount } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('role', 'teacher')
+
+    // Check how many of these are genuinely NEW users (existing emails don't count against the limit)
+    const emails = teachers.map(t => t.email)
+    const { data: existingUsers } = await supabase
+      .from('users')
+      .select('email')
+      .in('email', emails)
+    const existingEmails = new Set((existingUsers ?? []).map(u => u.email))
+    const newTeacherCount = teachers.filter(t => !existingEmails.has(t.email)).length
+
+    const projectedTotal = (currentTeacherCount ?? 0) + newTeacherCount
+    if (config.limits.maxTeachers !== 'unlimited' && projectedTotal > config.limits.maxTeachers) {
+      console.error(`Upload would exceed teacher limit: ${projectedTotal} > ${config.limits.maxTeachers}`)
       return
     }
 
