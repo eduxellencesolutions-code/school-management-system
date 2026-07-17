@@ -66,14 +66,16 @@ export default async function SchoolDetailPage({ params }: Props) {
     console.error('Error fetching learners count:', learnersError)
   }
 
-  const currentAdmin = users?.find(u => u.role === 'admin' || u.role === 'school_admin')
+  // ✅ FIX 1: Simplified to just 'admin' (school_admin doesn't exist)
+  const currentAdmin = users?.find(u => u.role === 'admin')
   const teachers = users?.filter(u => u.role === 'teacher') ?? []
 
+  // ✅ FIX 2: Updated status styles with all valid statuses and proper fallback
   const statusStyle: Record<string, string> = {
     active: 'bg-green-100 text-green-800',
-    inactive: 'bg-gray-100 text-gray-700',
+    trial: 'bg-blue-100 text-blue-800',
+    expired: 'bg-amber-100 text-amber-800',
     suspended: 'bg-red-100 text-red-800',
-    trial: 'bg-amber-100 text-amber-800',
     cancelled: 'bg-gray-100 text-gray-700',
   }
 
@@ -88,8 +90,8 @@ export default async function SchoolDetailPage({ params }: Props) {
           <div className="flex items-center gap-2 mb-1">
             <Building size={20} className="text-ink-faint" />
             <h1 className="text-xl font-bold text-ink">{org.name}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[org.subscription_status] ?? statusStyle.inactive}`}>
-              {org.subscription_status ?? 'inactive'}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[org.subscription_status] ?? statusStyle.cancelled}`}>
+              {org.subscription_status ?? 'cancelled'}
             </span>
           </div>
           <p className="text-sm text-ink-muted">
@@ -126,7 +128,7 @@ export default async function SchoolDetailPage({ params }: Props) {
         <h2 className="font-semibold text-sm text-ink mb-3">Subscription & Status</h2>
         <SchoolStatusActions
           orgId={org.id}
-          currentStatus={org.subscription_status ?? 'inactive'}
+          currentStatus={org.subscription_status ?? 'cancelled'}
           currentExpiry={org.subscription_expires_at}
         />
       </div>
