@@ -2,14 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { hasFeature } from '@/lib/plans/gating'
 
-// Initialize DeepSeek client (OpenAI-compatible)
-const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY!,
-  baseURL: 'https://api.deepseek.com/v1',
-})
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface GenerateRemarkInput {
   learnerFirstName: string
@@ -38,7 +35,7 @@ export async function generateAIRemark(input: GenerateRemarkInput): Promise<{ su
 
   // ✅ GATE: Check if AI remarks are available on this plan
   if (!hasFeature(plan, 'aiGeneratedRemarks')) {
-    return { success: false, error: 'AI-generated remarks are not available on your current plan.' }
+    return { success: false, error: 'AI-generated remarks are not available on your current plan. Please upgrade to unlock.' }
   }
 
   // Find strongest and weakest subjects
@@ -49,27 +46,18 @@ export async function generateAIRemark(input: GenerateRemarkInput): Promise<{ su
   const tone = input.tone ?? 'encouraging'
 
   try {
-    const response = await deepseek.chat.completions.create({
-      model: 'deepseek-chat', // DeepSeek's main model - free tier
-      max_tokens: 150,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional school teacher writing report card remarks. Write in a clear, constructive tone.'
-        },
-        {
-          role: 'user',
-          content: `Write a short, ${tone} school report card remark (2-3 sentences, no headings, no markdown) for a student named ${input.learnerFirstName}.
+    // Use Gemini 1.5 Flash - fast, free tier available
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+
+    const prompt = `Write a short, ${tone} school report card remark (2-3 sentences, no headings, no markdown) for a student named ${input.learnerFirstName}.
 Overall performance: ${input.percentage}% (Grade ${input.grade}).
 Strongest subject: ${strongestSubject?.name ?? 'N/A'} (${strongestSubject?.percentage ?? '-'}%).
 Needs improvement: ${weakestSubject?.name ?? 'N/A'} (${weakestSubject?.percentage ?? '-'}%).
 Write it as a teacher would, addressing the student directly or by name, suitable to print on an official report card. Do not include a greeting or sign-off.`
-        }
-      ],
-    })
 
-    const remark = response.choices[0]?.message?.content?.trim() || ''
+    const result = await model.generateContent(prompt)
+    const response = await result.response
+    const remark = response.text().trim()
 
     if (!remark) {
       return { success: false, error: 'AI did not return a usable remark. Please try again.' }
