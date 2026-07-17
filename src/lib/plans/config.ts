@@ -32,7 +32,7 @@ export interface PlanConfig {
     excelImportExport: boolean
     attendanceManagement: boolean
     behaviouralPsychomotorAssessment: boolean
-    aiGeneratedRemarks: boolean
+    aiGeneratedRemarks: boolean  // ✅ DeepSeek AI Remarks
     studentPortal: boolean
     parentPortal: boolean
     teacherPortal: boolean
@@ -74,7 +74,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: false,
       behaviouralPsychomotorAssessment: false,
-      aiGeneratedRemarks: false,
+      aiGeneratedRemarks: false,  // ❌ Free plan - no AI remarks
       studentPortal: false,
       parentPortal: false,
       teacherPortal: false,
@@ -114,7 +114,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,
+      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
@@ -154,7 +154,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,
+      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
@@ -194,7 +194,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       excelImportExport: true,
       attendanceManagement: true,
       behaviouralPsychomotorAssessment: true,
-      aiGeneratedRemarks: true,
+      aiGeneratedRemarks: true,  // ✅ Paid plan - AI remarks enabled
       studentPortal: true,
       parentPortal: true,
       teacherPortal: true,
