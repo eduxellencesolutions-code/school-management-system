@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { createStudent } from './actions'
 
 const schema = z.object({
   first_name:       z.string().min(1, 'First name is required'),
@@ -32,8 +33,6 @@ export default function NewStudentPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [groups, setGroups] = useState<Group[]>([])
-  const [groupsLoaded, setGroupsLoaded] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -45,40 +44,29 @@ export default function NewStudentPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      
-      setUserId(user.id)
-      
+
       const { data: profile } = await supabase
         .from('users')
         .select('organization_id')
         .eq('id', user.id)
         .single()
-      
-      // FIX: Handle solo teachers and institution teachers correctly
+
       let query = supabase
         .from('groups')
         .select('id, name')
         .eq('is_active', true)
         .order('name')
-      
+
       if (profile?.organization_id) {
-        // Institution teacher/admin - show organization classes
         query = query.eq('organization_id', profile.organization_id)
-        console.log('Loading institution classes for org:', profile.organization_id)
       } else {
-        // Solo teacher - show their own classes
         query = query.eq('instructor_id', user.id)
-        console.log('Loading solo teacher classes for user:', user.id)
       }
-      
+
       const { data: grps, error } = await query
-      
-      if (error) {
-        console.error('Error loading classes:', error)
-      }
-      
+      if (error) console.error('Error loading classes:', error)
+
       setGroups(grps ?? [])
-      setGroupsLoaded(true)
     }
     load()
   })
@@ -86,39 +74,15 @@ export default function NewStudentPage() {
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-      
-      const { data: profile } = await supabase
-        .from('users')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single()
+      const result = await createStudent(data)
 
-      const { error } = await supabase.from('learners').insert({
-        organization_id:  profile?.organization_id,
-        group_id:         data.group_id,
-        first_name:       data.first_name,
-        last_name:        data.last_name,
-        other_names:      data.other_names || null,
-        admission_number: data.admission_number || null,
-        gender:           data.gender || null,
-        date_of_birth:    data.date_of_birth || null,
-        guardian_name:    data.guardian_name || null,
-        guardian_phone:   data.guardian_phone || null,
-        email:            data.email || null,
-        phone:            data.phone || null,
-        enrollment_date:  new Date().toISOString().split('T')[0],
-        is_active:        true,
-      })
-
-      if (error) {
-        if (error.code === '23505') throw new Error('Admission number already exists')
-        throw error
+      if (!result.success) {
+        toast.error(result.error ?? 'Failed to add student')
+        return
       }
 
       toast.success(`${data.first_name} ${data.last_name} enrolled!`)
-      router.push(`/students?class=${data.group_id}`)
+      router.push(`/students?class=${result.groupId}`)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to add student')
     } finally {
@@ -128,7 +92,6 @@ export default function NewStudentPage() {
 
   return (
     <div className="max-w-xl">
-      {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-6 text-sm">
         <Link href="/students" className="text-ink-muted hover:text-ink">Students</Link>
         <span className="text-ink-faint">/</span>
@@ -143,7 +106,6 @@ export default function NewStudentPage() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-        {/* Class assignment */}
         <div className="card p-5 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-ink">Class assignment</h2>
           <div>
@@ -156,10 +118,8 @@ export default function NewStudentPage() {
           </div>
         </div>
 
-        {/* Personal info */}
         <div className="card p-5 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-ink">Personal information</h2>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Last name <span className="text-red-500">*</span></label>
@@ -200,7 +160,6 @@ export default function NewStudentPage() {
           </div>
         </div>
 
-        {/* Guardian info */}
         <div className="card p-5 flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-ink">Guardian / Parent contact</h2>
           <div className="grid grid-cols-2 gap-3">
