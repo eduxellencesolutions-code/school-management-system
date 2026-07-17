@@ -130,6 +130,7 @@ export default async function SchoolDetailPage({ params }: Props) {
           orgId={org.id}
           currentStatus={org.subscription_status ?? 'cancelled'}
           currentExpiry={org.subscription_expires_at}
+          currentPlan={org.subscription_plan ?? 'free'}
         />
       </div>
 
