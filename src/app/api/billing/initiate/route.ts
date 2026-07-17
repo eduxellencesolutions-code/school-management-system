@@ -14,8 +14,11 @@ export async function POST(req: NextRequest) {
     provider: 'flutterwave' | 'paystack'
   }
 
-  if (!['small_school', 'standard_school', 'premium_school'].includes(plan)) {
-    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+  // ✅ FIX: Added solo_teacher_pro to valid plans
+  const validPlans = ['small_school', 'standard_school', 'premium_school', 'solo_teacher_pro']
+  if (!validPlans.includes(plan)) {
+    console.error('Invalid plan received:', plan)
+    return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 })
   }
   if (!['NGN', 'USD'].includes(currency)) {
     return NextResponse.json({ error: 'Invalid currency' }, { status: 400 })
