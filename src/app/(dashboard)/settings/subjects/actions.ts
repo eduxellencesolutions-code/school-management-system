@@ -80,3 +80,101 @@ export async function createSubject(formData: FormData) {
   revalidatePath(`/classes/${groupId}`)
   redirect('/settings/subjects')
 }
+
+// ✅ NEW: Update subject function
+export async function updateSubject(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const subjectId = formData.get('id') as string
+  if (!subjectId) {
+    console.error('Subject ID is required')
+    return
+  }
+
+  const name = (formData.get('name') as string)?.trim()
+  const code = (formData.get('code') as string)?.trim()
+  const groupId = formData.get('group_id') as string
+  const templateId = formData.get('template_id') as string
+
+  if (!name || !groupId) {
+    console.error('Subject name and class are required')
+    return
+  }
+
+  // Verify user has permission to update this subject
+  const { data: profile } = await supabase
+    .from('users').select('organization_id').eq('id', user.id).single()
+
+  // Get the existing subject
+  const { data: existingSubject } = await supabase
+    .from('subjects')
+    .select('organization_id, instructor_id, group_id')
+    .eq('id', subjectId)
+    .single()
+
+  if (!existingSubject) {
+    console.error('Subject not found:', subjectId)
+    return
+  }
+
+  // Check ownership/permission
+  if (profile?.organization_id) {
+    // Institution: subject must belong to the same org
+    if (existingSubject.organization_id !== profile.organization_id) {
+      console.error('Subject does not belong to this organization')
+      return
+    }
+  } else {
+    // Solo teacher: subject must belong to them
+    if (existingSubject.instructor_id !== user.id) {
+      console.error('Subject does not belong to this teacher')
+      return
+    }
+  }
+
+  // Verify the new group belongs to the user/org
+  const { data: group } = await supabase
+    .from('groups')
+    .select('id, instructor_id, organization_id')
+    .eq('id', groupId)
+    .single()
+
+  if (!group) {
+    console.error('Group not found:', groupId)
+    return
+  }
+
+  if (profile?.organization_id) {
+    if (group.organization_id !== profile.organization_id) {
+      console.error('Group does not belong to this organization')
+      return
+    }
+  } else {
+    if (group.instructor_id !== user.id) {
+      console.error('Group does not belong to this teacher')
+      return
+    }
+  }
+
+  // Update the subject
+  const { error } = await supabase
+    .from('subjects')
+    .update({
+      name,
+      code: code || null,
+      group_id: groupId,
+      template_id: templateId || null,
+    })
+    .eq('id', subjectId)
+
+  if (error) {
+    console.error('Error updating subject:', error)
+    return
+  }
+
+  revalidatePath('/settings/subjects')
+  revalidatePath(`/classes/${groupId}`)
+  redirect('/settings/subjects')
+}
