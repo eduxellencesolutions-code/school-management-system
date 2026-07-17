@@ -1,65 +1,64 @@
-export const runtime = 'nodejs';
-import { NextRequest, NextResponse } from 'next/server';
-import Flutterwave from 'flutterwave-node-v3';
-import { createClient } from '@/lib/supabase/server';
-
-const PLANS: Record<string, { amount: number; label: string }> = {
-  teacher_term: { amount: 1000, label: 'Teacher (per term)' },
-  small_school_year: { amount: 10000, label: 'Small School (per year)' },
-  standard_school_year: { amount: 20000, label: 'Standard School (per year)' },
-  premium_school_year: { amount: 50000, label: 'Premium School (per year)' },
-};
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+import { getPrice, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
+import { CheckoutMetadata } from '@/lib/payments/types'
 
 export async function POST(req: NextRequest) {
-  try {
-    if (!process.env.FLW_PUBLIC_KEY || !process.env.FLW_SECRET_KEY) {
-      console.error('Flutterwave keys are not configured');
-      return NextResponse.json({ error: 'Payment provider not configured' }, { status: 500 });
-    }
-
-    const flw = new Flutterwave(
-      process.env.FLW_PUBLIC_KEY,
-      process.env.FLW_SECRET_KEY
-    );
-
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    const { planKey } = await req.json();
-    const plan = PLANS[planKey];
-    if (!plan) {
-      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
-    }
-
-    const tx_ref = `edux-${user.id}-${Date.now()}`;
-    const response = await flw.Payment.initiate({
-      tx_ref,
-      amount: plan.amount,
-      currency: 'NGN',
-      redirect_url: 'https://results.eduxellence.org/billing/verify',
-      customer: {
-        email: user.email || 'customer@example.com',
-        name: user.user_metadata?.name || 'Customer',
-      },
-      customizations: {
-        title: 'Eduxellence Results',
-        description: plan.label,
-      },
-      meta: {
-        userId: user.id,
-        planKey,
-      },
-    });
-
-    return NextResponse.json({ paymentLink: response.data.link });
-  } catch (error) {
-    console.error('Payment initiation error:', error);
-    return NextResponse.json(
-      { error: 'Failed to initiate payment' },
-      { status: 500 }
-    );
+  const { plan, currency, cycle, provider } = await req.json() as {
+    plan: PaidPlan
+    currency: Currency
+    cycle: BillingCycle
+    provider: 'flutterwave' | 'paystack'
   }
+
+  if (!['small_school', 'standard_school', 'premium_school'].includes(plan)) {
+    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+  }
+  if (!['NGN', 'USD'].includes(currency)) {
+    return NextResponse.json({ error: 'Invalid currency' }, { status: 400 })
+  }
+  if (!['termly', 'annual'].includes(cycle)) {
+    return NextResponse.json({ error: 'Invalid billing cycle' }, { status: 400 })
+  }
+  if (!['flutterwave', 'paystack'].includes(provider)) {
+    return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, name, email').eq('id', user.id).single()
+
+  const accountType = profile?.organization_id ? 'org' : 'solo'
+  const accountId = profile?.organization_id ?? user.id
+
+  const amount = getPrice(plan, currency, cycle)
+  const reference = `edux-${accountType}-${accountId}-${Date.now()}`
+
+  const metadata: CheckoutMetadata = { accountType, accountId, plan, cycle }
+
+  const commonInput = {
+    email: profile?.email ?? user.email!,
+    name: profile?.name ?? 'Customer',
+    amount,
+    currency,
+    reference,
+    redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`,
+    metadata,
+  }
+
+  const result = provider === 'flutterwave'
+    ? await initiateFlutterwaveCheckout(commonInput)
+    : await initiatePaystackCheckout(commonInput)
+
+  if (!result.success || !result.paymentLink) {
+    return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+  }
+
+  return NextResponse.json({ paymentLink: result.paymentLink })
 }
