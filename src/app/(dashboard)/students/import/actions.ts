@@ -79,15 +79,19 @@ export async function importStudents(groupId: string, rows: ImportRow[]): Promis
   const usage = await getUsageCounts(ref)
   const projectedTotal = usage.students + rows.length
 
-  if (config.limits.maxStudents !== 'unlimited' && projectedTotal > config.limits.maxStudents) {
-    const remaining = Math.max(0, config.limits.maxStudents - usage.students)
+  // ✅ FIXED: Use a type guard to handle 'unlimited' properly
+  const maxStudents = config.limits.maxStudents
+  const maxStudentsValue = typeof maxStudents === 'number' ? maxStudents : Infinity
+
+  if (projectedTotal > maxStudentsValue) {
+    const remaining = Math.max(0, typeof maxStudents === 'number' ? maxStudents - usage.students : 0)
     return {
       success: false,
       imported: 0,
       failed: 0,
       error: remaining > 0
-        ? `This import would exceed your student limit. You can add ${remaining} more student${remaining !== 1 ? 's' : ''} on the ${config.label} plan (${usage.students}/${config.limits.maxStudents} used). Upgrade to import all ${rows.length}.`
-        : `Student limit reached (${config.limits.maxStudents} max on ${config.label} plan). Upgrade to add more students.`,
+        ? `This import would exceed your student limit. You can add ${remaining} more student${remaining !== 1 ? 's' : ''} on the ${config.label} plan (${usage.students}/${typeof maxStudents === 'number' ? maxStudents : 'unlimited'} used). Upgrade to import all ${rows.length}.`
+        : `Student limit reached (${typeof maxStudents === 'number' ? maxStudents : 'unlimited'} max on ${config.label} plan). Upgrade to add more students.`,
     }
   }
 
