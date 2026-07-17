@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { PLAN_PRICING, PLAN_LIMITS, type SubscriptionPlan } from '@/types'
+import { getPlanConfig, PlanKey } from '@/lib/plans/config'
 import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown } from 'lucide-react'
 import Link from 'next/link'
-import UpgradeButton from '@/components/billing/UpgradeButton'
+import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -17,13 +17,15 @@ export default async function SettingsPage() {
     .single()
   
   const org = profile?.organization
-
-  const currentPlan = (org?.subscription_plan ?? 'free') as SubscriptionPlan
-  const planInfo = PLAN_PRICING[currentPlan]
-  const planLimits = PLAN_LIMITS[currentPlan]
-
   const isInstitution = !!org
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+
+  // ✅ Solo teachers carry their own subscription_plan/status on users;
+  // institutions carry it on organizations.
+  const currentPlan = (isInstitution ? org?.subscription_plan : profile?.subscription_plan) as PlanKey ?? 'free'
+  const currentStatus = (isInstitution ? org?.subscription_status : profile?.subscription_status) ?? 'active'
+  const config = getPlanConfig(currentPlan)
+
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
@@ -114,7 +116,7 @@ export default async function SettingsPage() {
                 <Crown size={16} className="text-ink-faint" />
                 <div>
                   <p className="text-xs text-ink-faint">Plan</p>
-                  <p className="text-sm text-ink font-medium capitalize">{planInfo?.label || 'Free'}</p>
+                  <p className="text-sm text-ink font-medium capitalize">{config.label}</p>
                 </div>
               </div>
               {org.motto && (
@@ -194,70 +196,72 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* ✅ Billing Section - with id="billing" for anchor navigation */}
-      {isInstitution && (
-        <div id="billing" className="card scroll-mt-20">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-              <Crown size={16} className="text-brand-500" />
-              Subscription & Billing
-            </h2>
-            <span className="badge badge-blue">{planInfo?.label}</span>
-          </div>
-          <div className="card-body flex flex-col gap-5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-ink">{planInfo?.naira}</span>
-              <span className="text-sm text-ink-muted">{planInfo?.period}</span>
-            </div>
-
-            {/* Feature checklist */}
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: `${planLimits?.max_groups === null ? 'Unlimited' : planLimits?.max_groups} classes`, enabled: true },
-                { label: `${planLimits?.max_learners === null ? 'Unlimited' : planLimits?.max_learners} students`, enabled: true },
-                { label: 'Excel export', enabled: planLimits?.has_excel_export ?? false },
-                { label: 'PDF reports', enabled: planLimits?.has_pdf_export ?? false },
-                { label: 'School branding', enabled: planLimits?.has_branding ?? false },
-                { label: 'AI remarks', enabled: planLimits?.has_ai_remarks ?? false },
-                { label: 'Analytics dashboard', enabled: planLimits?.has_analytics ?? false },
-                { label: 'Multiple teachers', enabled: planLimits?.has_multi_staff ?? false },
-                { label: 'Parent portal', enabled: planLimits?.has_parent_portal ?? false },
-              ].map(({ label, enabled }) => (
-                <div key={label} className="flex items-center gap-2 text-sm">
-                  {enabled
-                    ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
-                    : <XCircle size={14} className="text-surface-200 shrink-0" />
-                  }
-                  <span className={enabled ? 'text-ink' : 'text-ink-faint'}>{label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Upgrade options */}
-            {currentPlan !== 'premium_school' && (
-              <div className="border-t border-surface-200 pt-4">
-                <p className="text-sm font-medium text-ink mb-3">Upgrade your plan</p>
-                <div className="flex flex-col gap-2">
-                  {Object.entries(PLAN_PRICING)
-                    .filter(([key]) => key !== currentPlan && key !== 'free')
-                    .map(([key, info]) => (
-                      <div key={key} className="flex items-center justify-between p-3 border border-surface-200 rounded hover:border-brand-300 transition-colors">
-                        <div>
-                          <p className="text-sm font-medium text-ink">{info.label}</p>
-                          <p className="text-xs text-ink-muted">{info.naira} {info.period}</p>
-                        </div>
-                        <UpgradeButton planKey={key} label={info.label} />
-                      </div>
-                    ))}
-                </div>
-                <p className="text-xs text-ink-faint mt-3">
-                  Contact us to upgrade: <a href="mailto:billing@eduxellence.org" className="text-brand-500 hover:underline">billing@eduxellence.org</a>
-                </p>
-              </div>
+      {/* ✅ Billing Section - Now shows for BOTH institutions AND solo teachers */}
+      <div id="billing" className="card scroll-mt-20">
+        <div className="card-header flex items-center justify-between">
+          <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+            <Crown size={16} className="text-brand-500" />
+            Subscription & Billing
+          </h2>
+          <span className="badge badge-blue capitalize">{config.label}</span>
+        </div>
+        <div className="card-body flex flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <span className={`badge ${currentStatus === 'active' ? 'badge-green' : currentStatus === 'trial' ? 'badge-blue' : 'badge-red'} capitalize`}>
+              {currentStatus}
+            </span>
+            {(isInstitution ? org?.subscription_expires_at : profile?.subscription_expires_at) && (
+              <span className="text-xs text-ink-muted">
+                Renews / expires {new Date(isInstitution ? org.subscription_expires_at : profile.subscription_expires_at).toLocaleDateString('en-NG')}
+              </span>
             )}
           </div>
+
+          {/* Feature checklist — driven entirely by the plan config, not a separate PLAN_LIMITS table */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { label: `${config.limits.maxClasses === 'unlimited' ? 'Unlimited' : config.limits.maxClasses} classes`, enabled: true },
+              { label: `${config.limits.maxStudents} students`, enabled: true },
+              { label: 'Excel export', enabled: config.features.excelImportExport },
+              { label: 'PDF reports', enabled: config.features.pdfReportCards },
+              { label: 'School branding', enabled: config.features.schoolBranding === 'full' },
+              { label: 'AI remarks', enabled: config.features.aiGeneratedRemarks },
+              { label: 'Broadsheet generation', enabled: config.features.broadsheetGeneration },
+              { label: 'Multiple teachers', enabled: config.features.teacherManagement },
+              { label: 'Parent portal', enabled: config.features.parentPortal },
+              { label: 'Student portal', enabled: config.features.studentPortal },
+              { label: 'Online result checker', enabled: config.features.onlineResultChecker },
+              { label: 'Priority support', enabled: config.features.prioritySupport !== 'community' },
+            ].map(({ label, enabled }) => (
+              <div key={label} className="flex items-center gap-2 text-sm">
+                {enabled
+                  ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+                  : <XCircle size={14} className="text-surface-200 shrink-0" />
+                }
+                <span className={enabled ? 'text-ink' : 'text-ink-faint'}>{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Upgrade options */}
+          {currentPlan !== 'premium_school' && (
+            <div className="border-t border-surface-200 pt-4">
+              <p className="text-sm font-medium text-ink mb-3">Upgrade your plan</p>
+              <div className="flex flex-col gap-3">
+                {(['small_school', 'standard_school', 'premium_school'] as const)
+                  .filter(key => key !== currentPlan)
+                  .map(key => (
+                    <PlanUpgradeCard
+                      key={key}
+                      plan={key}
+                      label={getPlanConfig(key).label}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
