@@ -1,8 +1,9 @@
 'use client'
+
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
-import { getPrice, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
+import { getPrice, getAnnualSavingsPercent, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
 
 interface Props {
   plan: PaidPlan
@@ -74,7 +75,7 @@ export default function PlanUpgradeCard({ plan, label }: Props) {
             onClick={() => setCycle('annual')}
             className={`px-2 py-0.5 rounded ${cycle === 'annual' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
           >
-            Annual · Save ~17%
+            Annual · Save {getAnnualSavingsPercent(plan, currency)}%
           </button>
         </div>
       </div>
