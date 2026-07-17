@@ -142,6 +142,16 @@ export async function canCreateClass(plan: string, ref: AccountRef): Promise<Gat
     : { allowed: false, reason: `Class limit reached on the ${config.label} plan. Upgrade for unlimited classes.` }
 }
 
+// ✅ NEW: Subject creation gate
+export async function canCreateSubject(plan: string, ref: AccountRef): Promise<GateResult> {
+  const config = getPlanConfig(plan)
+  const usage = await getUsageCounts(ref)
+  const allowed = checkLimit(usage.subjects, config.limits.maxSubjects)
+  return allowed
+    ? { allowed: true }
+    : { allowed: false, reason: `Subject limit reached (${config.limits.maxSubjects} max on ${config.label} plan). Upgrade for unlimited subjects.` }
+}
+
 // Simple boolean feature check — for things like broadsheet
 // generation, portals, AI remarks, etc.
 export function hasFeature<K extends keyof PlanConfig['features']>(
