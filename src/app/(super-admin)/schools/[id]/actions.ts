@@ -9,10 +9,8 @@ async function requireSuperAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (!isSuperAdmin) redirect('/dashboard')
-
   return user
 }
 
@@ -30,10 +28,27 @@ export async function updateSchoolStatus(formData: FormData) {
   const status = formData.get('status') as string
   if (!orgId || !status) return { success: false, message: 'Missing data' }
 
+  const validStatuses = ['trial', 'active', 'expired', 'suspended', 'cancelled']
+  if (!validStatuses.includes(status)) {
+    return { success: false, message: `Invalid status: ${status}` }
+  }
+
   const admin = serviceClient()
+
+  const updates: Record<string, unknown> = { subscription_status: status }
+
+  if (status === 'suspended') {
+    updates.suspended_at = new Date().toISOString()
+  } else if (status === 'cancelled') {
+    updates.cancelled_at = new Date().toISOString()
+  } else if (status === 'active') {
+    updates.suspended_at = null
+    updates.cancelled_at = null
+  }
+
   const { error } = await admin
     .from('organizations')
-    .update({ subscription_status: status })
+    .update(updates)
     .eq('id', orgId)
 
   if (error) {
@@ -55,7 +70,12 @@ export async function extendSubscription(formData: FormData) {
   const admin = serviceClient()
   const { error } = await admin
     .from('organizations')
-    .update({ subscription_expires_at: newExpiry, subscription_status: 'active' })
+    .update({
+      subscription_expires_at: newExpiry,
+      subscription_status: 'active',
+      suspended_at: null,
+      cancelled_at: null,
+    })
     .eq('id', orgId)
 
   if (error) {
@@ -116,11 +136,40 @@ export async function permanentlyDeleteSchool(formData: FormData) {
   }
 
   const { error } = await admin.from('organizations').delete().eq('id', orgId)
+
   if (error) {
     console.error('Error deleting school:', error)
     return { success: false, message: 'Failed to delete school. It may have dependent records that must be removed first.' }
   }
 
+  revalidatePath('/schools')
+  return { success: true }
+}
+
+// ✅ NEW: Change school plan
+export async function changeSchoolPlan(formData: FormData) {
+  await requireSuperAdmin()
+  const orgId = formData.get('org_id') as string
+  const plan = formData.get('plan') as string
+  if (!orgId || !plan) return { success: false, message: 'Missing data' }
+
+  const validPlans = ['free', 'small_school', 'standard_school', 'premium_school']
+  if (!validPlans.includes(plan)) {
+    return { success: false, message: `Invalid plan: ${plan}` }
+  }
+
+  const admin = serviceClient()
+  const { error } = await admin
+    .from('organizations')
+    .update({ subscription_plan: plan })
+    .eq('id', orgId)
+
+  if (error) {
+    console.error('Error changing school plan:', error)
+    return { success: false, message: 'Failed to change plan' }
+  }
+
+  revalidatePath(`/schools/${orgId}`)
   revalidatePath('/schools')
   return { success: true }
 }
