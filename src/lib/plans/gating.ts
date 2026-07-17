@@ -34,12 +34,14 @@ export async function getUsageCounts(ref: AccountRef): Promise<UsageCounts> {
       { count: admins },
       { count: academicSessions },
       { count: classes },
+      { count: subjects },
     ] = await Promise.all([
       admin.from('learners').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
       admin.from('users').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId).eq('role', 'teacher'),
       admin.from('users').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId).eq('role', 'admin'),
       admin.from('academic_sessions').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
       admin.from('groups').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
+      admin.from('subjects').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
     ])
 
     return {
@@ -48,29 +50,37 @@ export async function getUsageCounts(ref: AccountRef): Promise<UsageCounts> {
       admins: admins ?? 0,
       academicSessions: academicSessions ?? 0,
       classes: classes ?? 0,
-      subjects: 0, // TODO: wire up once we confirm your subjects table name/shape
+      subjects: subjects ?? 0,
     }
   }
 
-  // Solo teacher: everything is scoped by instructor_id, and the
-  // teacher/admin count is always 1 (themselves).
+  // Solo teacher: subjects/academic_sessions/groups are scoped directly
+  // by instructor_id. learners has no instructor_id column, so it must
+  // be counted via a join through groups (a student belongs to a group,
+  // and a group belongs to the teacher).
   const [
-    { count: students },
     { count: academicSessions },
-    { count: classes },
+    { data: teacherGroups },
+    { count: subjects },
   ] = await Promise.all([
-    admin.from('learners').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
     admin.from('academic_sessions').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
-    admin.from('groups').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
+    admin.from('groups').select('id').eq('instructor_id', ref.userId),
+    admin.from('subjects').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
   ])
+
+  const groupIds = (teacherGroups ?? []).map(g => g.id)
+
+  const { count: students } = groupIds.length > 0
+    ? await admin.from('learners').select('id', { count: 'exact', head: true }).in('group_id', groupIds)
+    : { count: 0 }
 
   return {
     students: students ?? 0,
-    teachers: 1,
-    admins: 1,
+    teachers: 1, // Solo teacher counts as their own teacher
+    admins: 1, // Solo teacher counts as their own admin
     academicSessions: academicSessions ?? 0,
-    classes: classes ?? 0,
-    subjects: 0,
+    classes: groupIds.length,
+    subjects: subjects ?? 0,
   }
 }
 
