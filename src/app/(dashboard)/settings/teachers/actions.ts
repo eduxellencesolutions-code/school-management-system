@@ -50,12 +50,19 @@ export async function createTeacher(input: CreateTeacherInput) {
   }
 
   // ✅ Check teacher management feature
-  const { data: org } = await createClient()
+  const supabase = await createClient()
+  const { data: org } = await supabase
     .from('organizations').select('subscription_plan').eq('id', orgId).single()
   const plan = org?.subscription_plan ?? 'free'
 
   if (!hasFeature(plan, 'teacherManagement')) {
     return { error: 'Teacher management is not available on your current plan. Please upgrade to add teachers.' }
+  }
+
+  // ✅ GATE: Check numeric teacher limit before creating
+  const gate = await canAddTeacher(plan, { type: 'org', orgId })
+  if (!gate.allowed) {
+    return { error: gate.reason }
   }
 
   const adminClient = createServiceClient(
