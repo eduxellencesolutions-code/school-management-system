@@ -18,8 +18,32 @@ export async function generateReport(formData: FormData) {
     if (!type) throw new Error('Report type is required')
 
     const { data: profile } = await supabase
-      .from('users').select('organization_id').eq('id', user.id).single()
+      .from('users').select('organization_id, role').eq('id', user.id).single()
     if (!profile) throw new Error('User profile not found')
+
+    // ✅ Explicit authorization check — only admin, solo (own class), or the CLASS TEACHER may generate
+    const isAdmin = profile.role === 'admin' || profile.role === 'school_admin'
+    const isSolo = !profile.organization_id
+
+    if (!isAdmin && !isSolo) {
+      const { data: assignment } = await supabase
+        .from('teacher_assignments')
+        .select('id')
+        .eq('teacher_id', user.id)
+        .eq('class_id', groupId)
+        .eq('role', 'class_teacher')
+        .maybeSingle()
+
+      if (!assignment) {
+        throw new Error('Only the class teacher can generate a report for this class')
+      }
+    }
+
+    if (isSolo) {
+      const { data: ownGroup } = await supabase
+        .from('groups').select('id').eq('id', groupId).eq('instructor_id', user.id).maybeSingle()
+      if (!ownGroup) throw new Error('You can only generate reports for your own classes')
+    }
 
     // Determine the term: institution uses org's current_term_id (no override),
     // solo teacher uses their own current_term_id unless they picked a different one
