@@ -30,7 +30,7 @@ interface Props {
   initialRemarks: Record<string, { teacher_remark?: string; principal_remark?: string }>
   showPrincipalRemark: boolean
   hasAIRemarks: boolean
-  signatoryTitle?: string  // ✅ Added
+  signatoryTitle?: string
 }
 
 export default function RemarksEditor({
@@ -40,7 +40,7 @@ export default function RemarksEditor({
   initialRemarks,
   showPrincipalRemark,
   hasAIRemarks,
-  signatoryTitle = 'Principal'  // ✅ Default fallback
+  signatoryTitle = 'Principal'
 }: Props) {
   const [remarks, setRemarks] = useState(initialRemarks)
   const [saving, setSaving] = useState(false)
@@ -60,10 +60,9 @@ export default function RemarksEditor({
     }))
   }
 
-  // ✅ Get possessive form of the signatory title
   const getPossessiveTitle = (title: string) => {
-    if (title.endsWith('s')) return `${title}'`      // Headmistress' / Proprietress'
-    return `${title}'s`                               // Principal's / Head Teacher's / Headmaster's / Proprietor's
+    if (title.endsWith('s')) return `${title}'`
+    return `${title}'s`
   }
 
   const possessiveTitle = getPossessiveTitle(signatoryTitle)
@@ -84,10 +83,45 @@ export default function RemarksEditor({
       return
     }
 
-    // Fills the textarea only — teacher reviews and clicks
-    // "Save remarks" themselves. Never auto-saves.
     updateRemark(learner.learner_id, 'teacher_remark', result.remark)
     toast.success('Remark generated — review before saving')
+  }
+
+  // ✅ NEW: signatory (Principal/Head Teacher/etc) AI generation
+  async function handleGenerateSignatoryRemark(learner: LearnerRow) {
+    setGeneratingFor(`signatory-${learner.learner_id}`)
+
+    const sorted = [...learner.subjectBreakdown].sort((a, b) => b.percentage - a.percentage)
+    const strongest = sorted[0]
+    const weakest = sorted[sorted.length - 1]
+
+    try {
+      const res = await fetch('/api/ai/remarks/principal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          learner_name: `${learner.first_name} ${learner.last_name}`,
+          overall_percentage: learner.percentage,
+          grade: learner.grade,
+          strongest_subject: strongest?.name,
+          weakest_subject: weakest?.name,
+          signatory_title: signatoryTitle,
+        }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error ?? `Failed to generate ${signatoryTitle} remark`)
+        return
+      }
+
+      updateRemark(learner.learner_id, 'principal_remark', data.remark)
+      toast.success(`${signatoryTitle} remark generated — review before saving`)
+    } catch {
+      toast.error(`Failed to generate ${signatoryTitle} remark`)
+    } finally {
+      setGeneratingFor(null)
+    }
   }
 
   async function handleSave() {
@@ -114,7 +148,8 @@ export default function RemarksEditor({
           const suggestions = matchingTemplates(teacherTemplates, l.percentage)
           const principalSuggestions = matchingTemplates(principalTemplates, l.percentage)
           const current = remarks[l.learner_id] ?? {}
-          const isGenerating = generatingFor === l.learner_id
+          const isGeneratingTeacher = generatingFor === l.learner_id
+          const isGeneratingSignatory = generatingFor === `signatory-${l.learner_id}`
 
           return (
             <div key={l.learner_id} className="px-5 py-4 flex flex-col gap-3">
@@ -130,10 +165,10 @@ export default function RemarksEditor({
                     <button
                       type="button"
                       onClick={() => handleGenerateAI(l)}
-                      disabled={isGenerating}
+                      disabled={isGeneratingTeacher}
                       className="text-xs text-brand-500 hover:underline flex items-center gap-1 disabled:opacity-50"
                     >
-                      {isGenerating
+                      {isGeneratingTeacher
                         ? <><Loader2 size={11} className="animate-spin" /> Generating…</>
                         : <><Sparkles size={11} /> Generate with AI</>}
                     </button>
@@ -164,9 +199,25 @@ export default function RemarksEditor({
 
               {showPrincipalRemark && (
                 <div>
-                  <label className="block text-xs font-medium text-ink-muted mb-1">
-                    {possessiveTitle} remark
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-ink-muted">
+                      {possessiveTitle} remark
+                    </label>
+                    {hasAIRemarks ? (
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateSignatoryRemark(l)}
+                        disabled={isGeneratingSignatory}
+                        className="text-xs text-brand-500 hover:underline flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {isGeneratingSignatory
+                          ? <><Loader2 size={11} className="animate-spin" /> Generating…</>
+                          : <><Sparkles size={11} /> Generate with AI</>}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-faint">AI remarks: upgrade to unlock</span>
+                    )}
+                  </div>
                   {principalSuggestions.length > 0 && (
                     <select
                       className="input mb-1.5"
