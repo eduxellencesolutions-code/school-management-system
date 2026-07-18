@@ -110,7 +110,8 @@ export default async function ReportDetailPage({ params }: Props) {
     remarkTemplates = data ?? []
   }
 
-  const showPrincipalRemark = orgFull?.report_card_settings?.show_class_teacher_comment ?? false
+  // ✅ FIX: Use show_signatory_comment instead of show_class_teacher_comment
+  const showPrincipalRemark = orgFull?.report_card_settings?.show_signatory_comment ?? true
 
   // ✅ Get current plan for AI remarks feature
   let currentPlan = 'free'
