@@ -104,3 +104,49 @@ export async function deleteGroup(formData: FormData) {
     redirect('/classes?error=unexpected')
   }
 }
+
+export async function createGroup(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, role').eq('id', user.id).single()
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  if (profile?.organization_id && !isAdmin) redirect('/classes?error=not_authorized')
+
+  const name = (formData.get('name') as string)?.trim()
+  const code = (formData.get('code') as string)?.trim() || null
+  const type = formData.get('type') as string
+  const sessionId = (formData.get('session_id') as string) || null
+  const termId = (formData.get('term_id') as string) || null
+
+  if (!name) redirect('/classes/new?error=missing_name')
+
+  const { data: group, error } = await supabase
+    .from('groups')
+    .insert({
+      organization_id: profile?.organization_id ?? null,
+      name,
+      code,
+      type,
+      instructor_id: user.id,
+      session_id: sessionId,
+      term_id: termId,
+      is_active: true,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating class:', error)
+    redirect(`/classes/new?error=${encodeURIComponent('Failed to create class')}`)
+  }
+
+  revalidatePath('/classes')
+  redirect(`/classes/${group.id}`)
+}
