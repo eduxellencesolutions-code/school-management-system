@@ -307,20 +307,19 @@ export async function removeAssignment(formData: FormData) {
   revalidatePath('/settings/teachers')
 }
 
-// ✅ UPDATED: Bulk upload teachers via CSV with proper auth creation and gate checks
+// ✅ UPDATED: Bulk upload teachers via CSV with proper auth creation and subscription gate
 export async function uploadTeachers(formData: FormData) {
+  const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
-  
-  // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
-  if (!adminUser) return { error: 'Not authenticated' }
+  const orgId = profile?.organization_id
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before uploading teachers
-  const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
-  if (!allowed) return { error: message }
-
-  const { profile } = await checkInstitutionAccess()
-  const orgId = profile?.organization_id
+  const { data: { user } } = await supabase.auth.getUser()
+  const { allowed, message } = await requireActiveSubscription(supabase, user!.id)
+  if (!allowed) {
+    console.error('Blocked teacher upload — subscription expired:', message)
+    return
+  }
 
   // ✅ GATE: Check teacher management feature availability
   const { data: org } = await supabase
