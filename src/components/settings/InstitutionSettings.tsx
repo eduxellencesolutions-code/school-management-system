@@ -32,7 +32,7 @@ interface Organization {
     show_school_seal: boolean
     grade_system: string
     pass_mark: number
-    show_signatory_comment: boolean  // ✅ Added
+    show_signatory_comment: boolean
   } | null
 }
 
@@ -111,6 +111,36 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     const value = e.target.value
     setCustomTitle(value)
     setFormData(prev => ({ ...prev, principal_title: value }))
+  }
+
+  // ✅ NEW: Remove image handler
+  const handleRemoveImage = async (type: 'logo' | 'principal_sig' | 'teacher_sig') => {
+    const confirmed = window.confirm('Remove this image? This cannot be undone.')
+    if (!confirmed) return
+
+    const columnMap = {
+      logo: 'logo_url',
+      principal_sig: 'principal_signature_url',
+      teacher_sig: 'teacher_signature_url',
+    }
+    const column = columnMap[type]
+
+    const { error } = await supabase
+      .from('organizations')
+      .update({ [column]: null })
+      .eq('id', organization.id)
+
+    if (error) {
+      toast.error('Failed to remove image')
+      return
+    }
+
+    if (type === 'logo') setLogoPreview(null)
+    if (type === 'principal_sig') setPrincipalSigPreview(null)
+    if (type === 'teacher_sig') setTeacherSigPreview(null)
+
+    toast.success('Image removed')
+    router.refresh()
   }
 
   const handleFileUpload = async (file: File, type: 'logo' | 'principal_sig' | 'teacher_sig') => {
@@ -394,25 +424,36 @@ export default function InstitutionSettings({ organization, userId }: Props) {
             )}
           </div>
           <div>
-            <label className="btn-secondary btn-sm btn cursor-pointer">
-              <Upload size={13} />
-              Upload Logo
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    // Show preview immediately
-                    const previewUrl = URL.createObjectURL(file)
-                    setLogoPreview(previewUrl)
-                    handleFileUpload(file, 'logo')
-                  }
-                }}
-                disabled={uploading}
-              />
-            </label>
+            <div className="flex gap-2">
+              <label className="btn-secondary btn-sm btn cursor-pointer">
+                <Upload size={13} />
+                Upload Logo
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      // Show preview immediately
+                      const previewUrl = URL.createObjectURL(file)
+                      setLogoPreview(previewUrl)
+                      handleFileUpload(file, 'logo')
+                    }
+                  }}
+                  disabled={uploading}
+                />
+              </label>
+              {logoPreview && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage('logo')}
+                  className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+                >
+                  <X size={13} /> Remove
+                </button>
+              )}
+            </div>
             <p className="text-xs text-ink-muted mt-2">
               Recommended: Square image, PNG or JPG, max 2MB
             </p>
@@ -443,24 +484,35 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                 )}
               </div>
               <div>
-                <label className="btn-secondary btn-sm btn cursor-pointer">
-                  <Upload size={13} />
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const previewUrl = URL.createObjectURL(file)
-                        setPrincipalSigPreview(previewUrl)
-                        handleFileUpload(file, 'principal_sig')
-                      }
-                    }}
-                    disabled={uploading}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <label className="btn-secondary btn-sm btn cursor-pointer">
+                    <Upload size={13} />
+                    Upload
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          const previewUrl = URL.createObjectURL(file)
+                          setPrincipalSigPreview(previewUrl)
+                          handleFileUpload(file, 'principal_sig')
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </label>
+                  {principalSigPreview && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage('principal_sig')}
+                      className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+                    >
+                      <X size={13} /> Remove
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-ink-muted mt-1">
                   Upload principal's signature image
                 </p>
@@ -484,24 +536,35 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                 )}
               </div>
               <div>
-                <label className="btn-secondary btn-sm btn cursor-pointer">
-                  <Upload size={13} />
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const previewUrl = URL.createObjectURL(file)
-                        setTeacherSigPreview(previewUrl)
-                        handleFileUpload(file, 'teacher_sig')
-                      }
-                    }}
-                    disabled={uploading}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <label className="btn-secondary btn-sm btn cursor-pointer">
+                    <Upload size={13} />
+                    Upload
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          const previewUrl = URL.createObjectURL(file)
+                          setTeacherSigPreview(previewUrl)
+                          handleFileUpload(file, 'teacher_sig')
+                        }
+                      }}
+                      disabled={uploading}
+                    />
+                  </label>
+                  {teacherSigPreview && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage('teacher_sig')}
+                      className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+                    >
+                      <X size={13} /> Remove
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-ink-muted mt-1">
                   Default signature for all teachers
                 </p>
