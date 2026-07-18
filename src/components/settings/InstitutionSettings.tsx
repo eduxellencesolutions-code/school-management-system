@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette, PenTool } from 'lucide-react'
 
+// ✅ UPDATED: Added show_signatory_comment to the interface
 interface Organization {
   id: string
   name: string
@@ -31,6 +32,7 @@ interface Organization {
     show_school_seal: boolean
     grade_system: string
     pass_mark: number
+    show_signatory_comment: boolean  // ✅ Added
   } | null
 }
 
