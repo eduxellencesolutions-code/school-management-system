@@ -343,6 +343,7 @@ export default async function ReportDetailPage({ params }: Props) {
           templates={remarkTemplates}
           initialRemarks={report.student_remarks ?? {}}
           showPrincipalRemark={showPrincipalRemark}
+          signatoryTitle={orgFull?.principal_title ?? 'Principal'}
           hasAIRemarks={hasFeature(currentPlan, 'aiGeneratedRemarks')}
         />
       )}
