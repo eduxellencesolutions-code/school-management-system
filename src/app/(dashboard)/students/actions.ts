@@ -101,67 +101,59 @@ export async function createStudent(formData: FormData) {
   redirect(`/students?class=${groupId}&success=added`)
 }
 
-// ✅ NEW: Import multiple students
-export async function importStudents(groupId: string, rows: Array<{
-  first_name: string
-  last_name: string
-  other_names?: string
-  admission_number?: string
-  gender?: string
-  date_of_birth?: string
-  guardian_name?: string
-  guardian_phone?: string
-  email?: string
-}>) {
+// ✅ UPDATED: Import multiple students with subscription guard
+export async function importStudents(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  if (!user) return { success: false, message: 'Not authenticated', imported: 0, failed: 0 }
 
-  // ✅ Subscription gate — expired accounts cannot import students
+  // ✅ SUBSCRIPTION GATE: Check active subscription before importing students
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
-  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+  if (!allowed) return { success: false, message: message!, imported: 0, failed: 0 }
 
-  if (!groupId) return { success: false, imported: 0, failed: 0, error: 'Select a class first' }
-  if (rows.length === 0) return { success: false, imported: 0, failed: 0, error: 'No valid rows to import' }
-  if (rows.length > 500) return { success: false, imported: 0, failed: 0, error: 'Maximum 500 students per import' }
+  const groupId = formData.get('group_id') as string
+  const rowsJson = formData.get('rows') as string
+  if (!groupId || !rowsJson) return { success: false, message: 'Missing data', imported: 0, failed: 0 }
+
+  let rows: any[]
+  try {
+    rows = JSON.parse(rowsJson)
+  } catch {
+    return { success: false, message: 'Invalid data format', imported: 0, failed: 0 }
+  }
+
+  if (rows.length === 0) return { success: false, message: 'No valid rows to import', imported: 0, failed: 0 }
+  if (rows.length > 500) return { success: false, message: 'Maximum 500 students per import', imported: 0, failed: 0 }
 
   const { data: profile } = await supabase
-    .from('users')
-    .select('organization_id, subscription_plan')
-    .eq('id', user.id)
-    .single()
+    .from('users').select('organization_id').eq('id', user.id).single()
 
-  // Verify the destination class belongs to this institution/teacher
+  // Confirm this class actually belongs to the requester
   const { data: group } = await supabase
-    .from('groups')
-    .select('id, instructor_id, organization_id')
-    .eq('id', groupId)
-    .single()
+    .from('groups').select('id, instructor_id, organization_id').eq('id', groupId).single()
 
-  if (!group) return { success: false, imported: 0, failed: 0, error: 'Class not found' }
+  if (!group) return { success: false, message: 'Class not found', imported: 0, failed: 0 }
 
   if (profile?.organization_id) {
     if (group.organization_id !== profile.organization_id) {
-      return { success: false, imported: 0, failed: 0, error: 'Class does not belong to your organization' }
+      return { success: false, message: 'Class does not belong to your organization', imported: 0, failed: 0 }
     }
-  } else {
-    if (group.instructor_id !== user.id) {
-      return { success: false, imported: 0, failed: 0, error: 'Class does not belong to you' }
-    }
+  } else if (group.instructor_id !== user.id) {
+    return { success: false, message: 'Class does not belong to you', imported: 0, failed: 0 }
   }
 
   let success = 0
   let failed = 0
 
-  const batches: typeof rows[] = []
+  const batches = []
   for (let i = 0; i < rows.length; i += 50) batches.push(rows.slice(i, i + 50))
 
   for (const batch of batches) {
-    const inserts = batch.map(r => ({
+    const inserts = batch.map((r: any) => ({
       organization_id: profile?.organization_id ?? null,
       group_id: groupId,
-      first_name: r.first_name.trim(),
-      last_name: r.last_name.trim(),
+      first_name: r.first_name?.trim(),
+      last_name: r.last_name?.trim(),
       other_names: r.other_names?.trim() || null,
       admission_number: r.admission_number?.trim() || null,
       gender: r.gender || null,
@@ -173,9 +165,9 @@ export async function importStudents(groupId: string, rows: Array<{
       is_active: true,
     }))
 
-    const { error, data } = await supabase.from('learners').insert(inserts).select()
-
+    const { data, error } = await supabase.from('learners').insert(inserts).select()
     if (error) {
+      console.error('Batch import error:', error)
       failed += batch.length
     } else {
       success += data?.length ?? batch.length
