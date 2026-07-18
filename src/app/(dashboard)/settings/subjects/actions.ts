@@ -1,8 +1,10 @@
 'use server'
+
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { canCreateSubject, AccountRef } from '@/lib/plans/gating'
+import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 
 export async function createSubject(formData: FormData) {
   const supabase = await createClient()
@@ -11,6 +13,10 @@ export async function createSubject(formData: FormData) {
 
   const { data: profile } = await supabase
     .from('users').select('organization_id, subscription_plan').eq('id', user.id).single()
+
+  // ✅ SUBSCRIPTION GATE: Check active subscription before creating subject
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings/subjects?error=${encodeURIComponent(message!)}`)
 
   const name       = (formData.get('name') as string)?.trim()
   const code       = (formData.get('code') as string)?.trim()
@@ -81,7 +87,7 @@ export async function createSubject(formData: FormData) {
   redirect('/settings/subjects')
 }
 
-// ✅ NEW: Update subject function
+// ✅ NEW: Update subject function with subscription guard
 export async function updateSubject(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -106,6 +112,10 @@ export async function updateSubject(formData: FormData) {
   // Verify user has permission to update this subject
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
+
+  // ✅ SUBSCRIPTION GATE: Check active subscription before updating subject
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings/subjects?error=${encodeURIComponent(message!)}`)
 
   // Get the existing subject
   const { data: existingSubject } = await supabase
@@ -179,7 +189,7 @@ export async function updateSubject(formData: FormData) {
   redirect('/settings/subjects')
 }
 
-// ✅ NEW: Delete subject function
+// ✅ NEW: Delete subject function (unguarded - cleanup operations are allowed)
 export async function deleteSubject(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
