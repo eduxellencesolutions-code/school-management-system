@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { generateLearnerCSVTemplate, cn } from '@/lib/utils'
 import { Upload, Download, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { importStudents } from './actions'
+import { importStudents } from '../actions'
 
 interface CSVRow {
   first_name: string
@@ -70,7 +70,7 @@ export default function ImportStudentsPage() {
       setGroups(grps ?? [])
     }
     load()
-  }, []) // ✅ Added dependency array
+  }, [supabase])
 
   function downloadTemplate() {
     const csv = generateLearnerCSVTemplate()
@@ -174,7 +174,7 @@ export default function ImportStudentsPage() {
     if (file) handleFile(file)
   }
 
-  // ✅ UPDATED: Uses server action with proper gating
+  // ✅ UPDATED: Uses server action with FormData (matching the server action signature)
   async function runImport() {
     if (!selectedGroup) { toast.error('Select a class first'); return }
     const validRows = parsed.filter(r => r._status === 'valid')
@@ -182,7 +182,10 @@ export default function ImportStudentsPage() {
 
     setImporting(true)
 
-    const rows = validRows.map(r => ({
+    // ✅ Create FormData to match the server action signature
+    const formData = new FormData()
+    formData.append('group_id', selectedGroup)
+    formData.append('rows', JSON.stringify(validRows.map(r => ({
       first_name: r.first_name,
       last_name: r.last_name,
       other_names: r.other_names,
@@ -192,19 +195,26 @@ export default function ImportStudentsPage() {
       guardian_name: r.guardian_name,
       guardian_phone: r.guardian_phone,
       email: r.email,
-    }))
+    }))))
 
-    const result = await importStudents(selectedGroup, rows)
+    const result = await importStudents(formData)
     setImporting(false)
 
     if (!result.success) {
-      toast.error(result.error ?? 'Import failed')
+      toast.error(result.message || 'Import failed')
       return
     }
 
     setImportResults({ success: result.imported, failed: result.failed })
-    if (result.imported > 0) toast.success(`${result.imported} student${result.imported !== 1 ? 's' : ''} imported!`)
-    if (result.failed > 0) toast.error(`${result.failed} row${result.failed !== 1 ? 's' : ''} failed`)
+    if (result.imported > 0) {
+      toast.success(`${result.imported} student${result.imported !== 1 ? 's' : ''} imported!`)
+    }
+    if (result.failed > 0) {
+      toast.error(`${result.failed} row${result.failed !== 1 ? 's' : ''} failed`)
+    }
+
+    // Refresh the page after successful import
+    router.refresh()
   }
 
   const validCount = parsed.filter(r => r._status === 'valid').length
