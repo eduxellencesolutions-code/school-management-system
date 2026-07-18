@@ -9,6 +9,13 @@ const dark = '#0D0D0D'
 const muted = '#6B6456'
 const border = '#E2D9C8'
 
+// ✅ New: Seal config
+const SEAL_CONFIG = {
+  maxWidth: 80,
+  maxHeight: 55,
+  opacity: 0.25,
+}
+
 const styles = StyleSheet.create({
   page: { padding: 36, fontFamily: 'Helvetica', fontSize: 10, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'column', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: gold, paddingBottom: 12, marginBottom: 14 },
@@ -56,11 +63,20 @@ const styles = StyleSheet.create({
   sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique', marginBottom: 2 },
   metaFooter: { marginTop: 8, alignItems: 'center' },
   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
-  // ✅ New: School seal style
-  sealImage: { width: 50, height: 50, objectFit: 'contain', position: 'absolute', bottom: 55, right: 36, opacity: 0.85 },
+  // ✅ Updated: Centered seal watermark
+  sealImage: {
+    position: 'absolute',
+    left: '50%',
+    marginLeft: -(SEAL_CONFIG.maxWidth / 2),
+    bottom: 58,
+    width: SEAL_CONFIG.maxWidth,
+    height: SEAL_CONFIG.maxHeight,
+    objectFit: 'contain',
+    opacity: SEAL_CONFIG.opacity,
+  },
 })
 
-// ── Clean, explicit prop shapes — no defaults baked in, no dummy fallback text for content ──
+// ── Clean, explicit prop shapes ──
 
 interface ComponentScore {
   name: string
@@ -93,17 +109,16 @@ interface School {
   address?: string
 }
 
-// ✅ FIX 1: Updated Results interface with average field
 interface Results {
   subjects: SubjectResult[]
   grand_total: number
   max_possible: number
-  average: number        // ✅ new: total ÷ number of subjects
-  percentage: number     // kept internally for grade-color logic only, not displayed
+  average: number
+  percentage: number
   grade: string
   position: number
   class_size?: number
-  class_average?: number // average of students' grand totals
+  class_average?: number
 }
 
 interface Attendance {
@@ -150,7 +165,7 @@ function gradeColor(grade: string): string {
   }
 }
 
-// Safe image wrapper — a broken/expired Supabase URL should never crash PDF generation
+// Safe image wrapper
 function SafeSignature({ url, fallbackLabel }: { url?: string; fallbackLabel: string }) {
   if (!url) {
     return <Text style={styles.sigFallback}>({fallbackLabel} not uploaded)</Text>
@@ -290,7 +305,6 @@ export function StudentReportCard({
           ))}
         </View>
 
-        {/* ✅ FIX 2: Updated summary box - display Average instead of Percentage */}
         <View style={styles.summary}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{results.grand_total}</Text>
@@ -310,7 +324,6 @@ export function StudentReportCard({
           </View>
         </View>
 
-        {/* ✅ FIX 3: Updated class stats label */}
         {showClassStats && results.class_average !== undefined && (
           <View style={styles.classStats}>
             <View style={styles.classStatsItem}>
@@ -388,7 +401,7 @@ export function StudentReportCard({
           </View>
         </View>
 
-        {/* ✅ New: School seal overlay - positioned like a stamped seal */}
+        {/* ✅ Updated: Centered seal watermark - positioned like a stamped seal */}
         {showSchoolSeal && school.logo_url && (
           <Image src={school.logo_url} style={styles.sealImage} />
         )}
