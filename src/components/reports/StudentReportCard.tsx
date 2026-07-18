@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   },
 })
 
-// ── Clean, explicit prop shapes ──
+// ── Interfaces ──
 
 interface ComponentScore {
   name: string
@@ -132,6 +132,7 @@ interface StudentRemarks {
   principal_remark?: string
 }
 
+// ✅ UPDATED: Added all props
 interface Props {
   student: Student
   school: School
@@ -152,6 +153,9 @@ interface Props {
   reportId?: string
   generatedDate?: string
   showSchoolSeal?: boolean
+  showTeacherRemark?: boolean
+  showSignatoryRemark?: boolean
+  showSignatorySignature?: boolean
 }
 
 function gradeColor(grade: string): string {
@@ -193,6 +197,9 @@ export function StudentReportCard({
   reportId,
   generatedDate,
   showSchoolSeal = true,
+  showTeacherRemark = true,
+  showSignatoryRemark = true,
+  showSignatorySignature = true,
 }: Props) {
   const compNames: string[] = []
   if (showComponents) {
@@ -360,38 +367,46 @@ export function StudentReportCard({
           </View>
         )}
 
-        {(studentRemarks?.teacher_remark || studentRemarks?.principal_remark) && (
+        {/* ✅ Teacher remark - conditionally shown */}
+        {showTeacherRemark && studentRemarks?.teacher_remark && (
           <View style={styles.remarks}>
-            {studentRemarks?.teacher_remark && (
-              <>
-                <Text style={styles.remarksLabel}>CLASS TEACHER'S REMARK</Text>
-                <Text style={styles.remarksText}>{studentRemarks.teacher_remark}</Text>
-              </>
-            )}
-            {studentRemarks?.principal_remark && (
-              <>
-                <Text style={[styles.remarksLabel, { marginTop: studentRemarks?.teacher_remark ? 6 : 0 }]}>
-                  {(principalTitle || 'PRINCIPAL').toUpperCase()}'S REMARK
-                </Text>
-                <Text style={styles.remarksText}>{studentRemarks.principal_remark}</Text>
-              </>
-            )}
+            <Text style={styles.remarksLabel}>CLASS TEACHER'S REMARK</Text>
+            <Text style={styles.remarksText}>{studentRemarks.teacher_remark}</Text>
+          </View>
+        )}
+
+        {/* ✅ Signatory remark - conditionally shown */}
+        {showSignatoryRemark && studentRemarks?.principal_remark && (
+          <View style={[styles.remarks, { marginTop: showTeacherRemark && studentRemarks?.teacher_remark ? 6 : 0 }]}>
+            <Text style={styles.remarksLabel}>
+              {(principalTitle || 'PRINCIPAL').toUpperCase()}'S REMARK
+            </Text>
+            <Text style={styles.remarksText}>{studentRemarks.principal_remark}</Text>
           </View>
         )}
 
         <View style={styles.footer}>
-          <View style={styles.sigBlock}>
-            <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
-            <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
-            <View style={styles.sigLine} />
-            <Text style={styles.sigName}>{teacherName || '—'}</Text>
-          </View>
-          <View style={styles.sigBlock}>
-            <Text style={styles.sigLabel}>{principalTitle || 'Principal'}'s Signature</Text>
-            <SafeSignature url={principalSignature} fallbackLabel="Signature" />
-            <View style={styles.sigLine} />
-            <Text style={styles.sigName}>{principalName || principalTitle || '—'}</Text>
-          </View>
+          {/* ✅ Class Teacher Signature - conditionally shown */}
+          {showTeacherRemark && (
+            <View style={styles.sigBlock}>
+              <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
+              <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
+              <View style={styles.sigLine} />
+              <Text style={styles.sigName}>{teacherName || '—'}</Text>
+            </View>
+          )}
+
+          {/* ✅ Signatory Signature - conditionally shown */}
+          {showSignatorySignature && (
+            <View style={styles.sigBlock}>
+              <Text style={styles.sigLabel}>{principalTitle || 'Principal'}'s Signature</Text>
+              <SafeSignature url={principalSignature} fallbackLabel="Signature" />
+              <View style={styles.sigLine} />
+              <Text style={styles.sigName}>{principalName || principalTitle || '—'}</Text>
+            </View>
+          )}
+
+          {/* Date block - always shown */}
           <View style={styles.sigBlock}>
             <Text style={styles.sigLabel}>Date</Text>
             <View style={[styles.sigLine, { marginTop: 24 }]} />
@@ -401,7 +416,7 @@ export function StudentReportCard({
           </View>
         </View>
 
-        {/* ✅ Updated: Centered seal watermark - positioned like a stamped seal */}
+        {/* ✅ Updated: Centered seal watermark */}
         {showSchoolSeal && school.logo_url && (
           <Image src={school.logo_url} style={styles.sealImage} />
         )}
