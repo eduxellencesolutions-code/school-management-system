@@ -1,19 +1,44 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { getSubscriptionState } from './getSubscriptionState'
 
-export async function requireActiveSubscription(
+export interface SubscriptionState {
+  status: string
+  daysRemaining: number | null
+  graceEndsAt: string | null
+  plan: string
+}
+
+export async function getSubscriptionState(
   supabase: SupabaseClient,
   userId: string
-): Promise<{ allowed: boolean; message?: string }> {
-  const { status } = await getSubscriptionState(supabase, userId)
+): Promise<SubscriptionState> {
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, subscription_plan, subscription_status, grace_period_ends_at').eq('id', userId).single()
 
-  if (status === 'expired') {
-    return { 
-      allowed: false, 
-      message: 'Your subscription has expired. Renew in Settings → Billing to continue adding or editing data.' 
-    }
+  if (profile?.organization_id) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('subscription_status, subscription_plan, grace_period_ends_at')
+      .eq('id', profile.organization_id)
+      .single()
+
+    return computeState(org?.subscription_status, org?.subscription_plan, org?.grace_period_ends_at)
   }
 
-  // 'active', 'grace_period', 'trial' are all allowed — grace period retains full access, per spec
-  return { allowed: true }
+  return computeState(profile?.subscription_status, profile?.subscription_plan, profile?.grace_period_ends_at)
+}
+
+function computeState(status: string | undefined, plan: string | undefined, graceEndsAt: string | null | undefined): SubscriptionState {
+  let daysRemaining: number | null = null
+
+  if (status === 'grace_period' && graceEndsAt) {
+    const msRemaining = new Date(graceEndsAt).getTime() - Date.now()
+    daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000))
+  }
+
+  return {
+    status: status ?? 'active',
+    daysRemaining,
+    graceEndsAt: graceEndsAt ?? null,
+    plan: plan ?? 'free',
+  }
 }
