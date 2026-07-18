@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import ScoreGrid from '@/components/scores/ScoreGrid'
 import ScoreSelectors from '@/components/scores/ScoreSelectors'
 import Link from 'next/link'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, AlertTriangle } from 'lucide-react'
+import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -22,6 +23,9 @@ export default async function ScoresPage({ searchParams }: Props) {
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
   const orgId = profile?.organization_id
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+
+  // ✅ SUBSCRIPTION GATE: Check active subscription at page load
+  const { allowed: subscriptionActive, message: subscriptionMessage } = await requireActiveSubscription(supabase, authUser.id)
 
   let groups: { id: string; name: string; code?: string | null }[] = []
   let userRole: 'admin' | 'mixed' | 'solo' = 'solo'
@@ -183,7 +187,44 @@ export default async function ScoresPage({ searchParams }: Props) {
               Enrol students
             </Link>
           </div>
+        ) : !subscriptionActive ? (
+          // ✅ EXPIRED MODE: Read-only table view
+          <div className="flex flex-col gap-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+              <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">Subscription expired — read-only mode</p>
+                <p className="text-xs text-amber-700 mt-1">{subscriptionMessage}</p>
+              </div>
+            </div>
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-surface-200 bg-surface-50">
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-ink-muted uppercase">Student</th>
+                      {components.map((c: any) => (
+                        <th key={c.id} className="text-center px-3 py-2 text-xs font-semibold text-ink-muted uppercase">{c.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {learners.map((l: any) => (
+                      <tr key={l.id} className="border-b border-surface-100">
+                        <td className="px-4 py-2 font-medium text-ink">{l.last_name} {l.first_name}</td>
+                        {components.map((c: any) => {
+                          const score = existingScores.find((s: any) => s.learner_id === l.id && s.component_id === c.id)
+                          return <td key={c.id} className="text-center px-3 py-2 font-mono text-ink-muted">{score?.score ?? '—'}</td>
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         ) : (
+          // ✅ ACTIVE SUBSCRIPTION: Full editable ScoreGrid
           <ScoreGrid
             key={`${selectedGroupId}-${selectedSubjectId}`}
             groupId={selectedGroupId}
