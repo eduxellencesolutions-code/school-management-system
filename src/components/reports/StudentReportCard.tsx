@@ -56,6 +56,8 @@ const styles = StyleSheet.create({
   sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique', marginBottom: 2 },
   metaFooter: { marginTop: 8, alignItems: 'center' },
   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
+  // ✅ New: School seal style
+  sealImage: { width: 50, height: 50, objectFit: 'contain', position: 'absolute', bottom: 55, right: 36, opacity: 0.85 },
 })
 
 // ── Clean, explicit prop shapes — no defaults baked in, no dummy fallback text for content ──
@@ -134,6 +136,7 @@ interface Props {
   showClassStats?: boolean
   reportId?: string
   generatedDate?: string
+  showSchoolSeal?: boolean
 }
 
 function gradeColor(grade: string): string {
@@ -174,6 +177,7 @@ export function StudentReportCard({
   showClassStats = true,
   reportId,
   generatedDate,
+  showSchoolSeal = true,
 }: Props) {
   const compNames: string[] = []
   if (showComponents) {
@@ -383,6 +387,11 @@ export function StudentReportCard({
             </Text>
           </View>
         </View>
+
+        {/* ✅ New: School seal overlay - positioned like a stamped seal */}
+        {showSchoolSeal && school.logo_url && (
+          <Image src={school.logo_url} style={styles.sealImage} />
+        )}
 
         <View style={styles.metaFooter}>
           <Text style={styles.metaFooterText}>
