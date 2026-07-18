@@ -113,6 +113,15 @@ export default async function ReportDetailPage({ params }: Props) {
   // ✅ FIX: Use show_signatory_comment instead of show_class_teacher_comment
   const showPrincipalRemark = orgFull?.report_card_settings?.show_signatory_comment ?? true
 
+  // ✅ Build report card settings object
+  const reportCardSettings = {
+    showAttendance: orgFull?.report_card_settings?.show_attendance ?? false,
+    showTeacherRemark: orgFull?.report_card_settings?.show_remarks ?? true,
+    showSignatoryRemark: orgFull?.report_card_settings?.show_signatory_comment ?? true,
+    showSignatorySignature: orgFull?.report_card_settings?.show_principal_signature ?? true,
+    showSchoolSeal: orgFull?.report_card_settings?.show_school_seal ?? true,
+  }
+
   // ✅ Get current plan for AI remarks feature
   let currentPlan = 'free'
   if (profile?.organization_id) {
@@ -199,6 +208,7 @@ export default async function ReportDetailPage({ params }: Props) {
             studentRemarks={report.student_remarks ?? {}}
             generatedDate={report.completed_at ?? report.created_at}
             isInstitution={!!profile?.organization_id}
+            reportCardSettings={reportCardSettings}
           />
           <DeleteReportButton reportId={id} reportName={group?.name ?? 'Report'} canDelete={canDelete} />
         </div>
