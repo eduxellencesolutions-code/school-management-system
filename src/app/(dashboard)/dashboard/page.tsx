@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react'
 import { getTeacherDashboardData } from '@/lib/teacher-utils'
+import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -15,6 +16,7 @@ export default async function DashboardPage() {
 
   const orgId = user?.organization_id
   const userRole = user?.role || 'teacher'
+  const currentPlanKey = user?.subscription_plan ?? 'free'
 
   // ── Determine user type ──
   const isSoloTeacher = !orgId
@@ -462,16 +464,17 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {isSoloTeacher && (
+          {/* ✅ Updated: Real PlanUpgradeCard for solo teachers */}
+          {isSoloTeacher && currentPlanKey !== 'solo_teacher_pro' && (
             <div className="card p-5 bg-brand-50 border-brand-200">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={15} className="text-brand-600" />
                 <span className="text-xs font-semibold text-brand-700 uppercase tracking-wider">Free plan</span>
               </div>
               <p className="text-xs text-brand-700 leading-relaxed mb-3">
-                Upgrade to Teacher plan for unlimited classes, PDF reports, and AI remarks — just ₦1,000/term.
+                Upgrade to Solo Teacher Pro for unlimited classes, PDF reports, broadsheets, and AI remarks.
               </p>
-              <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">Upgrade now</Link>
+              <PlanUpgradeCard plan="solo_teacher_pro" label="Solo Teacher Pro" />
             </div>
           )}
         </div>
