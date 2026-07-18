@@ -67,6 +67,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     show_school_seal: organization?.report_card_settings?.show_school_seal ?? true,
     grade_system: organization?.report_card_settings?.grade_system || 'percentage',
     pass_mark: organization?.report_card_settings?.pass_mark || 40,
+    show_signatory_comment: organization?.report_card_settings?.show_signatory_comment ?? true,
   })
 
   // ✅ Custom title state
@@ -207,6 +208,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           show_attendance: formData.show_attendance,
           show_remarks: formData.show_remarks,
           show_class_teacher_comment: formData.show_class_teacher_comment,
+          show_signatory_comment: formData.show_signatory_comment,
           show_principal_signature: formData.show_principal_signature,
           show_school_seal: formData.show_school_seal,
           grade_system: formData.grade_system,
@@ -615,6 +617,17 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
               />
               <span className="text-sm text-ink">Show Class Teacher Comment</span>
+            </label>
+            {/* ✅ New: Show Signatory Comment */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="show_signatory_comment"
+                checked={formData.show_signatory_comment}
+                onChange={handleChange}
+                className="w-4 h-4 rounded border-surface-300 text-brand-500"
+              />
+              <span className="text-sm text-ink">Show {formData.principal_title || 'Principal'}'s Comment</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
