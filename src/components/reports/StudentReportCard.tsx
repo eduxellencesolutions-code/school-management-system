@@ -9,13 +9,6 @@ const dark = '#0D0D0D'
 const muted = '#6B6456'
 const border = '#E2D9C8'
 
-// ✅ New: Seal config
-const SEAL_CONFIG = {
-  maxWidth: 80,
-  maxHeight: 55,
-  opacity: 0.25,
-}
-
 const styles = StyleSheet.create({
   page: { padding: 36, fontFamily: 'Helvetica', fontSize: 10, backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'column', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: gold, paddingBottom: 12, marginBottom: 14 },
@@ -63,16 +56,15 @@ const styles = StyleSheet.create({
   sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique', marginBottom: 2 },
   metaFooter: { marginTop: 8, alignItems: 'center' },
   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
-  // ✅ Updated: Centered seal watermark
-  sealImage: {
+  // ✅ Full-page watermark seal
+  sealBackground: {
     position: 'absolute',
-    left: '50%',
-    marginLeft: -(SEAL_CONFIG.maxWidth / 2),
-    bottom: 58,
-    width: SEAL_CONFIG.maxWidth,
-    height: SEAL_CONFIG.maxHeight,
+    top: '30%',
+    left: '15%',
+    width: '70%',
+    height: '40%',
     objectFit: 'contain',
-    opacity: SEAL_CONFIG.opacity,
+    opacity: 0.08,
   },
 })
 
@@ -132,7 +124,6 @@ interface StudentRemarks {
   principal_remark?: string
 }
 
-// ✅ UPDATED: Added all props
 interface Props {
   student: Student
   school: School
@@ -215,6 +206,11 @@ export function StudentReportCard({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {/* ✅ Full-page watermark seal - rendered first so everything layers on top */}
+        {showSchoolSeal && school.logo_url && (
+          <Image src={school.logo_url} style={styles.sealBackground} />
+        )}
+
         {student.passport_url && (
           <Image src={student.passport_url} style={styles.passport} />
         )}
@@ -415,11 +411,6 @@ export function StudentReportCard({
             </Text>
           </View>
         </View>
-
-        {/* ✅ Updated: Centered seal watermark */}
-        {showSchoolSeal && school.logo_url && (
-          <Image src={school.logo_url} style={styles.sealImage} />
-        )}
 
         <View style={styles.metaFooter}>
           <Text style={styles.metaFooterText}>
