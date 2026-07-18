@@ -51,8 +51,8 @@ export async function generateAIRemark(input: GenerateRemarkInput): Promise<{ su
   const tone = input.tone ?? 'encouraging'
 
   try {
-    // ✅ FIX: Use gemini-2.0-flash-exp - newer flagship model
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    // ✅ FIX: Use gemini-2.5-flash - official production model
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `Write a short, ${tone} school report card remark (2-3 sentences, no headings, no markdown) for a student named ${input.learnerFirstName}.
 Overall performance: ${input.percentage}% (Grade ${input.grade}).
@@ -71,23 +71,6 @@ Write it as a teacher would, addressing the student directly or by name, suitabl
     return { success: true, remark }
   } catch (err: any) {
     console.error('AI remark generation error:', err)
-    // If gemini-2.0-flash-exp fails, try gemini-1.5-flash as fallback
-    try {
-      const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-      const prompt = `Write a short, ${tone} school report card remark (2-3 sentences, no headings, no markdown) for a student named ${input.learnerFirstName}.
-Overall performance: ${input.percentage}% (Grade ${input.grade}).
-Strongest subject: ${strongestSubject?.name ?? 'N/A'} (${strongestSubject?.percentage ?? '-'}%).
-Needs improvement: ${weakestSubject?.name ?? 'N/A'} (${weakestSubject?.percentage ?? '-'}%).
-Write it as a teacher would, addressing the student directly or by name, suitable to print on an official report card. Do not include a greeting or sign-off.`
-      const result = await fallbackModel.generateContent(prompt)
-      const response = await result.response
-      const remark = response.text().trim()
-      if (remark) {
-        return { success: true, remark }
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback AI also failed:', fallbackErr)
-    }
     return { success: false, error: err.message || 'Failed to generate remark. Please try again or write manually.' }
   }
 }
