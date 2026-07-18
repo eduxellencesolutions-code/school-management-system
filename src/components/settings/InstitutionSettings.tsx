@@ -39,6 +39,8 @@ interface Props {
   userId: string
 }
 
+const KNOWN_TITLES = ['Principal', 'Head Teacher', 'Headmaster', 'Headmistress', 'Proprietor', 'Proprietress']
+
 export default function InstitutionSettings({ organization, userId }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -67,6 +69,18 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     pass_mark: organization?.report_card_settings?.pass_mark || 40,
   })
 
+  // ✅ Custom title state
+  const [titleSelection, setTitleSelection] = useState(
+    organization?.principal_title && !KNOWN_TITLES.includes(organization.principal_title)
+      ? 'Other'
+      : (organization?.principal_title || 'Principal')
+  )
+  const [customTitle, setCustomTitle] = useState(
+    organization?.principal_title && !KNOWN_TITLES.includes(organization.principal_title)
+      ? organization.principal_title
+      : ''
+  )
+
   const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logo_url || null)
   const [principalSigPreview, setPrincipalSigPreview] = useState<string | null>(organization?.principal_signature_url || null)
   const [teacherSigPreview, setTeacherSigPreview] = useState<string | null>(organization?.teacher_signature_url || null)
@@ -77,6 +91,23 @@ export default function InstitutionSettings({ organization, userId }: Props) {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }))
+  }
+
+  // ✅ Custom title handlers
+  function handleTitleSelectionChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value
+    setTitleSelection(value)
+    if (value === 'Other') {
+      setFormData(prev => ({ ...prev, principal_title: customTitle }))
+    } else {
+      setFormData(prev => ({ ...prev, principal_title: value }))
+    }
+  }
+
+  function handleCustomTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value
+    setCustomTitle(value)
+    setFormData(prev => ({ ...prev, principal_title: value }))
   }
 
   const handleFileUpload = async (file: File, type: 'logo' | 'principal_sig' | 'teacher_sig') => {
@@ -475,7 +506,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           </div>
         </div>
 
-        {/* ✅ Updated: Two-column row for Principal's Name + Title */}
+        {/* ✅ Updated: Two-column row for Principal's Name + Title with custom title support */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
@@ -491,9 +522,9 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           <div>
             <label className="block text-xs font-medium text-ink mb-1">Title</label>
             <select
-              name="principal_title"
-              value={formData.principal_title}
-              onChange={handleChange}
+              name="principal_title_selection"
+              value={titleSelection}
+              onChange={handleTitleSelectionChange}
               className="input"
             >
               <option value="Principal">Principal</option>
@@ -502,7 +533,18 @@ export default function InstitutionSettings({ organization, userId }: Props) {
               <option value="Headmistress">Headmistress</option>
               <option value="Proprietor">Proprietor</option>
               <option value="Proprietress">Proprietress</option>
+              <option value="Other">Other (specify)</option>
             </select>
+            {titleSelection === 'Other' && (
+              <input
+                type="text"
+                value={customTitle}
+                onChange={handleCustomTitleChange}
+                className="input mt-2"
+                placeholder="e.g. Rector, Director, Chief Executive"
+                required
+              />
+            )}
           </div>
         </div>
       </div>
