@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import { createGroup } from '../actions'
 import Link from 'next/link'
 
 const schema = z.object({
@@ -22,9 +21,7 @@ interface SessionOption { id: string; name: string }
 interface TermOption { id: string; name: string; session_id: string }
 
 export default function NewClassPage() {
-  const router = useRouter()
   const supabase = createClient()
-  const [loading, setLoading] = useState(false)
   const [sessions, setSessions] = useState<SessionOption[]>([])
   const [terms, setTerms] = useState<TermOption[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
@@ -40,9 +37,7 @@ export default function NewClassPage() {
     async function loadOptions() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      const { data: profile } = await supabase
-        .from('users').select('organization_id').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
 
       const { data: sessionsData } = profile?.organization_id
         ? await supabase.from('academic_sessions').select('id, name').eq('organization_id', profile.organization_id).order('name', { ascending: false })
@@ -56,7 +51,6 @@ export default function NewClassPage() {
           .from('terms').select('id, name, session_id').in('session_id', sessionIds).order('name')
         setTerms(termsData ?? [])
       }
-
       setLoadingOptions(false)
     }
     loadOptions()
@@ -64,39 +58,8 @@ export default function NewClassPage() {
 
   const availableTerms = terms.filter(t => t.session_id === selectedSessionId)
 
-  async function onSubmit(data: FormData) {
-    setLoading(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      const { data: profile } = await supabase
-        .from('users').select('organization_id, role').eq('id', user.id).single()
-
-      const { data: group, error } = await supabase
-        .from('groups')
-        .insert({
-          organization_id: profile?.organization_id,
-          name: data.name,
-          code: data.code || null,
-          type: data.type,
-          instructor_id: user.id,
-          session_id: data.session_id || null,
-          term_id: data.term_id || null,
-          is_active: true,
-        })
-        .select().single()
-
-      if (error) throw error
-
-      toast.success(`Class "${data.name}" created!`)
-      router.refresh()
-      router.push(`/classes/${group.id}`)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create class')
-    } finally {
-      setLoading(false)
-    }
+  function onValidSubmit() {
+    ;(document.getElementById('class-form') as HTMLFormElement).requestSubmit()
   }
 
   return (
@@ -110,7 +73,7 @@ export default function NewClassPage() {
       <h1 className="page-title mb-1">Create a new class</h1>
       <p className="page-subtitle mb-6">Set up a class or course to start entering scores.</p>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="card p-6 flex flex-col gap-4">
+      <form id="class-form" action={createGroup} onSubmit={handleSubmit(onValidSubmit)} className="card p-6 flex flex-col gap-4">
         <div>
           <label className="block text-sm font-medium text-ink mb-1">Class name <span className="text-red-500">*</span></label>
           <input type="text" placeholder="e.g. JSS 2A, Primary 4 Gold, BIO 101" className="input" {...register('name')} />
@@ -157,9 +120,7 @@ export default function NewClassPage() {
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Term / Semester</label>
                 <select className="input" {...register('term_id')} disabled={!selectedSessionId}>
-                  <option value="">
-                    {selectedSessionId ? 'Select term' : 'Select session first'}
-                  </option>
+                  <option value="">{selectedSessionId ? 'Select term' : 'Select session first'}</option>
                   {availableTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
@@ -168,9 +129,7 @@ export default function NewClassPage() {
         </div>
 
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={loading} className="btn-primary btn flex-1">
-            {loading ? 'Creating…' : 'Create class'}
-          </button>
+          <button type="submit" className="btn-primary btn flex-1">Create class</button>
           <Link href="/classes" className="btn-secondary btn">Cancel</Link>
         </div>
       </form>
