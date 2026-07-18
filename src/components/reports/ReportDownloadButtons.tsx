@@ -16,6 +16,14 @@ interface School {
   address?: string
 }
 
+interface ReportCardSettings {
+  showAttendance: boolean
+  showTeacherRemark: boolean
+  showSignatoryRemark: boolean
+  showSignatorySignature: boolean
+  showSchoolSeal: boolean
+}
+
 interface Props {
   reportId: string
   groupName: string
@@ -32,12 +40,13 @@ interface Props {
   studentRemarks: Record<string, { teacher_remark?: string; principal_remark?: string }>
   generatedDate?: string
   isInstitution: boolean
+  reportCardSettings?: ReportCardSettings
 }
 
 export default function ReportDownloadButtons({
   reportId, groupName, termName, sessionName, learners, subjects,
   school, teacherName, teacherSignature, principalName, principalTitle, principalSignature,
-  studentRemarks, generatedDate, isInstitution,
+  studentRemarks, generatedDate, isInstitution, reportCardSettings,
 }: Props) {
   const [generatingPdf, setGeneratingPdf] = useState(false)
 
@@ -153,6 +162,11 @@ export default function ReportDownloadButtons({
             principalSignature={principalSignature}
             reportId={reportId}
             generatedDate={generatedDate}
+            showAttendance={reportCardSettings?.showAttendance ?? false}
+            showTeacherRemark={reportCardSettings?.showTeacherRemark ?? true}
+            showSignatoryRemark={reportCardSettings?.showSignatoryRemark ?? true}
+            showSignatorySignature={reportCardSettings?.showSignatorySignature ?? true}
+            showSchoolSeal={reportCardSettings?.showSchoolSeal ?? true}
           />
         )
 
