@@ -30,9 +30,18 @@ interface Props {
   initialRemarks: Record<string, { teacher_remark?: string; principal_remark?: string }>
   showPrincipalRemark: boolean
   hasAIRemarks: boolean
+  signatoryTitle?: string  // ✅ Added
 }
 
-export default function RemarksEditor({ reportId, learners, templates, initialRemarks, showPrincipalRemark, hasAIRemarks }: Props) {
+export default function RemarksEditor({
+  reportId,
+  learners,
+  templates,
+  initialRemarks,
+  showPrincipalRemark,
+  hasAIRemarks,
+  signatoryTitle = 'Principal'  // ✅ Default fallback
+}: Props) {
   const [remarks, setRemarks] = useState(initialRemarks)
   const [saving, setSaving] = useState(false)
   const [generatingFor, setGeneratingFor] = useState<string | null>(null)
@@ -50,6 +59,15 @@ export default function RemarksEditor({ reportId, learners, templates, initialRe
       [learnerId]: { ...prev[learnerId], [field]: value },
     }))
   }
+
+  // ✅ Get possessive form of the signatory title
+  const getPossessiveTitle = (title: string) => {
+    if (title.endsWith('s')) return `${title}'`      // Headmistress' / Proprietress'
+    return `${title}'s`                               // Principal's / Head Teacher's / Headmaster's / Proprietor's
+  }
+
+  const possessiveTitle = getPossessiveTitle(signatoryTitle)
+  const lowercaseTitle = signatoryTitle.toLowerCase()
 
   async function handleGenerateAI(learner: LearnerRow) {
     setGeneratingFor(learner.learner_id)
@@ -146,7 +164,9 @@ export default function RemarksEditor({ reportId, learners, templates, initialRe
 
               {showPrincipalRemark && (
                 <div>
-                  <label className="block text-xs font-medium text-ink-muted mb-1">Principal's remark</label>
+                  <label className="block text-xs font-medium text-ink-muted mb-1">
+                    {possessiveTitle} remark
+                  </label>
                   {principalSuggestions.length > 0 && (
                     <select
                       className="input mb-1.5"
@@ -162,7 +182,7 @@ export default function RemarksEditor({ reportId, learners, templates, initialRe
                   <textarea
                     className="input"
                     rows={2}
-                    placeholder="Or write a custom remark…"
+                    placeholder={`Or write a custom ${lowercaseTitle} remark…`}
                     value={current.principal_remark ?? ''}
                     onChange={e => updateRemark(l.learner_id, 'principal_remark', e.target.value)}
                   />
