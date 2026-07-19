@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { canAddStudent, AccountRef } from '@/lib/plans/gating'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 interface CreateStudentInput {
   first_name: string
@@ -53,9 +54,16 @@ export async function createStudent(
     ref = { type: 'solo', userId: user.id }
   }
 
+  // Check subscription status gate
   const gate = await canAddStudent(plan, ref)
   if (!gate.allowed) {
     return { success: false, error: gate.reason }
+  }
+
+  // Check plan limit gate (maxStudents)
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxStudents')
+  if (!limitCheck.allowed) {
+    return { success: false, error: limitCheck.message }
   }
 
   const { error } = await supabase.from('learners').insert({
