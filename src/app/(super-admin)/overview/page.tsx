@@ -19,6 +19,13 @@ export default async function SuperAdminOverview() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // ✅ Fetch super admin IDs once to exclude them from solo teacher counts
+  const { data: superAdminRows } = await admin.from('super_admins').select('id')
+  const superAdminIds = (superAdminRows ?? []).map(s => s.id)
+  const superAdminIdList = superAdminIds.length > 0 
+    ? superAdminIds.join(',') 
+    : '00000000-0000-0000-0000-000000000000'
+
   const [
     { count: totalSchools },
     { count: activeSchools },
@@ -32,7 +39,11 @@ export default async function SuperAdminOverview() {
   ] = await Promise.all([
     admin.from('organizations').select('*', { count: 'exact', head: true }),
     admin.from('organizations').select('*', { count: 'exact', head: true }).eq('subscription_status', 'active'),
-    admin.from('users').select('*', { count: 'exact', head: true }).is('organization_id', null),
+    // ✅ Exclude super admins from solo teacher count
+    admin.from('users')
+      .select('*', { count: 'exact', head: true })
+      .is('organization_id', null)
+      .not('id', 'in', `(${superAdminIdList})`),
     admin.from('users').select('id, organization_id, role'),
     admin.from('learners').select('*', { count: 'exact', head: true }),
     admin.from('reports').select('*', { count: 'exact', head: true }),
@@ -45,9 +56,11 @@ export default async function SuperAdminOverview() {
     admin.from('organizations')
       .select('id')
       .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    // ✅ Exclude super admins from new solo teachers this month
     admin.from('users')
       .select('id')
       .is('organization_id', null)
+      .not('id', 'in', `(${superAdminIdList})`)
       .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
   ])
 
@@ -64,10 +77,12 @@ export default async function SuperAdminOverview() {
     premium_school: 75000,
   }
 
+  // ✅ Exclude super admins from paid solo teacher count
   const { data: paidSolo } = await admin
     .from('users')
     .select('subscription_plan, subscription_status')
     .is('organization_id', null)
+    .not('id', 'in', `(${superAdminIdList})`)
     .eq('subscription_status', 'active')
     .eq('subscription_plan', 'solo_teacher_pro')
 
