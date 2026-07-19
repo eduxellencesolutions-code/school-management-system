@@ -209,19 +209,6 @@ export default async function ReportsPage() {
           </div>
         )}
       </div>
-
-      {!isInstitution && (
-        <div className="card p-5 bg-brand-50 border-brand-200">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText size={15} className="text-brand-600" />
-            <span className="text-xs font-semibold text-brand-700 uppercase tracking-wider">Upgrade for PDF Reports</span>
-          </div>
-          <p className="text-xs text-brand-700 leading-relaxed mb-3">
-            Institution accounts get branded PDF report cards with your school logo and signatures.
-          </p>
-          <Link href="/settings?tab=billing" className="btn-primary btn-sm btn w-full justify-center">Upgrade now</Link>
-        </div>
-      )}
     </div>
   )
 }
