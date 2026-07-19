@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 export async function deleteStudent(formData: FormData) {
   const supabase = await createClient()
@@ -64,6 +65,12 @@ export async function createStudent(formData: FormData) {
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
 
+  // ✅ PLAN LIMIT GATE: Check maxStudents limit
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxStudents')
+  if (!limitCheck.allowed) {
+    redirect(`/students/new?error=${encodeURIComponent(limitCheck.message!)}`)
+  }
+
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
 
@@ -111,6 +118,12 @@ export async function importStudents(formData: FormData) {
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
   if (!allowed) return { success: false, message: message!, imported: 0, failed: 0 }
 
+  // ✅ PLAN LIMIT GATE: Check maxStudents limit before importing
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxStudents')
+  if (!limitCheck.allowed) {
+    return { success: false, message: limitCheck.message!, imported: 0, failed: 0 }
+  }
+
   const groupId = formData.get('group_id') as string
   const rowsJson = formData.get('rows') as string
   if (!groupId || !rowsJson) return { success: false, message: 'Missing data', imported: 0, failed: 0 }
@@ -140,6 +153,18 @@ export async function importStudents(formData: FormData) {
     }
   } else if (group.instructor_id !== user.id) {
     return { success: false, message: 'Class does not belong to you', imported: 0, failed: 0 }
+  }
+
+  // Get current student count to check if we can import all rows
+  const { count: currentStudentCount } = await supabase
+    .from('learners')
+    .select('*', { count: 'exact', head: true })
+    .eq('organization_id', profile?.organization_id ?? null)
+
+  // Re-check limit with current count + rows.length
+  const planConfig = await checkPlanLimit(supabase, user.id, 'maxStudents')
+  if (!planConfig.allowed) {
+    return { success: false, message: planConfig.message!, imported: 0, failed: 0 }
   }
 
   let success = 0
