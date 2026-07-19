@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { hasFeature, canAddTeacher } from '@/lib/plans/gating'
 import { getPlanConfig } from '@/lib/plans/config'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 // Check if user is an institution
 async function checkInstitutionAccess() {
@@ -53,6 +54,12 @@ export async function createTeacher(input: CreateTeacherInput) {
   // ✅ SUBSCRIPTION GATE: Check active subscription before creating teacher
   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
   if (!allowed) return { error: message }
+
+  // ✅ PLAN LIMIT GATE: Check maxTeachers limit
+  const limitCheck = await checkPlanLimit(supabase, adminUser.id, 'maxTeachers')
+  if (!limitCheck.allowed) {
+    return { error: limitCheck.message }
+  }
 
   const { profile } = await checkInstitutionAccess()
   const orgId = profile?.organization_id
@@ -318,6 +325,13 @@ export async function uploadTeachers(formData: FormData) {
   const { allowed, message } = await requireActiveSubscription(supabase, user!.id)
   if (!allowed) {
     console.error('Blocked teacher upload — subscription expired:', message)
+    return
+  }
+
+  // ✅ PLAN LIMIT GATE: Check maxTeachers limit before uploading
+  const limitCheck = await checkPlanLimit(supabase, user!.id, 'maxTeachers')
+  if (!limitCheck.allowed) {
+    console.error('Blocked teacher upload — plan limit reached:', limitCheck.message)
     return
   }
 
