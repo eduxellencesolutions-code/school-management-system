@@ -20,11 +20,19 @@ export default async function SoloTeachersPage() {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
+  // ✅ Fetch super admin IDs to exclude them from solo teacher list
+  const { data: superAdminRows } = await admin.from('super_admins').select('id')
+  const superAdminIds = (superAdminRows ?? []).map(s => s.id)
+  const superAdminIdList = superAdminIds.length > 0 
+    ? superAdminIds.join(',') 
+    : '00000000-0000-0000-0000-000000000000'
+
   // ✅ FIX: Exclude super admins and include subscription_status
   const { data: soloTeachers, error } = await admin
     .from('users')
     .select('id, name, email, created_at, is_active, subscription_status')
     .is('organization_id', null)
+    .not('id', 'in', `(${superAdminIdList})`)
     .eq('is_super_admin', false)
     .order('created_at', { ascending: false })
 
