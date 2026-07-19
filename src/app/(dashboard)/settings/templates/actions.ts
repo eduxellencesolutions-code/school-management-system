@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 export async function createTemplate(formData: FormData) {
   console.log('=== CREATE TEMPLATE STARTED ===')
@@ -19,6 +20,12 @@ export async function createTemplate(formData: FormData) {
   // ✅ Subscription gate — expired accounts cannot create templates
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+
+  // ✅ PLAN LIMIT GATE: Check maxCustomTemplates limit
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxCustomTemplates')
+  if (!limitCheck.allowed) {
+    redirect(`/settings/templates?error=${encodeURIComponent(limitCheck.message!)}`)
+  }
 
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
