@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { createGroup } from '../actions'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 const schema = z.object({
   name: z.string().min(2, 'Class name is required'),
@@ -22,6 +23,10 @@ interface TermOption { id: string; name: string; session_id: string }
 
 export default function NewClassPage() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
+  const success = searchParams.get('success')
+  
   const [sessions, setSessions] = useState<SessionOption[]>([])
   const [terms, setTerms] = useState<TermOption[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
@@ -72,6 +77,20 @@ export default function NewClassPage() {
 
       <h1 className="page-title mb-1">Create a new class</h1>
       <p className="page-subtitle mb-6">Set up a class or course to start entering scores.</p>
+
+      {/* ✅ Display error message from URL */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-red-700">{decodeURIComponent(error)}</p>
+        </div>
+      )}
+      
+      {/* ✅ Display success message if needed */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-green-700">{decodeURIComponent(success)}</p>
+        </div>
+      )}
 
       <form id="class-form" action={createGroup} onSubmit={handleSubmit(onValidSubmit)} className="card p-6 flex flex-col gap-4">
         <div>
