@@ -8,10 +8,13 @@ import { createSubject } from '../actions'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-interface Props { searchParams: Promise<{ class?: string }> }
+interface Props { searchParams: Promise<{ class?: string; error?: string; success?: string }> }
 
 export default async function NewSubjectPage({ searchParams }: Props) {
-  const { class: classId } = await searchParams
+  const params = await searchParams
+  const classId = params.class
+  const error = params.error
+  const success = params.success
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -109,6 +112,20 @@ export default async function NewSubjectPage({ searchParams }: Props) {
         <h1 className="page-title">Add a subject</h1>
         <p className="page-subtitle">Assign it to a class and pick an assessment template.</p>
       </div>
+
+      {/* ✅ Display error message from URL */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-700">{decodeURIComponent(error)}</p>
+        </div>
+      )}
+      
+      {/* ✅ Display success message if needed */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-700">{decodeURIComponent(success)}</p>
+        </div>
+      )}
 
       <form action={createSubject} className="card p-5 flex flex-col gap-4">
         <div className="grid sm:grid-cols-2 gap-4">
