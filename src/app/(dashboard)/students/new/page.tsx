@@ -30,6 +30,10 @@ export default function NewStudentPage() {
   const searchParams = useSearchParams()
   const supabase = createClient()
   const [groups, setGroups] = useState<Group[]>([])
+  
+  // Get error and success from URL
+  const error = searchParams.get('error')
+  const success = searchParams.get('success')
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -82,6 +86,20 @@ export default function NewStudentPage() {
         <Link href="/students/import" className="text-brand-500 hover:underline font-medium">Import via CSV</Link>
         {' '}instead.
       </p>
+
+      {/* ✅ Display error message from URL */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-red-700">{decodeURIComponent(error)}</p>
+        </div>
+      )}
+      
+      {/* ✅ Display success message if needed */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-green-700">{decodeURIComponent(success)}</p>
+        </div>
+      )}
 
       <form
         id="student-form"
