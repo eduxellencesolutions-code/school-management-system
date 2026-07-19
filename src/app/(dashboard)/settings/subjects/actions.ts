@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { canCreateSubject, AccountRef } from '@/lib/plans/gating'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
@@ -52,26 +51,6 @@ export async function createSubject(formData: FormData) {
       console.error('Group does not belong to this teacher')
       return
     }
-  }
-
-  // Gate: check subject limit before inserting.
-  // Institutions use org-level plan, solo teachers use their own plan.
-  let plan: string
-  let ref: AccountRef
-  if (profile?.organization_id) {
-    const { data: org } = await supabase
-      .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
-    plan = org?.subscription_plan ?? 'free'
-    ref = { type: 'org', orgId: profile.organization_id }
-  } else {
-    plan = profile?.subscription_plan ?? 'free'
-    ref = { type: 'solo', userId: user.id }
-  }
-
-  const gate = await canCreateSubject(plan, ref)
-  if (!gate.allowed) {
-    console.error('Subject limit gate blocked creation:', gate.reason)
-    redirect(`/settings/subjects?error=${encodeURIComponent(gate.reason ?? 'Limit reached')}`)
   }
 
   const { error } = await supabase.from('subjects').insert({
