@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 export async function deleteGroup(formData: FormData) {
   const supabase = await createClient()
@@ -110,8 +111,15 @@ export async function createGroup(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Check subscription status gate
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+
+  // Check plan limit gate (maxClasses)
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxClasses')
+  if (!limitCheck.allowed) {
+    redirect(`/classes/new?error=${encodeURIComponent(limitCheck.message!)}`)
+  }
 
   const { data: profile } = await supabase
     .from('users').select('organization_id, role').eq('id', user.id).single()
