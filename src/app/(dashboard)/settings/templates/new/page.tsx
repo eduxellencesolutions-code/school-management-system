@@ -3,7 +3,15 @@ import { ArrowLeft } from 'lucide-react'
 import TemplateBuilder from '@/components/settings/TemplateBuilder'
 import { createTemplate } from '../actions'
 
-export default function NewTemplatePage() {
+interface Props {
+  searchParams: Promise<{ error?: string; success?: string }>
+}
+
+export default async function NewTemplatePage({ searchParams }: Props) {
+  const params = await searchParams
+  const error = params.error
+  const success = params.success
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center gap-2 text-sm">
@@ -20,6 +28,20 @@ export default function NewTemplatePage() {
           Define the components teachers will score against. You can load a preset or build your own.
         </p>
       </div>
+
+      {/* ✅ Display error message from URL */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-700">{decodeURIComponent(error)}</p>
+        </div>
+      )}
+      
+      {/* ✅ Display success message if needed */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-700">{decodeURIComponent(success)}</p>
+        </div>
+      )}
 
       <TemplateBuilder
         action={createTemplate}
