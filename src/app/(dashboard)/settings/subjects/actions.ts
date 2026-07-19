@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { canCreateSubject, AccountRef } from '@/lib/plans/gating'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 export async function createSubject(formData: FormData) {
   const supabase = await createClient()
@@ -17,6 +18,12 @@ export async function createSubject(formData: FormData) {
   // ✅ SUBSCRIPTION GATE: Check active subscription before creating subject
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
   if (!allowed) redirect(`/settings/subjects?error=${encodeURIComponent(message!)}`)
+
+  // ✅ PLAN LIMIT GATE: Check maxSubjects limit
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxSubjects')
+  if (!limitCheck.allowed) {
+    redirect(`/settings/subjects?error=${encodeURIComponent(limitCheck.message!)}`)
+  }
 
   const name       = (formData.get('name') as string)?.trim()
   const code       = (formData.get('code') as string)?.trim()
