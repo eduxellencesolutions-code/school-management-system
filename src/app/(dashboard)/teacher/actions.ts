@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
 
 // Get all teachers in an organization
 export async function getTeachers() {
@@ -38,6 +40,10 @@ export async function assignTeacher(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  // Check subscription status gate
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
 
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
@@ -155,6 +161,17 @@ export async function uploadTeachers(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Check subscription status gate
+  const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+
+  // Check plan limit gate (maxTeachers) - check before importing
+  const limitCheck = await checkPlanLimit(supabase, user.id, 'maxTeachers')
+  if (!limitCheck.allowed) {
+    console.error('Plan limit reached:', limitCheck.message)
+    return
+  }
+
   const { data: profile } = await supabase
     .from('users').select('organization_id').eq('id', user.id).single()
 
@@ -206,6 +223,19 @@ export async function uploadTeachers(formData: FormData) {
 
     if (teachers.length === 0) {
       console.error('No valid teachers found in CSV')
+      return
+    }
+
+    // Get current teacher count for limit checking
+    const { count: currentTeacherCount } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', profile?.organization_id)
+      .neq('role', 'admin')
+
+    const planConfig = await checkPlanLimit(supabase, user.id, 'maxTeachers')
+    if (!planConfig.allowed) {
+      console.error('Plan limit reached:', planConfig.message)
       return
     }
 
