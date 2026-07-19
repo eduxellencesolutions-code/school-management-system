@@ -1,0 +1,58 @@
+import { SupabaseClient } from '@supabase/supabase-js'
+import { getPlanConfig } from '@/lib/plans/config'
+
+type LimitType = 'maxStudents' | 'maxTeachers' | 'maxClasses' | 'maxSubjects' | 'maxCustomTemplates'
+
+export async function checkPlanLimit(
+  supabase: SupabaseClient,
+  userId: string,
+  limitType: LimitType
+): Promise<{ allowed: boolean; message?: string }> {
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, subscription_plan').eq('id', userId).single()
+
+  const orgId = profile?.organization_id
+  const plan = orgId
+    ? (await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single()).data?.subscription_plan
+    : profile?.subscription_plan
+
+  const config = getPlanConfig(plan ?? 'free')
+  const limit = config.limits[limitType]
+
+  if (limit === 'unlimited') return { allowed: true }
+
+  let currentCount = 0
+  if (limitType === 'maxStudents') {
+    const { count } = orgId
+      ? await supabase.from('learners').select('*', { count: 'exact', head: true }).eq('organization_id', orgId)
+      : await supabase.from('learners').select('*', { count: 'exact', head: true }).eq('instructor_id', userId)
+    currentCount = count ?? 0
+  } else if (limitType === 'maxClasses') {
+    const { count } = orgId
+      ? await supabase.from('groups').select('*', { count: 'exact', head: true }).eq('organization_id', orgId)
+      : await supabase.from('groups').select('*', { count: 'exact', head: true }).eq('instructor_id', userId)
+    currentCount = count ?? 0
+  } else if (limitType === 'maxTeachers') {
+    const { count } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('role', 'teacher')
+    currentCount = count ?? 0
+  } else if (limitType === 'maxSubjects') {
+    const { count } = orgId
+      ? await supabase.from('subjects').select('*', { count: 'exact', head: true }).eq('organization_id', orgId)
+      : await supabase.from('subjects').select('*', { count: 'exact', head: true }).eq('instructor_id', userId)
+    currentCount = count ?? 0
+  } else if (limitType === 'maxCustomTemplates') {
+    const { count } = orgId
+      ? await supabase.from('assessment_templates').select('*', { count: 'exact', head: true }).eq('organization_id', orgId)
+      : await supabase.from('assessment_templates').select('*', { count: 'exact', head: true }).eq('instructor_id', userId)
+    currentCount = count ?? 0
+  }
+
+  if (currentCount >= limit) {
+    return {
+      allowed: false,
+      message: `Your ${config.label} plan allows up to ${limit} ${limitType.replace('max', '').toLowerCase()}. Upgrade in Settings → Billing to add more.`,
+    }
+  }
+
+  return { allowed: true }
+}
