@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Archive } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
-import { approveReport } from '@/app/(dashboard)/reports/[id]/actions'
+import ApproveButton from '@/components/reports/ApproveButton'
 
 export const runtime = 'nodejs'
 
@@ -237,15 +237,7 @@ export default async function ReportsPage() {
                 
                 {/* ✅ Approve Button - Only for Principals on submitted reports */}
                 {isPrincipal && report.report_status === 'submitted' && (
-                  <form action={approveReport}>
-                    <input type="hidden" name="id" value={report.id} />
-                    <button
-                      type="submit"
-                      className="btn-success btn-sm btn flex items-center gap-1"
-                    >
-                      <CheckCircle2 size={14} /> Approve
-                    </button>
-                  </form>
+                  <ApproveButton reportId={report.id} />
                 )}
                 
                 <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
