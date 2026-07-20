@@ -12,9 +12,10 @@ interface Props {
   classes: { id: string; name: string }[]
   subjects: { id: string; name: string; group_id: string; group?: { name: string } | null }[]
   orgId: string
+  roleOptions?: { value: string; label: string }[]
 }
 
-export default function TeacherForm({ classes, subjects, orgId }: Props) {
+export default function TeacherForm({ classes, subjects, orgId, roleOptions }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -23,11 +24,20 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
   const [sigUrl, setSigUrl] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
+  // Default role options including principal
+  const defaultRoleOptions = [
+    { value: 'teacher', label: 'Teacher' },
+    { value: 'class_teacher', label: 'Class Teacher' },
+    { value: 'principal', label: 'Principal / Head Teacher' },
+  ]
+
+  const roles = roleOptions || defaultRoleOptions
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    role: 'teacher' as 'teacher' | 'lecturer' | 'assistant',
+    role: 'teacher' as 'teacher' | 'lecturer' | 'assistant' | 'principal',
     password: '',
     selectedClasses: [] as string[],
     selectedSubjects: [] as string[],
@@ -119,7 +129,7 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
         signatureUrl: sigUrl,
         selectedClasses: formData.selectedClasses,
         selectedSubjects: formData.selectedSubjects,
-        isClassTeacher: formData.isClassTeacher,
+        isClassTeacher: formData.isClassTeacher || formData.role === 'class_teacher',
         classTeacherOf: formData.classTeacherOf,
         subjectGroupMap,
       })
@@ -144,6 +154,18 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
   const availableSubjects = formData.selectedClasses.length > 0
     ? subjects.filter(s => formData.selectedClasses.includes(s.group_id))
     : subjects
+
+  // Get role help text
+  const getRoleHelpText = (role: string) => {
+    switch (role) {
+      case 'principal':
+        return 'Principal will receive report approval notifications and can approve reports'
+      case 'class_teacher':
+        return 'Class Teacher can generate and submit reports for assigned classes'
+      default:
+        return 'Teacher can enter scores for assigned subjects'
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-2xl">
@@ -174,16 +196,19 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
               className="input" placeholder="08012345678" />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Role</label>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-ink mb-1">Role *</label>
             <select name="role" value={formData.role} onChange={handleChange} className="input">
-              <option value="teacher">Teacher</option>
-              <option value="lecturer">Lecturer</option>
-              <option value="assistant">Assistant</option>
+              {roles.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
+            <p className="text-xs text-ink-muted mt-1">{getRoleHelpText(formData.role)}</p>
           </div>
 
-          <div>
+          <div className="col-span-2">
             <label className="block text-xs font-medium text-ink mb-1">Temporary password *</label>
             <div className="relative">
               <input 
@@ -236,20 +261,28 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       <div className="card p-6 flex flex-col gap-3">
         <h2 className="font-semibold text-sm text-ink">Class Assignment</h2>
 
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" name="isClassTeacher" checked={formData.isClassTeacher}
-            onChange={handleChange} className="w-4 h-4 rounded border-surface-300 text-brand-500" />
-          <span className="text-sm text-ink">Assign as Class Teacher</span>
-        </label>
+        {formData.role !== 'principal' && (
+          <>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="isClassTeacher" checked={formData.isClassTeacher}
+                onChange={handleChange} className="w-4 h-4 rounded border-surface-300 text-brand-500" />
+              <span className="text-sm text-ink">Assign as Class Teacher</span>
+            </label>
 
-        {formData.isClassTeacher && (
-          <div>
-            <label className="block text-xs font-medium text-ink mb-1">Class teacher of</label>
-            <select name="classTeacherOf" value={formData.classTeacherOf} onChange={handleChange} className="input max-w-xs">
-              <option value="">Select class…</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+            {formData.isClassTeacher && (
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Class teacher of</label>
+                <select name="classTeacherOf" value={formData.classTeacherOf} onChange={handleChange} className="input max-w-xs">
+                  <option value="">Select class…</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+          </>
+        )}
+
+        {formData.role === 'principal' && (
+          <p className="text-xs text-ink-muted">Principals do not have class or subject assignments. They approve reports submitted by class teachers.</p>
         )}
 
         <div>
@@ -276,28 +309,34 @@ export default function TeacherForm({ classes, subjects, orgId }: Props) {
       {/* Subject Assignment */}
       <div className="card p-6 flex flex-col gap-3">
         <h2 className="font-semibold text-sm text-ink">Subject Assignment</h2>
-        <p className="text-xs text-ink-muted">
-          {formData.selectedClasses.length > 0
-            ? 'Showing subjects from selected classes'
-            : 'Select classes above to filter subjects, or assign from all subjects'}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {availableSubjects.map(s => (
-            <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs cursor-pointer transition-colors
-              ${formData.selectedSubjects.includes(s.id)
-                ? 'border-green-500 bg-green-50 text-green-700'
-                : 'border-surface-200 text-ink-muted hover:border-green-300'}`}>
-              <input type="checkbox" className="sr-only"
-                checked={formData.selectedSubjects.includes(s.id)}
-                onChange={() => handleSubjectToggle(s.id)} />
-              {s.name}
-              {s.group?.name && <span className="text-ink-faint ml-1">({s.group.name})</span>}
-            </label>
-          ))}
-          {availableSubjects.length === 0 && (
-            <p className="text-xs text-ink-faint">No subjects available</p>
-          )}
-        </div>
+        {formData.role !== 'principal' ? (
+          <>
+            <p className="text-xs text-ink-muted">
+              {formData.selectedClasses.length > 0
+                ? 'Showing subjects from selected classes'
+                : 'Select classes above to filter subjects, or assign from all subjects'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {availableSubjects.map(s => (
+                <label key={s.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs cursor-pointer transition-colors
+                  ${formData.selectedSubjects.includes(s.id)
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-surface-200 text-ink-muted hover:border-green-300'}`}>
+                  <input type="checkbox" className="sr-only"
+                    checked={formData.selectedSubjects.includes(s.id)}
+                    onChange={() => handleSubjectToggle(s.id)} />
+                  {s.name}
+                  {s.group?.name && <span className="text-ink-faint ml-1">({s.group.name})</span>}
+                </label>
+              ))}
+              {availableSubjects.length === 0 && (
+                <p className="text-xs text-ink-faint">No subjects available</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-ink-muted">Principals do not have subject assignments. They approve reports submitted by class teachers.</p>
+        )}
       </div>
 
       <div className="flex gap-3">
