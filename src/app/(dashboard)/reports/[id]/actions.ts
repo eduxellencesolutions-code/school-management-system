@@ -129,6 +129,15 @@ async function getReportContext(reportId: string) {
   const isSolo = !profile?.organization_id
   const isPrincipal = profile?.role === 'principal'
 
+  // ✅ ADDED: Debug logging
+  console.log('🔍 Approve check:', { 
+    userId: user.id, 
+    role: profile?.role, 
+    isPrincipal,
+    reportId,
+    reportStatus: report.report_status
+  })
+
   let isClassTeacher = false
   if (!isSolo && !isAdmin) {
     const { data: assignment } = await supabase
