@@ -4,6 +4,94 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+// ── Notification Helper Functions ──
+
+async function notifyPrincipals(supabase: any, report: any, reportId: string, submitterId: string) {
+  try {
+    // Find all principals in the organization
+    const { data: principals } = await supabase
+      .from('users')
+      .select('id')
+      .eq('organization_id', report.organization_id)
+      .eq('role', 'principal')
+
+    if (!principals?.length) return
+
+    // Get the class name
+    const { data: group } = await supabase
+      .from('groups')
+      .select('name')
+      .eq('id', report.group_id)
+      .single()
+
+    // Get submitter name
+    const { data: submitter } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', submitterId)
+      .single()
+
+    const submitterName = submitter?.name || 'A teacher'
+
+    // Create notification for each principal
+    const rows = principals.map((p: any) => ({
+      user_id: p.id,
+      organization_id: report.organization_id,
+      type: 'report_submitted',
+      report_id: reportId,
+      message: `${group?.name ?? 'A class'} report was submitted for your approval by ${submitterName}`,
+    }))
+
+    await supabase.from('notifications').insert(rows)
+  } catch (error) {
+    console.error('Error notifying principals:', error)
+    // Don't throw - notification failure shouldn't break the main flow
+  }
+}
+
+async function notifyAdmins(supabase: any, report: any, reportId: string, approverId: string) {
+  try {
+    // Find all admins in the organization
+    const { data: admins } = await supabase
+      .from('users')
+      .select('id')
+      .eq('organization_id', report.organization_id)
+      .in('role', ['admin', 'school_admin'])
+
+    if (!admins?.length) return
+
+    // Get the class name
+    const { data: group } = await supabase
+      .from('groups')
+      .select('name')
+      .eq('id', report.group_id)
+      .single()
+
+    // Get approver name
+    const { data: approver } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', approverId)
+      .single()
+
+    const approverName = approver?.name || 'The principal'
+
+    // Create notification for each admin
+    const rows = admins.map((a: any) => ({
+      user_id: a.id,
+      organization_id: report.organization_id,
+      type: 'report_approved',
+      report_id: reportId,
+      message: `${group?.name ?? 'A class'} report was approved by ${approverName} and is ready to lock`,
+    }))
+
+    await supabase.from('notifications').insert(rows)
+  } catch (error) {
+    console.error('Error notifying admins:', error)
+    // Don't throw - notification failure shouldn't break the main flow
+  }
+}
+
 async function getReportContext(reportId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -70,6 +158,9 @@ export async function submitReport(formData: FormData) {
 
   if (error) return { success: false, message: 'Failed to submit report' }
 
+  // 🔔 Notify principals
+  await notifyPrincipals(supabase, report, reportId, user!.id)
+
   revalidatePath(`/reports/${reportId}`)
   return { success: true }
 }
@@ -89,6 +180,9 @@ export async function approveReport(formData: FormData) {
     .eq('id', reportId)
 
   if (error) return { success: false, message: 'Failed to approve report' }
+
+  // 🔔 Notify admins
+  await notifyAdmins(supabase, report, reportId, user!.id)
 
   revalidatePath(`/reports/${reportId}`)
   return { success: true }
