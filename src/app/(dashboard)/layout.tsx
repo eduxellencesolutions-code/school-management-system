@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
 import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
 import ExpiredBanner from '@/components/billing/ExpiredBanner'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -45,19 +46,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          {/* ✅ Grace period banner - shown when subscription is in grace period */}
-          {subState.isGracePeriod && subState.daysRemaining !== null && (
-            <div className="mb-4">
-              <GracePeriodBanner daysRemaining={subState.daysRemaining} />
+          {/* ✅ Header with Notification Bell */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex-1">
+              {/* Grace period banner - shown when subscription is in grace period */}
+              {subState.isGracePeriod && subState.daysRemaining !== null && (
+                <GracePeriodBanner daysRemaining={subState.daysRemaining} />
+              )}
+              
+              {/* Expired banner - shown when subscription has expired */}
+              {subState.isExpired && (
+                <ExpiredBanner />
+              )}
             </div>
-          )}
-          
-          {/* ✅ Expired banner - shown when subscription has expired */}
-          {subState.isExpired && (
-            <div className="mb-4">
-              <ExpiredBanner />
+            <div className="ml-4 shrink-0">
+              <NotificationBell />
             </div>
-          )}
+          </div>
           
           {children}
         </div>
