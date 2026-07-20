@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
 import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
+import ExpiredBanner from '@/components/billing/ExpiredBanner'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -27,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         .single()
     : { data: null }
 
-  // ✅ Get subscription state for grace period banner
+  // ✅ Get subscription state for grace period and expired banners
   const subState = await getSubscriptionState(supabase, authUser.id)
 
   return (
@@ -45,11 +46,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-6">
           {/* ✅ Grace period banner - shown when subscription is in grace period */}
-          {subState.status === 'grace_period' && subState.daysRemaining !== null && (
+          {subState.isGracePeriod && subState.daysRemaining !== null && (
             <div className="mb-4">
               <GracePeriodBanner daysRemaining={subState.daysRemaining} />
             </div>
           )}
+          
+          {/* ✅ Expired banner - shown when subscription has expired */}
+          {subState.isExpired && (
+            <div className="mb-4">
+              <ExpiredBanner />
+            </div>
+          )}
+          
           {children}
         </div>
       </main>
