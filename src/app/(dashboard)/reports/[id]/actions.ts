@@ -15,7 +15,10 @@ async function notifyPrincipals(supabase: any, report: any, reportId: string, su
       .eq('organization_id', report.organization_id)
       .eq('role', 'principal')
 
-    if (!principals?.length) return
+    if (!principals?.length) {
+      console.log('ℹ️ No principals found in organization, skipping notification')
+      return
+    }
 
     // Get the class name
     const { data: group } = await supabase
@@ -42,7 +45,12 @@ async function notifyPrincipals(supabase: any, report: any, reportId: string, su
       message: `${group?.name ?? 'A class'} report was submitted for your approval by ${submitterName}`,
     }))
 
-    await supabase.from('notifications').insert(rows)
+    const { error } = await supabase.from('notifications').insert(rows)
+    if (error) {
+      console.error('Error inserting notifications:', error)
+    } else {
+      console.log(`✅ Notified ${principals.length} principal(s) about report submission`)
+    }
   } catch (error) {
     console.error('Error notifying principals:', error)
     // Don't throw - notification failure shouldn't break the main flow
@@ -58,7 +66,10 @@ async function notifyAdmins(supabase: any, report: any, reportId: string, approv
       .eq('organization_id', report.organization_id)
       .in('role', ['admin', 'school_admin'])
 
-    if (!admins?.length) return
+    if (!admins?.length) {
+      console.log('ℹ️ No admins found in organization, skipping notification')
+      return
+    }
 
     // Get the class name
     const { data: group } = await supabase
@@ -85,7 +96,12 @@ async function notifyAdmins(supabase: any, report: any, reportId: string, approv
       message: `${group?.name ?? 'A class'} report was approved by ${approverName} and is ready to lock`,
     }))
 
-    await supabase.from('notifications').insert(rows)
+    const { error } = await supabase.from('notifications').insert(rows)
+    if (error) {
+      console.error('Error inserting notifications:', error)
+    } else {
+      console.log(`✅ Notified ${admins.length} admin(s) about report approval`)
+    }
   } catch (error) {
     console.error('Error notifying admins:', error)
     // Don't throw - notification failure shouldn't break the main flow
