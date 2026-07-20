@@ -15,10 +15,11 @@ async function getReportContext(reportId: string) {
   const { data: report } = await supabase
     .from('reports').select('group_id, organization_id, created_by, report_status').eq('id', reportId).single()
 
-  if (!report) return { report: null, user, isAdmin: false, isSolo: false, isClassTeacher: false }
+  if (!report) return { report: null, user, isAdmin: false, isSolo: false, isClassTeacher: false, isPrincipal: false }
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
   const isSolo = !profile?.organization_id
+  const isPrincipal = profile?.role === 'principal'
 
   let isClassTeacher = false
   if (!isSolo && !isAdmin) {
@@ -32,7 +33,7 @@ async function getReportContext(reportId: string) {
     isClassTeacher = !!assignment
   }
 
-  return { report, user, isAdmin, isSolo, isClassTeacher }
+  return { report, user, isAdmin, isSolo, isClassTeacher, isPrincipal }
 }
 
 export async function saveStudentRemarks(reportId: string, remarks: Record<string, { teacher_remark?: string; principal_remark?: string }>) {
@@ -53,11 +54,12 @@ export async function saveStudentRemarks(reportId: string, remarks: Record<strin
   return { success: true }
 }
 
+// ✅ UPDATED: Only class teacher can submit (admin removed)
 export async function submitReport(formData: FormData) {
   const reportId = formData.get('id') as string
-  const { report, isAdmin, isSolo, isClassTeacher, user } = await getReportContext(reportId)
+  const { report, isClassTeacher, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
-  if (!isAdmin && !isSolo && !isClassTeacher) return { success: false, message: 'You are not allowed to submit this report' }
+  if (!isClassTeacher) return { success: false, message: 'Only the class teacher can submit this report for approval' }
   if (report.report_status !== 'draft') return { success: false, message: 'Only draft reports can be submitted' }
 
   const supabase = await createClient()
@@ -72,11 +74,36 @@ export async function submitReport(formData: FormData) {
   return { success: true }
 }
 
+// ✅ NEW: Principal approves report
+export async function approveReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  const { report, isPrincipal, user } = await getReportContext(reportId)
+  if (!report) return { success: false, message: 'Report not found' }
+  if (!isPrincipal) return { success: false, message: 'Only the principal/head teacher can approve this report' }
+  if (report.report_status !== 'submitted') return { success: false, message: 'Only submitted reports can be approved' }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('reports')
+    .update({ report_status: 'approved', approved_by: user!.id, approved_at: new Date().toISOString() })
+    .eq('id', reportId)
+
+  if (error) return { success: false, message: 'Failed to approve report' }
+
+  revalidatePath(`/reports/${reportId}`)
+  return { success: true }
+}
+
+// ✅ UPDATED: Only admin can publish, and only after approval (solo teachers bypass)
 export async function publishReport(formData: FormData) {
   const reportId = formData.get('id') as string
   const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can publish reports' }
+  // ✅ Solo teachers bypass the approval chain, but institutions require approval
+  if (!isSolo && report.report_status !== 'approved') {
+    return { success: false, message: 'This report must be approved by the principal before it can be locked' }
+  }
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -142,7 +169,6 @@ export async function softDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
   const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
-  // ✅ FIX: Only admins and solo teachers can delete reports
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can delete generated reports' }
 
   const supabase = await createClient()
