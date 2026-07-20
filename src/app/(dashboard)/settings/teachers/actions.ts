@@ -34,7 +34,7 @@ interface CreateTeacherInput {
   name: string
   email: string
   phone: string
-  role: 'teacher' | 'lecturer' | 'assistant' | 'principal'  // ✅ Added 'principal'
+  role: 'teacher' | 'lecturer' | 'assistant' | 'principal'
   password: string
   signatureUrl: string | null
   selectedClasses: string[]
@@ -156,6 +156,8 @@ export async function createTeacher(input: CreateTeacherInput) {
 }
 
 // Get all teachers in an organization
+// Valid roles: teacher, lecturer, assistant, principal
+// class_teacher is NOT a users.role - it's stored in teacher_assignments
 export async function getTeachers() {
   const { profile } = await checkInstitutionAccess()
   const supabase = await createClient()
@@ -174,7 +176,7 @@ export async function getTeachers() {
       )
     `)
     .eq('organization_id', profile?.organization_id)
-    .in('role', ['teacher', 'class_teacher', 'principal'])  // ✅ Include all teacher roles
+    .in('role', ['teacher', 'lecturer', 'assistant', 'principal'])
     .order('name')
 
   return teachers || []
@@ -405,7 +407,7 @@ export async function uploadTeachers(formData: FormData) {
       .from('users')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId)
-      .in('role', ['teacher', 'class_teacher', 'principal'])  // ✅ Include all teacher roles
+      .in('role', ['teacher', 'lecturer', 'assistant', 'principal'])
 
     // Check how many of these are genuinely NEW users (existing emails don't count against the limit)
     const emails = teachers.map(t => t.email)
