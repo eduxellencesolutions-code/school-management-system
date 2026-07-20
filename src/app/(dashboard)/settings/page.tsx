@@ -245,7 +245,7 @@ export default async function SettingsPage() {
             ))}
           </div>
 
-          {/* ✅ Restructured upgrade/downgrade section */}
+          {/* ✅ Restructured upgrade/downgrade/renew section */}
           {(() => {
             // Get upgrade and downgrade options specific to this account type
             const allUpgrades = getUpgradeOptions(currentPlan, isInstitution)
@@ -254,6 +254,19 @@ export default async function SettingsPage() {
 
             return (
               <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
+                {/* ✅ NEW: Show Renew option when expired or in grace period */}
+                {(currentStatus === 'expired' || currentStatus === 'grace_period') && (
+                  <div>
+                    <p className="text-sm font-medium text-ink mb-3 text-red-600">
+                      {currentStatus === 'expired' ? 'Renew Your Subscription' : 'Renew Before Grace Period Ends'}
+                    </p>
+                    <PlanUpgradeCard 
+                      plan={currentPlan} 
+                      label={`${config.label} (Renew)`} 
+                    />
+                  </div>
+                )}
+
                 {upgrades.length > 0 && (
                   <div>
                     <p className="text-sm font-medium text-ink mb-3">Upgrade Available</p>
