@@ -30,6 +30,7 @@ export default function NewClassPage() {
   const [sessions, setSessions] = useState<SessionOption[]>([])
   const [terms, setTerms] = useState<TermOption[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -63,8 +64,30 @@ export default function NewClassPage() {
 
   const availableTerms = terms.filter(t => t.session_id === selectedSessionId)
 
-  function onValidSubmit() {
-    ;(document.getElementById('class-form') as HTMLFormElement).requestSubmit()
+  // ✅ FIX: Call server action directly instead of using native form action
+  async function onValidSubmit(data: FormData) {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
+    try {
+      const fd = new FormData()
+      fd.set('name', data.name)
+      if (data.code) fd.set('code', data.code)
+      fd.set('type', data.type)
+      if (data.session_id) fd.set('session_id', data.session_id)
+      if (data.term_id) fd.set('term_id', data.term_id)
+      
+      // ✅ Call server action directly — redirects will work via Next.js
+      await createGroup(fd)
+    } catch (error) {
+      // ✅ Server actions throw redirect errors — that's expected
+      // Any other error should be logged
+      if (!(error instanceof Error && error.message?.includes('NEXT_REDIRECT'))) {
+        console.error('Error creating class:', error)
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -92,7 +115,8 @@ export default function NewClassPage() {
         </div>
       )}
 
-      <form id="class-form" action={createGroup} onSubmit={handleSubmit(onValidSubmit)} className="card p-6 flex flex-col gap-4">
+      {/* ✅ REMOVED action={createGroup} — server action called programmatically via RHF's handleSubmit */}
+      <form id="class-form" onSubmit={handleSubmit(onValidSubmit)} className="card p-6 flex flex-col gap-4">
         <div>
           <label className="block text-sm font-medium text-ink mb-1">Class name <span className="text-red-500">*</span></label>
           <input type="text" placeholder="e.g. JSS 2A, Primary 4 Gold, BIO 101" className="input" {...register('name')} />
@@ -148,7 +172,9 @@ export default function NewClassPage() {
         </div>
 
         <div className="flex gap-3 pt-2">
-          <button type="submit" className="btn-primary btn flex-1">Create class</button>
+          <button type="submit" className="btn-primary btn flex-1" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating...' : 'Create class'}
+          </button>
           <Link href="/classes" className="btn-secondary btn">Cancel</Link>
         </div>
       </form>
