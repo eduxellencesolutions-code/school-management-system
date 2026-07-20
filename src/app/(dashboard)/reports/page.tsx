@@ -21,13 +21,16 @@ export default async function ReportsPage() {
   const isInstitution = profile?.organization?.type === 'school' &&
     profile?.organization?.subscription_status === 'active'
 
-  // Determine delete permissions
+  // Determine user roles
   // Both 'admin' and 'school_admin' are valid roles in the enum
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isPrincipal = profile?.role === 'principal'
   const isSolo = !profile?.organization_id
 
   let myClassTeacherOf: string[] = []
-  if (!isSolo && !isAdmin) {
+  // Only fetch class teacher assignments if not admin, not solo, and not principal
+  // (Principals see everything via their own branch)
+  if (!isSolo && !isAdmin && !isPrincipal) {
     const { data: assignments } = await supabase
       .from('teacher_assignments')
       .select('class_id')
@@ -36,7 +39,7 @@ export default async function ReportsPage() {
     myClassTeacherOf = (assignments ?? []).map(a => a.class_id).filter(Boolean)
   }
 
-  // ✅ FIXED: Three-branch reports fetch with proper scoping
+  // ✅ FIXED: Four-branch reports fetch with proper scoping
   let reports, reportsError
 
   if (orgId && isAdmin) {
@@ -48,8 +51,20 @@ export default async function ReportsPage() {
       .neq('report_status', 'archived')
       .order('created_at', { ascending: false })
     reports = res.data; reportsError = res.error
-  } else if (orgId && !isAdmin) {
-    // Institution teacher (non-admin) sees: reports they created + reports for classes they're class teacher of (excluding archived)
+  } else if (orgId && isPrincipal) {
+    // ✅ NEW: Principal sees everything submitted, approved, or published — org-wide
+    // This allows principals to review and approve reports without being the class teacher
+    const res = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .in('report_status', ['submitted', 'approved', 'published'])
+      .order('created_at', { ascending: false })
+    reports = res.data; reportsError = res.error
+  } else if (orgId && !isAdmin && !isPrincipal) {
+    // Institution teacher (non-admin, non-principal) sees: 
+    // - reports they created
+    // - reports for classes they're class teacher of (excluding archived)
     const res = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
       .eq('organization_id', orgId)
