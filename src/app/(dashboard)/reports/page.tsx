@@ -22,7 +22,8 @@ export default async function ReportsPage() {
     profile?.organization?.subscription_status === 'active'
 
   // Determine delete permissions
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  // school_admin is NOT a valid role in the enum - only 'admin' exists
+  const isAdmin = profile?.role === 'admin'
   const isSolo = !profile?.organization_id
 
   let myClassTeacherOf: string[] = []
