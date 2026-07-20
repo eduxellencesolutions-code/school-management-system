@@ -11,8 +11,9 @@ interface Notification {
   id: string
   type: string
   report_id: string
-  message: string
-  is_read: boolean  // ✅ FIX: Changed from 'read' to 'is_read'
+  title: string  // ✅ FIX: Added title field
+  body: string   // ✅ FIX: Changed from 'message' to 'body'
+  is_read: boolean
   created_at: string
 }
 
@@ -77,7 +78,6 @@ export default function NotificationBell() {
       if (error) throw error
 
       setNotifications(data || [])
-      // ✅ FIX: Use is_read instead of read
       setUnreadCount(data?.filter((n: Notification) => !n.is_read).length || 0)
     } catch (error) {
       console.error('Error fetching notifications:', error)
@@ -91,7 +91,6 @@ export default function NotificationBell() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // ✅ FIX: Use is_read instead of read
       const { error } = await supabase
         .from('notifications')
         .update({ is_read: true })
@@ -103,7 +102,7 @@ export default function NotificationBell() {
       // Update local state
       setNotifications((prev) =>
         prev.map((n) =>
-          n.id === notificationId ? { ...n, is_read: true } : n  // ✅ FIX
+          n.id === notificationId ? { ...n, is_read: true } : n
         )
       )
       setUnreadCount((prev) => Math.max(0, prev - 1))
@@ -118,7 +117,6 @@ export default function NotificationBell() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // ✅ FIX: Use is_read instead of read
       const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
       if (unreadIds.length === 0) return
 
@@ -132,7 +130,7 @@ export default function NotificationBell() {
 
       // Update local state
       setNotifications((prev) =>
-        prev.map((n) => ({ ...n, is_read: true }))  // ✅ FIX
+        prev.map((n) => ({ ...n, is_read: true }))
       )
       setUnreadCount(0)
       toast.success('All notifications marked as read')
@@ -209,12 +207,10 @@ export default function NotificationBell() {
                   key={notification.id}
                   href={getNotificationLink(notification)}
                   onClick={() => {
-                    // ✅ FIX: Use is_read instead of read
                     if (!notification.is_read) markAsRead(notification.id)
                     setIsOpen(false)
                   }}
                   className={`block px-4 py-3 border-b border-surface-100 hover:bg-surface-50 transition-colors ${
-                    // ✅ FIX: Use is_read instead of read
                     !notification.is_read ? 'bg-brand-50/30' : ''
                   }`}
                 >
@@ -223,14 +219,18 @@ export default function NotificationBell() {
                       {getNotificationIcon(notification.type)}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${!notification.is_read ? 'font-medium text-ink' : 'text-ink-muted'}`}>
-                        {notification.message}
+                      {/* ✅ FIX: Show title as bold header */}
+                      <p className={`text-sm font-semibold ${!notification.is_read ? 'text-ink' : 'text-ink-muted'}`}>
+                        {notification.title}
+                      </p>
+                      {/* ✅ FIX: Show body as the message content */}
+                      <p className={`text-xs ${!notification.is_read ? 'text-ink-muted' : 'text-ink-faint'}`}>
+                        {notification.body}
                       </p>
                       <p className="text-xs text-ink-faint mt-0.5">
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </p>
                     </div>
-                    {/* ✅ FIX: Use is_read instead of read */}
                     {!notification.is_read && (
                       <button
                         onClick={(e) => {
