@@ -20,14 +20,17 @@ export default async function TeachersPage() {
     redirect('/dashboard')
   }
 
-  // Check if user is admin (only admins can manage teachers)
-  if (profile?.role !== 'admin' && profile?.role !== 'school_admin') {
+  // ✅ Check if user is admin (only admins can manage teachers)
+  // school_admin is NOT a valid role in the enum - only 'admin' exists
+  if (profile?.role !== 'admin') {
     redirect('/dashboard')
   }
 
   console.log('🔍 TEACHERS PAGE - Organization ID:', profile.organization_id)
 
-  // ✅ Get all teachers in the organization with their assignments (including principals)
+  // ✅ Get all teachers in the organization with their assignments
+  // Valid roles: teacher, lecturer, assistant, principal
+  // class_teacher is NOT a users.role - it's stored in teacher_assignments
   const { data: teachers, error: teachersError } = await supabase
     .from('users')
     .select(`
@@ -46,7 +49,7 @@ export default async function TeachersPage() {
       )
     `)
     .eq('organization_id', profile.organization_id)
-    .in('role', ['teacher', 'class_teacher', 'principal'])
+    .in('role', ['teacher', 'lecturer', 'assistant', 'principal'])
     .order('name')
 
   if (teachersError) {
