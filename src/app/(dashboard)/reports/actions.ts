@@ -68,26 +68,19 @@ export async function generateReport(formData: FormData) {
       if (!termId) throw new Error('Please select a term, or set a default term in Settings → Academic Periods.')
     }
 
+    // ✅ FIX: Fetch term name and session name
     const { data: termRow } = await supabase
-      .from('terms').select('session_id').eq('id', termId).single()
-    const sessionId = termRow?.session_id ?? null
-
-    const { data: existing } = await supabase
-      .from('reports')
-      .select('id, status, created_at')
-      .eq('group_id', groupId)
-      .eq('term_id', termId)
-      .eq('type', type)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .from('terms')
+      .select('name, session_id, session:academic_sessions(name)')
+      .eq('id', termId)
       .single()
+    
+    const sessionId = termRow?.session_id ?? null
+    const termName = termRow?.name ?? ''
+    const sessionName = (termRow?.session as any)?.name ?? ''
 
-    if (existing?.status === 'processing') {
-      revalidatePath('/reports')
-      return { success: false, message: 'A report for this class and term is already being generated' }
-    }
-
-    const reportData = await generateReportData(groupId, supabase)
+    // ✅ FIX: Pass termName and sessionName to generateReportData
+    const reportData = await generateReportData(groupId, supabase, termName, sessionName)
 
     const { data: report, error: insertError } = await supabase
       .from('reports')
@@ -128,7 +121,8 @@ export async function generateReport(formData: FormData) {
   }
 }
 
-async function generateReportData(groupId: string, supabase: any) {
+// ✅ FIX: Updated to accept termName and sessionName
+async function generateReportData(groupId: string, supabase: any, termName: string, sessionName: string) {
   const { data: learners } = await supabase
     .from('learners')
     .select('id, first_name, last_name, admission_number')
@@ -273,11 +267,14 @@ async function generateReportData(groupId: string, supabase: any) {
 
   const sortedByPosition = [...reportData].sort((a, b) => a.position - b.position)
 
+  // ✅ FIX: Return object now includes term_name and session_name
   return {
     learners: sortedByPosition,
     subjects: subjects.map((s: any) => ({ id: s.id, name: s.name, code: s.code, template_id: s.template_id })),
     grading_system: grades,
     generated_at: new Date().toISOString(),
+    term_name: termName,
+    session_name: sessionName,
     summary: {
       total_learners: learners.length,
       total_subjects: subjects.length,
