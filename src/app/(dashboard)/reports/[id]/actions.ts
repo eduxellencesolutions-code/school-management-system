@@ -171,12 +171,22 @@ export async function submitReport(formData: FormData) {
   if (report.report_status !== 'draft') return { success: false, message: 'Only draft reports can be submitted' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ report_status: 'submitted', submitted_by: user!.id, submitted_at: new Date().toISOString() })
+    .update({ 
+      report_status: 'submitted', 
+      submitted_by: user!.id, 
+      submitted_at: new Date().toISOString() 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to submit report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Submission failed — you may not have permission to update this report' }
+  }
 
   // 🔔 Notify principals — wrapped so notification failure never blocks submission
   try {
@@ -199,12 +209,22 @@ export async function approveReport(formData: FormData) {
   if (report.report_status !== 'submitted') return { success: false, message: 'Only submitted reports can be approved' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ report_status: 'approved', approved_by: user!.id, approved_at: new Date().toISOString() })
+    .update({ 
+      report_status: 'approved', 
+      approved_by: user!.id, 
+      approved_at: new Date().toISOString() 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to approve report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Approval failed — you may not have permission to update this report' }
+  }
 
   // 🔔 Notify admins — wrapped so any notification failure never blocks the approval itself
   try {
@@ -230,12 +250,22 @@ export async function publishReport(formData: FormData) {
   }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ report_status: 'published', published_by: user!.id, published_at: new Date().toISOString() })
+    .update({ 
+      report_status: 'published', 
+      published_by: user!.id, 
+      published_at: new Date().toISOString() 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to publish report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Publish failed — you may not have permission to update this report' }
+  }
 
   revalidatePath(`/reports/${reportId}`)
   revalidatePath('/reports')
@@ -249,12 +279,22 @@ export async function unpublishReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can unlock reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ report_status: 'submitted', published_by: null, published_at: null })
+    .update({ 
+      report_status: 'submitted', 
+      published_by: null, 
+      published_at: null 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to unlock report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Unlock failed — you may not have permission to update this report' }
+  }
 
   revalidatePath(`/reports/${reportId}`)
   revalidatePath('/reports')
@@ -268,8 +308,18 @@ export async function archiveReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can archive reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase.from('reports').update({ report_status: 'archived' }).eq('id', reportId)
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
+    .from('reports')
+    .update({ report_status: 'archived' })
+    .eq('id', reportId)
+    .select('id')
+
   if (error) return { success: false, message: 'Failed to archive report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Archive failed — you may not have permission to update this report' }
+  }
 
   revalidatePath(`/reports/${reportId}`)
   revalidatePath('/reports')
@@ -283,8 +333,18 @@ export async function unarchiveReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can restore archived reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase.from('reports').update({ report_status: 'published' }).eq('id', reportId)
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
+    .from('reports')
+    .update({ report_status: 'published' })
+    .eq('id', reportId)
+    .select('id')
+
   if (error) return { success: false, message: 'Failed to restore report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Restore failed — you may not have permission to update this report' }
+  }
 
   revalidatePath('/reports')
   revalidatePath('/reports/archive')
@@ -298,12 +358,22 @@ export async function softDeleteReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can delete generated reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ deleted: true, deleted_by: user!.id, deleted_at: new Date().toISOString() })
+    .update({ 
+      deleted: true, 
+      deleted_by: user!.id, 
+      deleted_at: new Date().toISOString() 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to delete report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Delete failed — you may not have permission to update this report' }
+  }
 
   revalidatePath('/reports')
   revalidatePath('/dashboard')
@@ -317,12 +387,22 @@ export async function restoreReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can restore reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually updated
+  const { data, error } = await supabase
     .from('reports')
-    .update({ deleted: false, deleted_by: null, deleted_at: null })
+    .update({ 
+      deleted: false, 
+      deleted_by: null, 
+      deleted_at: null 
+    })
     .eq('id', reportId)
+    .select('id')
 
   if (error) return { success: false, message: 'Failed to restore report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Restore failed — you may not have permission to update this report' }
+  }
 
   revalidatePath('/reports')
   return { success: true }
@@ -335,8 +415,18 @@ export async function permanentlyDeleteReport(formData: FormData) {
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can permanently delete reports' }
 
   const supabase = await createClient()
-  const { error } = await supabase.from('reports').delete().eq('id', reportId)
+  
+  // ✅ FIX: Add .select('id') to verify the row was actually deleted
+  const { data, error } = await supabase
+    .from('reports')
+    .delete()
+    .eq('id', reportId)
+    .select('id')
+
   if (error) return { success: false, message: 'Failed to permanently delete report' }
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Permanent delete failed — you may not have permission to delete this report' }
+  }
 
   revalidatePath('/reports')
   return { success: true }
