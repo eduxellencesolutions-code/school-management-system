@@ -30,6 +30,7 @@ export default function NewStudentPage() {
   const searchParams = useSearchParams()
   const supabase = createClient()
   const [groups, setGroups] = useState<Group[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Get error and success from URL
   const error = searchParams.get('error')
@@ -66,10 +67,35 @@ export default function NewStudentPage() {
     load()
   })
 
-  function onValidSubmit() {
-    // React Hook Form has validated client-side; now submit the real <form> to the server action
-    const formEl = document.getElementById('student-form') as HTMLFormElement
-    formEl.requestSubmit()
+  // ✅ FIX: Call server action directly instead of using native form action
+  async function onValidSubmit(data: FormData) {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
+    try {
+      const fd = new FormData()
+      fd.set('first_name', data.first_name)
+      fd.set('last_name', data.last_name)
+      if (data.other_names) fd.set('other_names', data.other_names)
+      if (data.admission_number) fd.set('admission_number', data.admission_number)
+      if (data.gender) fd.set('gender', data.gender)
+      if (data.date_of_birth) fd.set('date_of_birth', data.date_of_birth)
+      if (data.guardian_name) fd.set('guardian_name', data.guardian_name)
+      if (data.guardian_phone) fd.set('guardian_phone', data.guardian_phone)
+      if (data.email) fd.set('email', data.email)
+      fd.set('group_id', data.group_id)
+      
+      // ✅ Call server action directly — redirects will work via Next.js
+      await createStudent(fd)
+    } catch (error) {
+      // ✅ Server actions throw redirect errors — that's expected
+      // Any other error should be logged
+      if (!(error instanceof Error && error.message?.includes('NEXT_REDIRECT'))) {
+        console.error('Error creating student:', error)
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -101,9 +127,8 @@ export default function NewStudentPage() {
         </div>
       )}
 
+      {/* ✅ REMOVED action={createStudent} — server action called programmatically via RHF's handleSubmit */}
       <form
-        id="student-form"
-        action={createStudent}
         onSubmit={handleSubmit(onValidSubmit)}
         className="flex flex-col gap-6"
       >
@@ -180,7 +205,9 @@ export default function NewStudentPage() {
         </div>
 
         <div className="flex gap-3">
-          <button type="submit" className="btn-primary btn flex-1">Add student</button>
+          <button type="submit" className="btn-primary btn flex-1" disabled={isSubmitting}>
+            {isSubmitting ? 'Adding...' : 'Add student'}
+          </button>
           <Link href="/students" className="btn-secondary btn">Cancel</Link>
         </div>
       </form>
