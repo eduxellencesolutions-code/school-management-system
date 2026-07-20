@@ -27,7 +27,7 @@ export default async function TeachersPage() {
 
   console.log('🔍 TEACHERS PAGE - Organization ID:', profile.organization_id)
 
-  // ✅ Get all teachers in the organization with their assignments
+  // ✅ Get all teachers in the organization with their assignments (including principals)
   const { data: teachers, error: teachersError } = await supabase
     .from('users')
     .select(`
@@ -46,7 +46,7 @@ export default async function TeachersPage() {
       )
     `)
     .eq('organization_id', profile.organization_id)
-    .eq('role', 'teacher')
+    .in('role', ['teacher', 'class_teacher', 'principal'])
     .order('name')
 
   if (teachersError) {
