@@ -34,6 +34,13 @@ export default async function NewTeacherPage() {
     group: Array.isArray(s.group) ? (s.group[0] ?? null) : s.group,
   }))
 
+  // ✅ Role options for the dropdown
+  const roleOptions = [
+    { value: 'teacher', label: 'Teacher' },
+    { value: 'class_teacher', label: 'Class Teacher' },
+    { value: 'principal', label: 'Principal / Head Teacher' },
+  ]
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center gap-2 text-sm">
@@ -53,6 +60,7 @@ export default async function NewTeacherPage() {
         classes={classes || []}
         subjects={transformedSubjects}
         orgId={profile.organization_id}
+        roleOptions={roleOptions}
       />
     </div>
   )
