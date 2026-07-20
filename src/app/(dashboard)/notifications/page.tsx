@@ -48,7 +48,6 @@ export default async function NotificationsPage() {
               key={notification.id}
               href={`/reports/${notification.report_id}`}
               className={`card p-4 hover:shadow-md transition-shadow ${
-                // ✅ FIX: Use is_read instead of read
                 !notification.is_read ? 'border-brand-300 bg-brand-50/30' : ''
               }`}
             >
@@ -57,8 +56,13 @@ export default async function NotificationsPage() {
                   {notification.type === 'report_submitted' ? '📋' : '✅'}
                 </span>
                 <div className="flex-1">
-                  <p className={`text-sm ${!notification.is_read ? 'font-semibold text-ink' : 'text-ink-muted'}`}>
-                    {notification.message}
+                  {/* ✅ FIX: Show title as bold header */}
+                  <p className={`text-sm font-semibold ${!notification.is_read ? 'text-ink' : 'text-ink-muted'}`}>
+                    {notification.title}
+                  </p>
+                  {/* ✅ FIX: Show body as the message content */}
+                  <p className={`text-sm ${!notification.is_read ? 'text-ink' : 'text-ink-muted'}`}>
+                    {notification.body}
                   </p>
                   <p className="text-xs text-ink-faint mt-1">
                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
