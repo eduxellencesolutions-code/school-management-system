@@ -5,6 +5,8 @@ export interface SubscriptionState {
   daysRemaining: number | null
   graceEndsAt: string | null
   plan: string
+  isExpired: boolean
+  isGracePeriod: boolean
 }
 
 export async function getSubscriptionState(
@@ -29,16 +31,19 @@ export async function getSubscriptionState(
 
 function computeState(status: string | undefined, plan: string | undefined, graceEndsAt: string | null | undefined): SubscriptionState {
   let daysRemaining: number | null = null
+  const currentStatus = status ?? 'active'
 
-  if (status === 'grace_period' && graceEndsAt) {
+  if (currentStatus === 'grace_period' && graceEndsAt) {
     const msRemaining = new Date(graceEndsAt).getTime() - Date.now()
     daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000))
   }
 
   return {
-    status: status ?? 'active',
+    status: currentStatus,
     daysRemaining,
     graceEndsAt: graceEndsAt ?? null,
     plan: plan ?? 'free',
+    isExpired: currentStatus === 'expired',
+    isGracePeriod: currentStatus === 'grace_period',
   }
 }
