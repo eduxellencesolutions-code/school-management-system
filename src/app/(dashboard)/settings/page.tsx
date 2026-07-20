@@ -1,12 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getPlanConfig, PlanKey } from '@/lib/plans/config'
-import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown } from 'lucide-react'
+import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown, Signature } from 'lucide-react'
 import Link from 'next/link'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import PlanDowngradeCard from '@/components/billing/PlanDowngradeCard'
 import { getUpgradeOptions, getDowngradeOptions } from '@/lib/plans/downgrade'
 import { PaidPlan } from '@/lib/payments/pricing'
+import MySignatureUpload from '@/components/settings/MySignatureUpload'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -99,6 +100,34 @@ export default async function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* ✅ Teacher Signature Upload - Only show for teachers (not admins) */}
+          {profile?.role === 'teacher' && (
+            <div className="mt-4 pt-4 border-t border-surface-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Signature size={16} className="text-brand-500" />
+                <h3 className="font-medium text-sm text-ink">Teacher Signature</h3>
+              </div>
+              <p className="text-xs text-ink-muted mb-3">
+                Upload your signature. It will appear on report cards for classes where you are the class teacher.
+              </p>
+              <MySignatureUpload currentSignatureUrl={profile?.signature_url} />
+            </div>
+          )}
+
+          {/* ✅ Show note for admins */}
+          {profile?.role === 'admin' && (
+            <div className="mt-4 pt-4 border-t border-surface-200">
+              <p className="text-xs text-ink-muted">
+                <span className="font-medium">Note:</span> As an administrator, your signature is managed at the 
+                organization level. You can update the principal signature in{' '}
+                <Link href="/settings/institution" className="text-brand-500 hover:underline">
+                  Institution Settings
+                </Link>
+                .
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
