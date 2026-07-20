@@ -60,11 +60,12 @@ async function notifyPrincipals(supabase: any, report: any, reportId: string, su
 async function notifyAdmins(supabase: any, report: any, reportId: string, approverId: string) {
   try {
     // Find all admins in the organization
+    // school_admin is NOT a valid role in the enum - only 'admin' exists
     const { data: admins } = await supabase
       .from('users')
       .select('id')
       .eq('organization_id', report.organization_id)
-      .in('role', ['admin', 'school_admin'])
+      .eq('role', 'admin')
 
     if (!admins?.length) {
       console.log('ℹ️ No admins found in organization, skipping notification')
@@ -121,7 +122,8 @@ async function getReportContext(reportId: string) {
 
   if (!report) return { report: null, user, isAdmin: false, isSolo: false, isClassTeacher: false, isPrincipal: false }
 
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  // school_admin is NOT a valid role in the enum - only 'admin' exists
+  const isAdmin = profile?.role === 'admin'
   const isSolo = !profile?.organization_id
   const isPrincipal = profile?.role === 'principal'
 
