@@ -29,7 +29,6 @@ export default async function ReportsPage() {
 
   let myClassTeacherOf: string[] = []
   // Only fetch class teacher assignments if not admin, not solo, and not principal
-  // (Principals see everything via their own branch)
   if (!isSolo && !isAdmin && !isPrincipal) {
     const { data: assignments } = await supabase
       .from('teacher_assignments')
@@ -39,8 +38,24 @@ export default async function ReportsPage() {
     myClassTeacherOf = (assignments ?? []).map(a => a.class_id).filter(Boolean)
   }
 
-  // ✅ FIXED: Four-branch reports fetch with proper scoping
-  let reports, reportsError
+  // Get subject teacher assignments too
+  let mySubjectClassIds: string[] = []
+  if (!isSolo && (isPrincipal || !isAdmin)) {
+    const { data: subjectAssignments } = await supabase
+      .from('teacher_assignments')
+      .select('class_id')
+      .eq('teacher_id', authUser.id)
+      .eq('role', 'subject_teacher')
+    mySubjectClassIds = (subjectAssignments ?? []).map(a => a.class_id).filter(Boolean)
+  }
+
+  // Combine both for "My Reports"
+  const myOwnClassIds = [...new Set([...myClassTeacherOf, ...mySubjectClassIds])]
+
+  // ── Reports Fetch ──
+  let myReports: any[] = []
+  let pendingApprovalReports: any[] = []
+  let reportsError = null
 
   if (orgId && isAdmin) {
     // Admin sees all reports in the organization (excluding archived)
@@ -50,29 +65,43 @@ export default async function ReportsPage() {
       .eq('deleted', false)
       .neq('report_status', 'archived')
       .order('created_at', { ascending: false })
-    reports = res.data; reportsError = res.error
+    myReports = res.data ?? []
+    reportsError = res.error
   } else if (orgId && isPrincipal) {
-    // ✅ NEW: Principal sees everything submitted, approved, or published — org-wide
-    // This allows principals to review and approve reports without being the class teacher
-    const res = await supabase.from('reports')
+    // "My Reports" - principal sees reports they created OR their assigned classes
+    const myRes = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
       .eq('organization_id', orgId)
       .eq('deleted', false)
-      .in('report_status', ['submitted', 'approved', 'published'])
+      .neq('report_status', 'archived')
+      .or(`created_by.eq.${authUser.id},group_id.in.(${myOwnClassIds.length > 0 ? myOwnClassIds.join(',') : '00000000-0000-0000-0000-000000000000'})`)
       .order('created_at', { ascending: false })
-    reports = res.data; reportsError = res.error
+
+    // "Pending Approval" - org-wide, anything awaiting principal action (excluding their own)
+    const pendingRes = await supabase.from('reports')
+      .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
+      .eq('organization_id', orgId)
+      .eq('deleted', false)
+      .in('report_status', ['submitted', 'approved'])
+      .neq('created_by', authUser.id)
+      .order('created_at', { ascending: false })
+
+    myReports = myRes.data ?? []
+    pendingApprovalReports = pendingRes.data ?? []
+    reportsError = myRes.error || pendingRes.error
   } else if (orgId && !isAdmin && !isPrincipal) {
-    // Institution teacher (non-admin, non-principal) sees: 
+    // Institution teacher (non-admin, non-principal) sees:
     // - reports they created
-    // - reports for classes they're class teacher of (excluding archived)
+    // - reports for classes they're assigned to (class teacher or subject teacher)
     const res = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
       .eq('organization_id', orgId)
       .eq('deleted', false)
       .neq('report_status', 'archived')
-      .or(`created_by.eq.${authUser.id},group_id.in.(${myClassTeacherOf.length > 0 ? myClassTeacherOf.join(',') : '00000000-0000-0000-0000-000000000000'})`)
+      .or(`created_by.eq.${authUser.id},group_id.in.(${myOwnClassIds.length > 0 ? myOwnClassIds.join(',') : '00000000-0000-0000-0000-000000000000'})`)
       .order('created_at', { ascending: false })
-    reports = res.data; reportsError = res.error
+    myReports = res.data ?? []
+    reportsError = res.error
   } else {
     // Solo teacher sees only their own reports (excluding archived)
     const res = await supabase.from('reports')
@@ -81,7 +110,8 @@ export default async function ReportsPage() {
       .eq('deleted', false)
       .neq('report_status', 'archived')
       .order('created_at', { ascending: false })
-    reports = res.data; reportsError = res.error
+    myReports = res.data ?? []
+    reportsError = res.error
   }
 
   if (reportsError) {
@@ -117,11 +147,13 @@ export default async function ReportsPage() {
     term: Array.isArray(cls.term) ? cls.term[0] : cls.term,
   }))
 
-  const totalReports = reports?.length ?? 0
-  const completedReports = reports?.filter(r => r.status === 'ready').length ?? 0
-  const processingReports = reports?.filter(r => r.status === 'processing' || r.status === 'pending').length ?? 0
-  const failedReports = reports?.filter(r => r.status === 'failed').length ?? 0
+  // ── Statistics ──
+  const totalReports = myReports?.length ?? 0
+  const completedReports = myReports?.filter(r => r.status === 'ready').length ?? 0
+  const processingReports = myReports?.filter(r => r.status === 'processing' || r.status === 'pending').length ?? 0
+  const failedReports = myReports?.filter(r => r.status === 'failed').length ?? 0
 
+  // ── Badge Functions ──
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       ready: 'bg-green-100 text-green-800',
@@ -133,6 +165,85 @@ export default async function ReportsPage() {
       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || styles.pending}`}>
         {status || 'pending'}
       </span>
+    )
+  }
+
+  const getReportStatusBadge = (reportStatus: string) => {
+    const styles: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-700',
+      submitted: 'bg-amber-100 text-amber-800',
+      approved: 'bg-blue-100 text-blue-800',
+      published: 'bg-green-100 text-green-800',
+      archived: 'bg-surface-200 text-ink-faint',
+    }
+    const labels: Record<string, string> = {
+      draft: 'Draft',
+      submitted: '🟨 Awaiting Approval',
+      approved: 'Approved — ready to lock',
+      published: '🟩 Published',
+      archived: 'Archived',
+    }
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[reportStatus] || styles.draft}`}>
+        {labels[reportStatus] || reportStatus}
+      </span>
+    )
+  }
+
+  // ── Render Helper ──
+  function renderReportList(reports: any[], isAdmin: boolean, isSolo: boolean) {
+    if (!reports || reports.length === 0) {
+      return (
+        <div className="px-5 py-8 text-center text-sm text-ink-muted">
+          No reports to display.
+        </div>
+      )
+    }
+
+    return (
+      <div className="divide-y divide-surface-200">
+        {reports.map((report) => {
+          const groupName = (report.group as { name: string } | null)?.name || '—'
+          const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
+          const canDelete = isAdmin || isSolo
+          
+          return (
+            <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-ink">{groupName}</p>
+                    {getStatusBadge(report.status)}
+                    {getReportStatusBadge(report.report_status)}
+                  </div>
+                  <p className="text-xs text-ink-muted">Created by {createdBy}</p>
+                  <p className="text-xs text-ink-faint">
+                    {report.created_at ? new Date(report.created_at).toLocaleDateString('en-NG', {
+                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    }) : '—'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {report.status === 'ready' && report.download_url && (
+                  <a href={report.download_url} download className="btn-secondary btn-sm btn flex items-center gap-1">
+                    <Download size={14} /> Download
+                  </a>
+                )}
+                <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
+                <DeleteReportButton 
+                  reportId={report.id} 
+                  reportName={groupName} 
+                  canDelete={canDelete}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     )
   }
 
@@ -155,6 +266,7 @@ export default async function ReportsPage() {
         </div>
       </div>
 
+      {/* Statistics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="stat-card"><div className="stat-value">{totalReports}</div><div className="stat-label">Total Reports</div></div>
         <div className="stat-card border-green-200"><div className="stat-value text-green-600">{completedReports}</div><div className="stat-label">Ready</div></div>
@@ -162,69 +274,51 @@ export default async function ReportsPage() {
         <div className="stat-card border-red-200"><div className="stat-value text-red-600">{failedReports}</div><div className="stat-label">Failed</div></div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="font-semibold text-sm text-ink">All Reports</h2>
-        </div>
-        {reports && reports.length > 0 ? (
-          <div className="divide-y divide-surface-200">
-            {reports.map((report) => {
-              const groupName = (report.group as { name: string } | null)?.name || '—'
-              const createdBy = (report.created_by_user as { name: string } | null)?.name || '—'
-              
-              // ✅ FIXED: Only admins and solo teachers can delete
-              const groupId = (report.group as { id: string } | null)?.id
-              const canDelete = isAdmin || isSolo
-              
-              return (
-                <div key={report.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded bg-brand-50 text-brand-600 flex items-center justify-center">
-                      <FileText size={18} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-ink">{groupName}</p>
-                        {getStatusBadge(report.status)}
-                      </div>
-                      <p className="text-xs text-ink-muted">Created by {createdBy}</p>
-                      <p className="text-xs text-ink-faint">
-                        {report.created_at ? new Date(report.created_at).toLocaleDateString('en-NG', {
-                          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        }) : '—'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {report.status === 'ready' && report.download_url && (
-                      <a href={report.download_url} download className="btn-secondary btn-sm btn flex items-center gap-1">
-                        <Download size={14} /> Download
-                      </a>
-                    )}
-                    {/* FIX: Changed from /reports/preview?id= to /reports/ for the consolidated view */}
-                    <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
-                    <DeleteReportButton 
-                      reportId={report.id} 
-                      reportName={groupName} 
-                      canDelete={canDelete}
-                    />
-                  </div>
-                </div>
-              )
-            })}
+      {/* ── PRINCIPAL VIEW: Two Sections ── */}
+      {isPrincipal ? (
+        <>
+          {/* My Reports Section */}
+          <div className="card">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+                📋 My Reports
+              </h2>
+              <span className="text-xs text-ink-muted">
+                {myReports.length} report{myReports.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            {renderReportList(myReports, isAdmin, isSolo)}
           </div>
-        ) : (
-          <div className="px-5 py-12 text-center">
-            <FileText size={40} className="text-surface-200 mx-auto mb-3" />
-            <p className="text-sm text-ink-muted mb-3">No reports generated yet</p>
-            {classes && classes.length > 0 ? (
-              <Link href="/reports/generate" className="btn-primary btn-sm btn">Generate your first report</Link>
+
+          {/* Pending Approval Section */}
+          <div className="card">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+                🟨 Pending Approval
+              </h2>
+              <span className="text-xs text-ink-muted">
+                {pendingApprovalReports.length} report{pendingApprovalReports.length !== 1 ? 's' : ''} awaiting your review
+              </span>
+            </div>
+            {pendingApprovalReports.length > 0 ? (
+              renderReportList(pendingApprovalReports, isAdmin, isSolo)
             ) : (
-              <Link href="/classes/new" className="btn-primary btn-sm btn">Create a class first</Link>
+              <div className="px-5 py-8 text-center text-sm text-ink-muted">
+                No reports currently awaiting your approval.
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        /* ── NON-PRINCIPAL VIEW: Single List ── */
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink">All Reports</h2>
+            <span className="text-xs text-ink-muted">{myReports.length} report{myReports.length !== 1 ? 's' : ''}</span>
+          </div>
+          {renderReportList(myReports, isAdmin, isSolo)}
+        </div>
+      )}
     </div>
   )
 }
