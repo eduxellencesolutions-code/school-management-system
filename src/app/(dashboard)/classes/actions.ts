@@ -111,21 +111,38 @@ export async function createGroup(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  console.log('🔍 [createGroup] Starting class creation for user:', user.id)
+
   // Check subscription status gate
   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
-  if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+  console.log('🔍 [createGroup] Subscription check:', { userId: user.id, allowed, message })
+  if (!allowed) {
+    console.log('❌ [createGroup] Subscription gate blocked:', message)
+    redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+  }
 
   // Check plan limit gate (maxClasses)
   const limitCheck = await checkPlanLimit(supabase, user.id, 'maxClasses')
+  console.log('🔍 [createGroup] Plan limit check:', { 
+    userId: user.id, 
+    allowed: limitCheck.allowed, 
+    message: limitCheck.message 
+  })
   if (!limitCheck.allowed) {
+    console.log('❌ [createGroup] Plan limit gate blocked:', limitCheck.message)
     redirect(`/classes/new?error=${encodeURIComponent(limitCheck.message!)}`)
   }
+
+  console.log('✅ [createGroup] All checks passed, proceeding to create class')
 
   const { data: profile } = await supabase
     .from('users').select('organization_id, role').eq('id', user.id).single()
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
-  if (profile?.organization_id && !isAdmin) redirect('/classes?error=not_authorized')
+  if (profile?.organization_id && !isAdmin) {
+    console.log('❌ [createGroup] Not authorized - user is not admin')
+    redirect('/classes?error=not_authorized')
+  }
 
   const name = (formData.get('name') as string)?.trim()
   const code = (formData.get('code') as string)?.trim() || null
@@ -133,7 +150,12 @@ export async function createGroup(formData: FormData) {
   const sessionId = (formData.get('session_id') as string) || null
   const termId = (formData.get('term_id') as string) || null
 
-  if (!name) redirect('/classes/new?error=missing_name')
+  if (!name) {
+    console.log('❌ [createGroup] Missing class name')
+    redirect('/classes/new?error=missing_name')
+  }
+
+  console.log('📝 [createGroup] Inserting class:', { name, code, type, sessionId, termId, organization_id: profile?.organization_id ?? null })
 
   const { data: group, error } = await supabase
     .from('groups')
@@ -151,10 +173,11 @@ export async function createGroup(formData: FormData) {
     .single()
 
   if (error) {
-    console.error('Error creating class:', error)
+    console.error('❌ [createGroup] Error creating class:', error)
     redirect(`/classes/new?error=${encodeURIComponent('Failed to create class')}`)
   }
 
+  console.log('✅ [createGroup] Class created successfully:', group.id)
   revalidatePath('/classes')
   redirect(`/classes/${group.id}`)
 }
