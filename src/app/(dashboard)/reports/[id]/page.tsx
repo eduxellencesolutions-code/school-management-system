@@ -93,14 +93,25 @@ export default async function ReportDetailPage({ params }: Props) {
   const canEditRemarks = (isAdmin || isClassTeacher) && report.report_status !== 'published'
 
   let orgFull = null
-  let reportCreator = null
   if (profile?.organization_id) {
     const { data } = await supabase.from('organizations').select('*').eq('id', profile.organization_id).single()
     orgFull = data
   }
-  const { data: creator } = await supabase
-    .from('users').select('name, signature_url').eq('id', report.created_by).single()
-  reportCreator = creator
+
+  // ✅ FIX: Get the assigned class teacher instead of report creator
+  let classTeacher = null
+  const { data: assignment } = await supabase
+    .from('teacher_assignments')
+    .select('teacher_id')
+    .eq('class_id', report.group_id)
+    .eq('role', 'class_teacher')
+    .maybeSingle()
+
+  if (assignment?.teacher_id) {
+    const { data: teacher } = await supabase
+      .from('users').select('name, signature_url').eq('id', assignment.teacher_id).single()
+    classTeacher = teacher
+  }
 
   let remarkTemplates: any[] = []
   if (canEditRemarks) {
@@ -200,8 +211,9 @@ export default async function ReportDetailPage({ params }: Props) {
               logo_url: orgFull?.logo_url,
               address: orgFull?.address,
             }}
-            teacherName={reportCreator?.name}
-            teacherSignature={reportCreator?.signature_url}
+            // ✅ FIX: Use classTeacher instead of reportCreator
+            teacherName={classTeacher?.name}
+            teacherSignature={classTeacher?.signature_url}
             principalName={orgFull?.principal_name}
             principalTitle={orgFull?.principal_title}
             principalSignature={orgFull?.principal_signature_url}
@@ -209,7 +221,7 @@ export default async function ReportDetailPage({ params }: Props) {
             generatedDate={report.completed_at ?? report.created_at}
             isInstitution={!!profile?.organization_id}
             reportCardSettings={reportCardSettings}
-            subjectComponentsMap={subjectComponentsMap}  // ✅ NEW
+            subjectComponentsMap={subjectComponentsMap}
           />
           <DeleteReportButton reportId={id} reportName={group?.name ?? 'Report'} canDelete={canDelete} />
         </div>
