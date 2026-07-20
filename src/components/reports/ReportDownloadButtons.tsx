@@ -41,23 +41,37 @@ interface Props {
   generatedDate?: string
   isInstitution: boolean
   reportCardSettings?: ReportCardSettings
+  subjectComponentsMap: Record<string, string[]>  // ✅ NEW
 }
 
 export default function ReportDownloadButtons({
   reportId, groupName, termName, sessionName, learners, subjects,
   school, teacherName, teacherSignature, principalName, principalTitle, principalSignature,
   studentRemarks, generatedDate, isInstitution, reportCardSettings,
+  subjectComponentsMap,  // ✅ NEW
 }: Props) {
   const [generatingPdf, setGeneratingPdf] = useState(false)
 
   function downloadCSV() {
-    const headers = ['#', 'Student', 'Adm. No', ...subjects.map((s: any) => s.name), 'Total', '%', 'Grade', 'Pos.']
+    // ✅ Build headers with components
+    const headers = ['#', 'Student', 'Adm. No',
+      ...subjects.flatMap((s: any) => [
+        ...(subjectComponentsMap[s.id] ?? []).map((name: string) => `${s.name} (${name})`),
+        `${s.name} (Total)`,
+      ]),
+      'Total', 'Average', 'Grade', 'Pos.']
+
     const rows = learners.map((r: any, i: number) => [
       i + 1, `${r.last_name} ${r.first_name}`, r.admission_number ?? '',
-      ...subjects.map((s: any) => r.subject_totals?.[s.id] ?? ''),
-      r.overall_total, r.percentage, r.grade, r.position,
+      ...subjects.flatMap((s: any) => {
+        const detail = r.subject_details?.find((d: any) => d.subject_id === s.id)
+        const comps = detail?.component_scores ?? []
+        return [...comps.map((c: any) => c.score ?? ''), detail?.total ?? r.subject_totals?.[s.id] ?? '']
+      }),
+      r.overall_total, r.average, r.grade, r.position,
     ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -68,17 +82,45 @@ export default function ReportDownloadButtons({
 
   function downloadExcel() {
     const wb = XLSX.utils.book_new()
+    
+    // ✅ Build headers with components
+    const headerRow = ['#', 'Student', 'Adm. No',
+      ...subjects.flatMap((s: any) => [
+        ...(subjectComponentsMap[s.id] ?? []).map((name: string) => `${s.name} (${name})`),
+        `${s.name} (Total)`,
+      ]),
+      'Total', 'Average', 'Grade', 'Pos.']
+
     const titleRows: unknown[][] = [
       [`${groupName} — ${termName} Result Broadsheet`], [],
-      ['#', 'Student', 'Adm. No', ...subjects.map((s: any) => s.name), 'Total', '%', 'Grade', 'Pos.'],
+      headerRow,
     ]
+
     const dataRows = learners.map((r: any, i: number) => [
       i + 1, `${r.last_name} ${r.first_name}`, r.admission_number ?? '',
-      ...subjects.map((s: any) => r.subject_totals?.[s.id] ?? ''),
-      r.overall_total, `${r.percentage}%`, r.grade, r.position,
+      ...subjects.flatMap((s: any) => {
+        const detail = r.subject_details?.find((d: any) => d.subject_id === s.id)
+        const comps = detail?.component_scores ?? []
+        return [...comps.map((c: any) => c.score ?? ''), detail?.total ?? r.subject_totals?.[s.id] ?? '']
+      }),
+      r.overall_total, r.average, r.grade, r.position,
     ])
+
     const ws = XLSX.utils.aoa_to_sheet([...titleRows, ...dataRows])
-    ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, ...subjects.map(() => ({ wch: 10 })), { wch: 8 }, { wch: 7 }, { wch: 7 }, { wch: 6 }]
+    
+    // ✅ Build column widths based on the expanded header
+    const totalColumns = headerRow.length
+    ws['!cols'] = [
+      { wch: 4 },   // #
+      { wch: 24 },  // Student
+      { wch: 12 },  // Adm. No
+      ...Array(totalColumns - 6).fill({ wch: 10 }), // Subject columns
+      { wch: 8 },   // Total
+      { wch: 8 },   // Average
+      { wch: 7 },   // Grade
+      { wch: 6 },   // Pos.
+    ]
+
     XLSX.utils.book_append_sheet(wb, ws, 'Broadsheet')
     XLSX.writeFile(wb, `${groupName}_${termName}_Broadsheet.xlsx`)
     toast.success('Excel downloaded!')
@@ -99,7 +141,6 @@ export default function ReportDownloadButtons({
 
     try {
       const pdfBlobs: { name: string; blob: Blob }[] = []
-      // ✅ FIX: Class average should average each student's average, not their grand total
       const classAverage = learners.length > 0
         ? learners.reduce((sum: number, l: any) => sum + (l.average ?? 0), 0) / learners.length
         : undefined
@@ -108,10 +149,8 @@ export default function ReportDownloadButtons({
         const row = learners[i]
         toast.loading(`Generating PDF ${i + 1}/${learners.length}…`, { id: loadingToast })
 
-        // ✅ Use the new component_scores array structure
         const subjectResults = subjects.map((s: any) => {
           const detail = row.subject_details?.find((d: any) => d.subject_id === s.id)
-          // component_scores is now a proper array with everything already attached
           const components = (detail?.component_scores ?? []).map((c: any) => ({
             name: c.name,
             score: c.score,
@@ -143,7 +182,6 @@ export default function ReportDownloadButtons({
               subjects: subjectResults,
               grand_total: row.overall_total,
               max_possible: subjectResults.reduce((sum, s) => sum + s.max_score, 0),
-              // ✅ FIX: Added average field
               average: row.average,
               percentage: row.percentage,
               grade: row.grade,
