@@ -12,7 +12,7 @@ interface Notification {
   type: string
   report_id: string
   message: string
-  read: boolean
+  is_read: boolean  // ✅ FIX: Changed from 'read' to 'is_read'
   created_at: string
 }
 
@@ -77,7 +77,8 @@ export default function NotificationBell() {
       if (error) throw error
 
       setNotifications(data || [])
-      setUnreadCount(data?.filter((n: Notification) => !n.read).length || 0)
+      // ✅ FIX: Use is_read instead of read
+      setUnreadCount(data?.filter((n: Notification) => !n.is_read).length || 0)
     } catch (error) {
       console.error('Error fetching notifications:', error)
     } finally {
@@ -90,9 +91,10 @@ export default function NotificationBell() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // ✅ FIX: Use is_read instead of read
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true })
         .eq('id', notificationId)
         .eq('user_id', user.id)
 
@@ -101,7 +103,7 @@ export default function NotificationBell() {
       // Update local state
       setNotifications((prev) =>
         prev.map((n) =>
-          n.id === notificationId ? { ...n, read: true } : n
+          n.id === notificationId ? { ...n, is_read: true } : n  // ✅ FIX
         )
       )
       setUnreadCount((prev) => Math.max(0, prev - 1))
@@ -116,12 +118,13 @@ export default function NotificationBell() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
+      // ✅ FIX: Use is_read instead of read
+      const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
       if (unreadIds.length === 0) return
 
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true })
         .in('id', unreadIds)
         .eq('user_id', user.id)
 
@@ -129,7 +132,7 @@ export default function NotificationBell() {
 
       // Update local state
       setNotifications((prev) =>
-        prev.map((n) => ({ ...n, read: true }))
+        prev.map((n) => ({ ...n, is_read: true }))  // ✅ FIX
       )
       setUnreadCount(0)
       toast.success('All notifications marked as read')
@@ -206,11 +209,13 @@ export default function NotificationBell() {
                   key={notification.id}
                   href={getNotificationLink(notification)}
                   onClick={() => {
-                    if (!notification.read) markAsRead(notification.id)
+                    // ✅ FIX: Use is_read instead of read
+                    if (!notification.is_read) markAsRead(notification.id)
                     setIsOpen(false)
                   }}
                   className={`block px-4 py-3 border-b border-surface-100 hover:bg-surface-50 transition-colors ${
-                    !notification.read ? 'bg-brand-50/30' : ''
+                    // ✅ FIX: Use is_read instead of read
+                    !notification.is_read ? 'bg-brand-50/30' : ''
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -218,14 +223,15 @@ export default function NotificationBell() {
                       {getNotificationIcon(notification.type)}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${!notification.read ? 'font-medium text-ink' : 'text-ink-muted'}`}>
+                      <p className={`text-sm ${!notification.is_read ? 'font-medium text-ink' : 'text-ink-muted'}`}>
                         {notification.message}
                       </p>
                       <p className="text-xs text-ink-faint mt-0.5">
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                       </p>
                     </div>
-                    {!notification.read && (
+                    {/* ✅ FIX: Use is_read instead of read */}
+                    {!notification.is_read && (
                       <button
                         onClick={(e) => {
                           e.preventDefault()
