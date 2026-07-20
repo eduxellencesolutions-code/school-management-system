@@ -22,6 +22,10 @@ export default async function SettingsPage() {
   
   const org = profile?.organization
   const isInstitution = !!org
+  const isSolo = !isInstitution
+
+  // ✅ FIX 1: isAdmin now correctly includes school_admin
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
   // ✅ Solo teachers carry their own subscription_plan/status on users;
   // institutions carry it on organizations.
@@ -29,10 +33,17 @@ export default async function SettingsPage() {
   const currentStatus = (isInstitution ? org?.subscription_status : profile?.subscription_status) ?? 'active'
   const config = getPlanConfig(currentPlan)
 
-  const isAdmin = profile?.role === 'admin'
-
   // ✅ Check if current plan is a paid plan (not 'free')
   const isPaidPlan = currentPlan !== 'free'
+
+  // ✅ FIX 2: Only admins (or solo teachers managing their own subscription) should see billing
+  const canSeeBilling = isAdmin || isSolo
+
+  // ✅ FIX 3: Teachers, lecturers, assistants, and principals can upload signatures
+  const canUploadSignature = profile?.role === 'teacher' || 
+                             profile?.role === 'lecturer' || 
+                             profile?.role === 'assistant' || 
+                             profile?.role === 'principal'
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
@@ -101,8 +112,8 @@ export default async function SettingsPage() {
             )}
           </div>
 
-          {/* ✅ Teacher Signature Upload - Only show for teachers (not admins) */}
-          {profile?.role === 'teacher' && (
+          {/* ✅ FIX 3: Signature upload for teachers, lecturers, assistants, and principals */}
+          {canUploadSignature && (
             <div className="mt-4 pt-4 border-t border-surface-200">
               <div className="flex items-center gap-2 mb-3">
                 <Signature size={16} className="text-brand-500" />
@@ -115,8 +126,8 @@ export default async function SettingsPage() {
             </div>
           )}
 
-          {/* ✅ Show note for admins */}
-          {profile?.role === 'admin' && (
+          {/* ✅ FIX 3: Show note for admins using isAdmin (now includes school_admin) */}
+          {isAdmin && (
             <div className="mt-4 pt-4 border-t border-surface-200">
               <p className="text-xs text-ink-muted">
                 <span className="font-medium">Note:</span> As an administrator, your signature is managed at the 
@@ -231,103 +242,105 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* ✅ Billing Section - Shows for BOTH institutions AND solo teachers */}
-      <div id="billing" className="card scroll-mt-20">
-        <div className="card-header flex items-center justify-between">
-          <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
-            <Crown size={16} className="text-brand-500" />
-            Subscription & Billing
-          </h2>
-          <span className="badge badge-blue capitalize">{config.label}</span>
-        </div>
-        <div className="card-body flex flex-col gap-5">
-          <div className="flex items-center gap-3">
-            <span className={`badge ${currentStatus === 'active' ? 'badge-green' : currentStatus === 'trial' ? 'badge-blue' : 'badge-red'} capitalize`}>
-              {currentStatus}
-            </span>
-            {(isInstitution ? org?.subscription_expires_at : profile?.subscription_expires_at) && (
-              <span className="text-xs text-ink-muted">
-                Renews / expires {new Date(isInstitution ? org.subscription_expires_at : profile.subscription_expires_at).toLocaleDateString('en-NG')}
+      {/* ✅ FIX 2: Billing Section - Only admins and solo teachers */}
+      {canSeeBilling && (
+        <div id="billing" className="card scroll-mt-20">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+              <Crown size={16} className="text-brand-500" />
+              Subscription & Billing
+            </h2>
+            <span className="badge badge-blue capitalize">{config.label}</span>
+          </div>
+          <div className="card-body flex flex-col gap-5">
+            <div className="flex items-center gap-3">
+              <span className={`badge ${currentStatus === 'active' ? 'badge-green' : currentStatus === 'trial' ? 'badge-blue' : 'badge-red'} capitalize`}>
+                {currentStatus}
               </span>
-            )}
-          </div>
+              {(isInstitution ? org?.subscription_expires_at : profile?.subscription_expires_at) && (
+                <span className="text-xs text-ink-muted">
+                  Renews / expires {new Date(isInstitution ? org.subscription_expires_at : profile.subscription_expires_at).toLocaleDateString('en-NG')}
+                </span>
+              )}
+            </div>
 
-          {/* Feature checklist — driven entirely by the plan config */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: `${config.limits.maxClasses === 'unlimited' ? 'Unlimited' : config.limits.maxClasses} classes`, enabled: true },
-              { label: `${config.limits.maxStudents} students`, enabled: true },
-              { label: 'Excel export', enabled: config.features.excelImportExport },
-              { label: 'PDF reports', enabled: config.features.pdfReportCards },
-              { label: 'School branding', enabled: config.features.schoolBranding === 'full' },
-              { label: 'AI remarks', enabled: config.features.aiGeneratedRemarks },
-              { label: 'Broadsheet generation', enabled: config.features.broadsheetGeneration },
-              { label: 'Multiple teachers', enabled: config.features.teacherManagement },
-              { label: 'Parent portal', enabled: config.features.parentPortal },
-              { label: 'Student portal', enabled: config.features.studentPortal },
-              { label: 'Online result checker', enabled: config.features.onlineResultChecker },
-              { label: 'Priority support', enabled: config.features.prioritySupport !== 'community' },
-            ].map(({ label, enabled }) => (
-              <div key={label} className="flex items-center gap-2 text-sm">
-                {enabled
-                  ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
-                  : <XCircle size={14} className="text-surface-200 shrink-0" />
-                }
-                <span className={enabled ? 'text-ink' : 'text-ink-faint'}>{label}</span>
-              </div>
-            ))}
-          </div>
+            {/* Feature checklist — driven entirely by the plan config */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: `${config.limits.maxClasses === 'unlimited' ? 'Unlimited' : config.limits.maxClasses} classes`, enabled: true },
+                { label: `${config.limits.maxStudents} students`, enabled: true },
+                { label: 'Excel export', enabled: config.features.excelImportExport },
+                { label: 'PDF reports', enabled: config.features.pdfReportCards },
+                { label: 'School branding', enabled: config.features.schoolBranding === 'full' },
+                { label: 'AI remarks', enabled: config.features.aiGeneratedRemarks },
+                { label: 'Broadsheet generation', enabled: config.features.broadsheetGeneration },
+                { label: 'Multiple teachers', enabled: config.features.teacherManagement },
+                { label: 'Parent portal', enabled: config.features.parentPortal },
+                { label: 'Student portal', enabled: config.features.studentPortal },
+                { label: 'Online result checker', enabled: config.features.onlineResultChecker },
+                { label: 'Priority support', enabled: config.features.prioritySupport !== 'community' },
+              ].map(({ label, enabled }) => (
+                <div key={label} className="flex items-center gap-2 text-sm">
+                  {enabled
+                    ? <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+                    : <XCircle size={14} className="text-surface-200 shrink-0" />
+                  }
+                  <span className={enabled ? 'text-ink' : 'text-ink-faint'}>{label}</span>
+                </div>
+              ))}
+            </div>
 
-          {/* ✅ Restructured upgrade/downgrade/renew section */}
-          {(() => {
-            // Get upgrade and downgrade options specific to this account type
-            const allUpgrades = getUpgradeOptions(currentPlan, isInstitution)
-            const upgrades = allUpgrades.filter(k => k !== 'free')
-            const downgrades = getDowngradeOptions(currentPlan, isInstitution)
+            {/* ✅ Restructured upgrade/downgrade/renew section */}
+            {(() => {
+              // Get upgrade and downgrade options specific to this account type
+              const allUpgrades = getUpgradeOptions(currentPlan, isInstitution)
+              const upgrades = allUpgrades.filter(k => k !== 'free')
+              const downgrades = getDowngradeOptions(currentPlan, isInstitution)
 
-            return (
-              <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
-                {/* ✅ NEW: Show Renew option when expired or in grace period (only for paid plans) */}
-                {(currentStatus === 'expired' || currentStatus === 'grace_period') && isPaidPlan && (
-                  <div>
-                    <p className="text-sm font-medium text-ink mb-3 text-red-600">
-                      {currentStatus === 'expired' ? 'Renew Your Subscription' : 'Renew Before Grace Period Ends'}
-                    </p>
-                    <PlanUpgradeCard 
-                      plan={currentPlan as PaidPlan} 
-                      label={`${config.label} (Renew)`} 
-                    />
-                  </div>
-                )}
-
-                {upgrades.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-ink mb-3">Upgrade Available</p>
-                    <div className="flex flex-col gap-3">
-                      {upgrades.map(key => (
-                        <PlanUpgradeCard key={key} plan={key as PaidPlan} label={getPlanConfig(key).label} />
-                      ))}
+              return (
+                <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
+                  {/* ✅ NEW: Show Renew option when expired or in grace period (only for paid plans) */}
+                  {(currentStatus === 'expired' || currentStatus === 'grace_period') && isPaidPlan && (
+                    <div>
+                      <p className="text-sm font-medium text-ink mb-3 text-red-600">
+                        {currentStatus === 'expired' ? 'Renew Your Subscription' : 'Renew Before Grace Period Ends'}
+                      </p>
+                      <PlanUpgradeCard 
+                        plan={currentPlan as PaidPlan} 
+                        label={`${config.label} (Renew)`} 
+                      />
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {downgrades.length > 0 ? (
-                  <div>
-                    <p className="text-sm font-medium text-ink mb-3">Downgrade Available</p>
-                    <div className="flex flex-col gap-3">
-                      {downgrades.map(key => (
-                        <PlanDowngradeCard key={key} plan={key} label={getPlanConfig(key).label} />
-                      ))}
+                  {upgrades.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-ink mb-3">Upgrade Available</p>
+                      <div className="flex flex-col gap-3">
+                        {upgrades.map(key => (
+                          <PlanUpgradeCard key={key} plan={key as PaidPlan} label={getPlanConfig(key).label} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : currentPlan !== 'free' ? (
-                  <p className="text-xs text-ink-faint">No lower paid plan available.</p>
-                ) : null}
-              </div>
-            )
-          })()}
+                  )}
+
+                  {downgrades.length > 0 ? (
+                    <div>
+                      <p className="text-sm font-medium text-ink mb-3">Downgrade Available</p>
+                      <div className="flex flex-col gap-3">
+                        {downgrades.map(key => (
+                          <PlanDowngradeCard key={key} plan={key} label={getPlanConfig(key).label} />
+                        ))}
+                      </div>
+                    </div>
+                  ) : currentPlan !== 'free' ? (
+                    <p className="text-xs text-ink-faint">No lower paid plan available.</p>
+                  ) : null}
+                </div>
+              )
+            })()}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
