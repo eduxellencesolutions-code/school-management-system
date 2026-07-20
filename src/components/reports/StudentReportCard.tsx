@@ -48,15 +48,21 @@ const styles = StyleSheet.create({
   remarksLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 2 },
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
-  sigBlock: { alignItems: 'center', width: '30%' },
-  sigImage: { width: 70, height: 20, marginBottom: 2, objectFit: 'contain' },
-  sigLine: { width: 80, borderBottomWidth: 1, borderBottomColor: dark, marginBottom: 2 },
-  sigLabel: { fontSize: 7, color: muted },
+  sigBlock: { alignItems: 'center', width: '40%' },
+  // ✅ FIX 1: Fixed-height image container with consistent baseline
+  sigImageWrap: { height: 26, width: 90, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 1 },
+  // ✅ FIX 1: Image with max dimensions
+  sigImage: { maxWidth: 90, maxHeight: 26, objectFit: 'contain' },
+  // ✅ FIX 2: Tight line under signature
+  sigLine: { width: 90, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2 },
+  sigLabel: { fontSize: 7, color: muted, marginBottom: 2 },
   sigName: { fontSize: 7.5, color: dark, marginTop: 1 },
-  sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique', marginBottom: 2 },
+  sigTitle: { fontSize: 6, color: muted, fontFamily: 'Helvetica-Oblique', marginTop: 1 },
+  // ✅ FIX 4: Fallback with dashed border
+  sigFallbackBox: { width: 90, height: 26, borderWidth: 0.5, borderStyle: 'dashed', borderColor: border, justifyContent: 'center', alignItems: 'center', marginBottom: 1 },
+  sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique' },
   metaFooter: { marginTop: 8, alignItems: 'center' },
   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
-  // ✅ Full-page watermark seal
   sealBackground: {
     position: 'absolute',
     top: '30%',
@@ -160,12 +166,20 @@ function gradeColor(grade: string): string {
   }
 }
 
-// Safe image wrapper
+// ✅ FIX 1 & 4: Safe signature with fixed-height container and fallback
 function SafeSignature({ url, fallbackLabel }: { url?: string; fallbackLabel: string }) {
   if (!url) {
-    return <Text style={styles.sigFallback}>({fallbackLabel} not uploaded)</Text>
+    return (
+      <View style={styles.sigFallbackBox}>
+        <Text style={styles.sigFallback}>Not yet signed</Text>
+      </View>
+    )
   }
-  return <Image src={url} style={styles.sigImage} />
+  return (
+    <View style={styles.sigImageWrap}>
+      <Image src={url} style={styles.sigImage} />
+    </View>
+  )
 }
 
 export function StudentReportCard({
@@ -206,7 +220,6 @@ export function StudentReportCard({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* ✅ Full-page watermark seal - rendered first so everything layers on top */}
         {showSchoolSeal && school.logo_url && (
           <Image src={school.logo_url} style={styles.sealBackground} />
         )}
@@ -363,7 +376,6 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ Teacher remark - conditionally shown */}
         {showTeacherRemark && studentRemarks?.teacher_remark && (
           <View style={styles.remarks}>
             <Text style={styles.remarksLabel}>CLASS TEACHER'S REMARK</Text>
@@ -371,7 +383,6 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ Signatory remark - conditionally shown */}
         {showSignatoryRemark && studentRemarks?.principal_remark && (
           <View style={[styles.remarks, { marginTop: showTeacherRemark && studentRemarks?.teacher_remark ? 6 : 0 }]}>
             <Text style={styles.remarksLabel}>
@@ -381,35 +392,31 @@ export function StudentReportCard({
           </View>
         )}
 
+        {/* ✅ FIX: Footer with Class Teacher (Left) and Principal (Right) - Date removed */}
         <View style={styles.footer}>
-          {/* ✅ Class Teacher Signature - conditionally shown */}
+          {/* Class Teacher Signature - Left */}
           {showTeacherRemark && (
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
               <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
               <Text style={styles.sigName}>{teacherName || '—'}</Text>
+              {/* ✅ FIX 3: "Verified" cue - Class Teacher title */}
+              <Text style={styles.sigTitle}>Class Teacher</Text>
             </View>
           )}
 
-          {/* ✅ Signatory Signature - conditionally shown */}
+          {/* Principal Signature - Right (moved from center) */}
           {showSignatorySignature && (
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>{principalTitle || 'Principal'}'s Signature</Text>
               <SafeSignature url={principalSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
               <Text style={styles.sigName}>{principalName || principalTitle || '—'}</Text>
+              {/* ✅ FIX 3: "Verified" cue - Principal title */}
+              <Text style={styles.sigTitle}>{principalTitle || 'Principal'}</Text>
             </View>
           )}
-
-          {/* Date block - always shown */}
-          <View style={styles.sigBlock}>
-            <Text style={styles.sigLabel}>Date</Text>
-            <View style={[styles.sigLine, { marginTop: 24 }]} />
-            <Text style={styles.sigName}>
-              {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </Text>
-          </View>
         </View>
 
         <View style={styles.metaFooter}>
