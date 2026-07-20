@@ -36,13 +36,14 @@ async function notifyPrincipals(supabase: any, report: any, reportId: string, su
 
     const submitterName = submitter?.name || 'A teacher'
 
-    // Create notification for each principal
+    // ✅ FIX: Use title/body instead of message
     const rows = principals.map((p: any) => ({
       user_id: p.id,
       organization_id: report.organization_id,
       type: 'report_submitted',
       report_id: reportId,
-      message: `${group?.name ?? 'A class'} report was submitted for your approval by ${submitterName}`,
+      title: 'Report submitted for approval',
+      body: `${group?.name ?? 'A class'} report was submitted for your approval by ${submitterName}`,
     }))
 
     const { error } = await supabase.from('notifications').insert(rows)
@@ -88,13 +89,14 @@ async function notifyAdmins(supabase: any, report: any, reportId: string, approv
 
     const approverName = approver?.name || 'The principal'
 
-    // Create notification for each admin
+    // ✅ FIX: Use title/body instead of message
     const rows = admins.map((a: any) => ({
       user_id: a.id,
       organization_id: report.organization_id,
       type: 'report_approved',
       report_id: reportId,
-      message: `${group?.name ?? 'A class'} report was approved by ${approverName} and is ready to lock`,
+      title: 'Report approved',
+      body: `${group?.name ?? 'A class'} report was approved by ${approverName} and is ready to lock`,
     }))
 
     const { error } = await supabase.from('notifications').insert(rows)
@@ -176,14 +178,19 @@ export async function submitReport(formData: FormData) {
 
   if (error) return { success: false, message: 'Failed to submit report' }
 
-  // 🔔 Notify principals
-  await notifyPrincipals(supabase, report, reportId, user!.id)
+  // 🔔 Notify principals — wrapped so notification failure never blocks submission
+  try {
+    await notifyPrincipals(supabase, report, reportId, user!.id)
+  } catch (notifyError) {
+    console.error('Notification failed (submission still succeeded):', notifyError)
+  }
 
   revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')
   return { success: true }
 }
 
-// ✅ NEW: Principal approves report
+// ✅ UPDATED: Principal approves report with defensive notification wrapping
 export async function approveReport(formData: FormData) {
   const reportId = formData.get('id') as string
   const { report, isPrincipal, user } = await getReportContext(reportId)
@@ -199,10 +206,15 @@ export async function approveReport(formData: FormData) {
 
   if (error) return { success: false, message: 'Failed to approve report' }
 
-  // 🔔 Notify admins
-  await notifyAdmins(supabase, report, reportId, user!.id)
+  // 🔔 Notify admins — wrapped so any notification failure never blocks the approval itself
+  try {
+    await notifyAdmins(supabase, report, reportId, user!.id)
+  } catch (notifyError) {
+    console.error('Notification failed (approval still succeeded):', notifyError)
+  }
 
   revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')  // ✅ Also revalidate the list page
   return { success: true }
 }
 
@@ -226,6 +238,7 @@ export async function publishReport(formData: FormData) {
   if (error) return { success: false, message: 'Failed to publish report' }
 
   revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')
   return { success: true }
 }
 
@@ -244,6 +257,7 @@ export async function unpublishReport(formData: FormData) {
   if (error) return { success: false, message: 'Failed to unlock report' }
 
   revalidatePath(`/reports/${reportId}`)
+  revalidatePath('/reports')
   return { success: true }
 }
 
