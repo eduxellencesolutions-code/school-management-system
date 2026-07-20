@@ -209,6 +209,7 @@ export default async function ReportDetailPage({ params }: Props) {
             generatedDate={report.completed_at ?? report.created_at}
             isInstitution={!!profile?.organization_id}
             reportCardSettings={reportCardSettings}
+            subjectComponentsMap={subjectComponentsMap}  // ✅ NEW
           />
           <DeleteReportButton reportId={id} reportName={group?.name ?? 'Report'} canDelete={canDelete} />
         </div>
