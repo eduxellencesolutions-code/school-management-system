@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, FileText, Download, Clock, CheckCircle, XCircle, Archive } from 'lucide-react'
+import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Archive } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
+import { approveReport } from '@/app/(dashboard)/reports/[id]/actions'
 
 export const runtime = 'nodejs'
 
@@ -191,7 +192,7 @@ export default async function ReportsPage() {
   }
 
   // ── Render Helper ──
-  function renderReportList(reports: any[], isAdmin: boolean, isSolo: boolean) {
+  function renderReportList(reports: any[], isAdmin: boolean, isSolo: boolean, isPrincipal: boolean = false) {
     if (!reports || reports.length === 0) {
       return (
         <div className="px-5 py-8 text-center text-sm text-ink-muted">
@@ -233,6 +234,20 @@ export default async function ReportsPage() {
                     <Download size={14} /> Download
                   </a>
                 )}
+                
+                {/* ✅ Approve Button - Only for Principals on submitted reports */}
+                {isPrincipal && report.report_status === 'submitted' && (
+                  <form action={approveReport}>
+                    <input type="hidden" name="id" value={report.id} />
+                    <button
+                      type="submit"
+                      className="btn-success btn-sm btn flex items-center gap-1"
+                    >
+                      <CheckCircle2 size={14} /> Approve
+                    </button>
+                  </form>
+                )}
+                
                 <Link href={`/reports/${report.id}`} className="btn-primary btn-sm btn">View</Link>
                 <DeleteReportButton 
                   reportId={report.id} 
@@ -287,7 +302,7 @@ export default async function ReportsPage() {
                 {myReports.length} report{myReports.length !== 1 ? 's' : ''}
               </span>
             </div>
-            {renderReportList(myReports, isAdmin, isSolo)}
+            {renderReportList(myReports, isAdmin, isSolo, isPrincipal)}
           </div>
 
           {/* Pending Approval Section */}
@@ -301,7 +316,7 @@ export default async function ReportsPage() {
               </span>
             </div>
             {pendingApprovalReports.length > 0 ? (
-              renderReportList(pendingApprovalReports, isAdmin, isSolo)
+              renderReportList(pendingApprovalReports, isAdmin, isSolo, isPrincipal)
             ) : (
               <div className="px-5 py-8 text-center text-sm text-ink-muted">
                 No reports currently awaiting your approval.
@@ -316,7 +331,7 @@ export default async function ReportsPage() {
             <h2 className="font-semibold text-sm text-ink">All Reports</h2>
             <span className="text-xs text-ink-muted">{myReports.length} report{myReports.length !== 1 ? 's' : ''}</span>
           </div>
-          {renderReportList(myReports, isAdmin, isSolo)}
+          {renderReportList(myReports, isAdmin, isSolo, false)}
         </div>
       )}
     </div>
