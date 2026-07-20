@@ -21,8 +21,8 @@ export default async function TeachersPage() {
   }
 
   // ✅ Check if user is admin (only admins can manage teachers)
-  // school_admin is NOT a valid role in the enum - only 'admin' exists
-  if (profile?.role !== 'admin') {
+  // Both 'admin' and 'school_admin' are valid roles in the enum
+  if (profile?.role !== 'admin' && profile?.role !== 'school_admin') {
     redirect('/dashboard')
   }
 
