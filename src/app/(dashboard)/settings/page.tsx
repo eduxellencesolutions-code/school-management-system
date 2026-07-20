@@ -6,6 +6,7 @@ import Link from 'next/link'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import PlanDowngradeCard from '@/components/billing/PlanDowngradeCard'
 import { getUpgradeOptions, getDowngradeOptions } from '@/lib/plans/downgrade'
+import { PaidPlan } from '@/lib/payments/pricing'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -28,6 +29,9 @@ export default async function SettingsPage() {
   const config = getPlanConfig(currentPlan)
 
   const isAdmin = profile?.role === 'admin'
+
+  // ✅ Check if current plan is a paid plan (not 'free')
+  const isPaidPlan = currentPlan !== 'free'
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
@@ -254,14 +258,14 @@ export default async function SettingsPage() {
 
             return (
               <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
-                {/* ✅ NEW: Show Renew option when expired or in grace period */}
-                {(currentStatus === 'expired' || currentStatus === 'grace_period') && (
+                {/* ✅ NEW: Show Renew option when expired or in grace period (only for paid plans) */}
+                {(currentStatus === 'expired' || currentStatus === 'grace_period') && isPaidPlan && (
                   <div>
                     <p className="text-sm font-medium text-ink mb-3 text-red-600">
                       {currentStatus === 'expired' ? 'Renew Your Subscription' : 'Renew Before Grace Period Ends'}
                     </p>
                     <PlanUpgradeCard 
-                      plan={currentPlan} 
+                      plan={currentPlan as PaidPlan} 
                       label={`${config.label} (Renew)`} 
                     />
                   </div>
@@ -272,7 +276,7 @@ export default async function SettingsPage() {
                     <p className="text-sm font-medium text-ink mb-3">Upgrade Available</p>
                     <div className="flex flex-col gap-3">
                       {upgrades.map(key => (
-                        <PlanUpgradeCard key={key} plan={key} label={getPlanConfig(key).label} />
+                        <PlanUpgradeCard key={key} plan={key as PaidPlan} label={getPlanConfig(key).label} />
                       ))}
                     </div>
                   </div>
