@@ -20,8 +20,11 @@ export function getUpgradeOptions(currentPlan: PlanKey, isInstitution: boolean):
 export function getDowngradeOptions(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
   const list = getRankList(currentPlan, isInstitution)
   const idx = list.indexOf(currentPlan)
-  // Never allow downgrading to 'free' — only to a lower PAID tier
-  return list.slice(1, idx).filter(p => p !== 'free')
+  
+  // ✅ FIXED: Get all plans BEFORE the current plan (lower tiers)
+  // For solo_teacher_pro: ['free'] → returns ['free']
+  // For premium_school: ['free', 'small_school', 'standard_school'] → returns all lower tiers
+  return list.slice(0, idx)
 }
 
 export interface UsageCheck {
