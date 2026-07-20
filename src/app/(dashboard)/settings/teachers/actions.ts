@@ -29,12 +29,12 @@ async function checkInstitutionAccess() {
   return { user, profile }
 }
 
-// ✅ NEW: Create teacher function with subscription guard
+// ✅ UPDATED: Create teacher function with subscription guard and principal support
 interface CreateTeacherInput {
   name: string
   email: string
   phone: string
-  role: 'teacher' | 'lecturer' | 'assistant'
+  role: 'teacher' | 'lecturer' | 'assistant' | 'principal'  // ✅ Added 'principal'
   password: string
   signatureUrl: string | null
   selectedClasses: string[]
@@ -117,6 +117,12 @@ export async function createTeacher(input: CreateTeacherInput) {
     console.error('User update error:', updateError)
   }
 
+  // ✅ If role is principal, skip assignment creation
+  if (input.role === 'principal') {
+    revalidatePath('/settings/teachers')
+    return { success: true, teacherName: input.name }
+  }
+
   const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string; organization_id: string }[] = []
 
   if (input.isClassTeacher && input.classTeacherOf) {
@@ -168,7 +174,7 @@ export async function getTeachers() {
       )
     `)
     .eq('organization_id', profile?.organization_id)
-    .eq('role', 'teacher')
+    .in('role', ['teacher', 'class_teacher', 'principal'])  // ✅ Include all teacher roles
     .order('name')
 
   return teachers || []
@@ -399,7 +405,7 @@ export async function uploadTeachers(formData: FormData) {
       .from('users')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId)
-      .eq('role', 'teacher')
+      .in('role', ['teacher', 'class_teacher', 'principal'])  // ✅ Include all teacher roles
 
     // Check how many of these are genuinely NEW users (existing emails don't count against the limit)
     const emails = teachers.map(t => t.email)
