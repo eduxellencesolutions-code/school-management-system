@@ -89,6 +89,11 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
     }
   }
 
+  // ✅ Helper function for type-safe class teacher check
+  const getIsClassTeacher = (role: string, isChecked: boolean) => {
+    return isChecked || (role === 'class_teacher' as const)
+  }
+
   // ✅ UPDATED: handleSubmit now uses the server action
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -120,6 +125,9 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
       const subjectGroupMap: Record<string, string> = {}
       subjects.forEach(s => { subjectGroupMap[s.id] = s.group_id })
 
+      // ✅ FIX: Use helper function for type-safe comparison
+      const isClassTeacher = getIsClassTeacher(formData.role, formData.isClassTeacher)
+
       const result = await createTeacher({
         name: formData.name,
         email: formData.email,
@@ -129,7 +137,7 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
         signatureUrl: sigUrl,
         selectedClasses: formData.selectedClasses,
         selectedSubjects: formData.selectedSubjects,
-        isClassTeacher: formData.isClassTeacher || formData.role === 'class_teacher',
+        isClassTeacher: isClassTeacher,
         classTeacherOf: formData.classTeacherOf,
         subjectGroupMap,
       })
