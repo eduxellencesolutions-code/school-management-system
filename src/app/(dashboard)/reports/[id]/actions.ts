@@ -129,7 +129,6 @@ async function getReportContext(reportId: string) {
   const isSolo = !profile?.organization_id
   const isPrincipal = profile?.role === 'principal'
 
-  // ✅ ADDED: Debug logging
   console.log('🔍 Approve check:', { 
     userId: user.id, 
     role: profile?.role, 
@@ -181,7 +180,6 @@ export async function submitReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -197,7 +195,6 @@ export async function submitReport(formData: FormData) {
     return { success: false, message: 'Submission failed — you may not have permission to update this report' }
   }
 
-  // 🔔 Notify principals — wrapped so notification failure never blocks submission
   try {
     await notifyPrincipals(supabase, report, reportId, user!.id)
   } catch (notifyError) {
@@ -217,9 +214,17 @@ export async function approveReport(formData: FormData) {
   if (!isPrincipal) return { success: false, message: 'Only the principal/head teacher can approve this report' }
   if (report.report_status !== 'submitted') return { success: false, message: 'Only submitted reports can be approved' }
 
+  // ✅ DEBUG: Log the update attempt
+  console.log('📝 Attempting to approve report:', {
+    reportId,
+    userId: user!.id,
+    organizationId: report.organization_id,
+    currentStatus: report.report_status,
+    isPrincipal
+  })
+
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -230,12 +235,23 @@ export async function approveReport(formData: FormData) {
     .eq('id', reportId)
     .select('id')
 
-  if (error) return { success: false, message: 'Failed to approve report' }
+  // ✅ DEBUG: Log the result
+  console.log('📝 Update result:', { 
+    error: error?.message || null,
+    errorCode: error?.code || null,
+    dataLength: data?.length || 0,
+    data: data || null
+  })
+
+  if (error) {
+    console.error('❌ Update error:', error)
+    return { success: false, message: 'Failed to approve report' }
+  }
   if (!data || data.length === 0) {
+    console.error('❌ No rows updated — RLS may be blocking this update')
     return { success: false, message: 'Approval failed — you may not have permission to update this report' }
   }
 
-  // 🔔 Notify admins — wrapped so any notification failure never blocks the approval itself
   try {
     await notifyAdmins(supabase, report, reportId, user!.id)
   } catch (notifyError) {
@@ -243,7 +259,8 @@ export async function approveReport(formData: FormData) {
   }
 
   revalidatePath(`/reports/${reportId}`)
-  revalidatePath('/reports')  // ✅ Also revalidate the list page
+  revalidatePath('/reports')
+  console.log('✅ Report approved successfully:', reportId)
   return { success: true }
 }
 
@@ -253,14 +270,12 @@ export async function publishReport(formData: FormData) {
   const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can publish reports' }
-  // ✅ Solo teachers bypass the approval chain, but institutions require approval
   if (!isSolo && report.report_status !== 'approved') {
     return { success: false, message: 'This report must be approved by the principal before it can be locked' }
   }
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -289,7 +304,6 @@ export async function unpublishReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -318,7 +332,6 @@ export async function archiveReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ report_status: 'archived' })
@@ -343,7 +356,6 @@ export async function unarchiveReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ report_status: 'published' })
@@ -368,7 +380,6 @@ export async function softDeleteReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -397,7 +408,6 @@ export async function restoreReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually updated
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -425,7 +435,6 @@ export async function permanentlyDeleteReport(formData: FormData) {
 
   const supabase = await createClient()
   
-  // ✅ FIX: Add .select('id') to verify the row was actually deleted
   const { data, error } = await supabase
     .from('reports')
     .delete()
