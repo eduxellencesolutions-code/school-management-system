@@ -16,7 +16,8 @@ export default async function NotificationsPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  const unreadCount = notifications?.filter((n) => !n.read).length || 0
+  // ✅ FIX: Use is_read instead of read
+  const unreadCount = notifications?.filter((n) => !n.is_read).length || 0
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">
@@ -47,7 +48,8 @@ export default async function NotificationsPage() {
               key={notification.id}
               href={`/reports/${notification.report_id}`}
               className={`card p-4 hover:shadow-md transition-shadow ${
-                !notification.read ? 'border-brand-300 bg-brand-50/30' : ''
+                // ✅ FIX: Use is_read instead of read
+                !notification.is_read ? 'border-brand-300 bg-brand-50/30' : ''
               }`}
             >
               <div className="flex items-start gap-3">
@@ -55,14 +57,14 @@ export default async function NotificationsPage() {
                   {notification.type === 'report_submitted' ? '📋' : '✅'}
                 </span>
                 <div className="flex-1">
-                  <p className={`text-sm ${!notification.read ? 'font-semibold text-ink' : 'text-ink-muted'}`}>
+                  <p className={`text-sm ${!notification.is_read ? 'font-semibold text-ink' : 'text-ink-muted'}`}>
                     {notification.message}
                   </p>
                   <p className="text-xs text-ink-faint mt-1">
                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                   </p>
                 </div>
-                {!notification.read && (
+                {!notification.is_read && (
                   <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0 mt-2" />
                 )}
               </div>
