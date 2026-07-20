@@ -74,6 +74,7 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
   const isSolo = !profile?.organization_id
+  const isPrincipal = profile?.role === 'principal'  // ✅ NEW
 
   let isClassTeacher = false
   if (!isSolo && !isAdmin) {
@@ -89,6 +90,7 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const canPublish = isAdmin || isSolo
   const canSubmit = isAdmin || isClassTeacher
+  const canApprove = isPrincipal && report.report_status === 'submitted'  // ✅ NEW
   const canDelete = isAdmin || isSolo
   const canEditRemarks = (isAdmin || isClassTeacher) && report.report_status !== 'published'
 
@@ -163,6 +165,7 @@ export default async function ReportDetailPage({ params }: Props) {
   const statusBadge: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700',
     submitted: 'bg-amber-100 text-amber-800',
+    approved: 'bg-blue-100 text-blue-800',  // ✅ NEW
     published: 'bg-green-100 text-green-800',
     archived: 'bg-surface-200 text-ink-faint',
   }
@@ -195,6 +198,7 @@ export default async function ReportDetailPage({ params }: Props) {
             reportId={id}
             reportStatus={report.report_status ?? 'draft'}
             canSubmit={canSubmit}
+            canApprove={canApprove}  // ✅ NEW
             canPublish={canPublish}
             isSolo={isSolo}
           />
@@ -211,7 +215,6 @@ export default async function ReportDetailPage({ params }: Props) {
               logo_url: orgFull?.logo_url,
               address: orgFull?.address,
             }}
-            // ✅ FIX: Use classTeacher instead of reportCreator
             teacherName={classTeacher?.name}
             teacherSignature={classTeacher?.signature_url}
             principalName={orgFull?.principal_name}
@@ -230,6 +233,13 @@ export default async function ReportDetailPage({ params }: Props) {
       {report.report_status === 'published' && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
           This report is published and locked. Scores and remarks cannot be edited unless an administrator unlocks it.
+        </div>
+      )}
+
+      {/* ✅ NEW: Show awaiting approval message for non-principals */}
+      {report.report_status === 'submitted' && !isPrincipal && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          This report has been submitted and is awaiting approval from the principal.
         </div>
       )}
 
