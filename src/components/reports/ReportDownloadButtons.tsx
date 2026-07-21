@@ -39,16 +39,17 @@ interface Props {
   principalSignature?: string
   studentRemarks: Record<string, { teacher_remark?: string; principal_remark?: string }>
   generatedDate?: string
-  canDownloadPdf: boolean  // ✅ NEW — driven by plan config
+  canDownloadPdf: boolean
+  isSolo: boolean  // ✅ NEW - account type for layout
   reportCardSettings?: ReportCardSettings
-  subjectComponentsMap: Record<string, string[]>  // ✅ NEW
+  subjectComponentsMap: Record<string, string[]>
 }
 
 export default function ReportDownloadButtons({
   reportId, groupName, termName, sessionName, learners, subjects,
   school, teacherName, teacherSignature, principalName, principalTitle, principalSignature,
-  studentRemarks, generatedDate, canDownloadPdf, reportCardSettings,
-  subjectComponentsMap,  // ✅ NEW
+  studentRemarks, generatedDate, canDownloadPdf, isSolo, reportCardSettings,  // ✅ add isSolo
+  subjectComponentsMap,
 }: Props) {
   const [generatingPdf, setGeneratingPdf] = useState(false)
 
@@ -206,6 +207,7 @@ export default function ReportDownloadButtons({
             showSignatoryRemark={reportCardSettings?.showSignatoryRemark ?? true}
             showSignatorySignature={reportCardSettings?.showSignatorySignature ?? true}
             showSchoolSeal={reportCardSettings?.showSchoolSeal ?? true}
+            isSolo={isSolo}  // ✅ ADD THIS
           />
         )
 
