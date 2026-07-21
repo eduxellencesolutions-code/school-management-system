@@ -101,19 +101,24 @@ export default async function ReportDetailPage({ params }: Props) {
     orgFull = data
   }
 
-  // ✅ FIX: Get the assigned class teacher instead of report creator
+  // ✅ FIX: Solo teachers have no teacher_assignments row — they ARE the class teacher by default
   let classTeacher = null
-  const { data: assignment } = await supabase
-    .from('teacher_assignments')
-    .select('teacher_id')
-    .eq('class_id', report.group_id)
-    .eq('role', 'class_teacher')
-    .maybeSingle()
 
-  if (assignment?.teacher_id) {
-    const { data: teacher } = await supabase
-      .from('users').select('name, signature_url').eq('id', assignment.teacher_id).single()
-    classTeacher = teacher
+  if (isSolo) {
+    classTeacher = { name: profile?.name, signature_url: profile?.signature_url }
+  } else {
+    const { data: assignment } = await supabase
+      .from('teacher_assignments')
+      .select('teacher_id')
+      .eq('class_id', report.group_id)
+      .eq('role', 'class_teacher')
+      .maybeSingle()
+
+    if (assignment?.teacher_id) {
+      const { data: teacher } = await supabase
+        .from('users').select('name, signature_url').eq('id', assignment.teacher_id).single()
+      classTeacher = teacher
+    }
   }
 
   let remarkTemplates: any[] = []
@@ -126,11 +131,12 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const showPrincipalRemark = orgFull?.report_card_settings?.show_signatory_comment ?? true
 
+  // ✅ FIX: Solo teachers have no principal/signatory at all
   const reportCardSettings = {
     showAttendance: orgFull?.report_card_settings?.show_attendance ?? false,
     showTeacherRemark: orgFull?.report_card_settings?.show_remarks ?? true,
-    showSignatoryRemark: orgFull?.report_card_settings?.show_signatory_comment ?? true,
-    showSignatorySignature: orgFull?.report_card_settings?.show_principal_signature ?? true,
+    showSignatoryRemark: isSolo ? false : (orgFull?.report_card_settings?.show_signatory_comment ?? true),
+    showSignatorySignature: isSolo ? false : (orgFull?.report_card_settings?.show_principal_signature ?? true),
     showSchoolSeal: orgFull?.report_card_settings?.show_school_seal ?? true,
   }
 
@@ -224,7 +230,6 @@ export default async function ReportDetailPage({ params }: Props) {
             principalSignature={orgFull?.principal_signature_url}
             studentRemarks={report.student_remarks ?? {}}
             generatedDate={report.completed_at ?? report.created_at}
-            // ✅ FIX: Use canDownloadPdf instead of isInstitution
             canDownloadPdf={canDownloadPdf}
             reportCardSettings={reportCardSettings}
             subjectComponentsMap={subjectComponentsMap}
