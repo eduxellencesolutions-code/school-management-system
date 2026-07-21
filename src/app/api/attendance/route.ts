@@ -1,11 +1,10 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 // POST /api/attendance
 // Body: { groupId, termId, sessionId, date, records: [{ learnerId, status }] }
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createClient();
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
@@ -33,7 +32,6 @@ export async function POST(request: Request) {
   const isSolo = userRow.organization_id === null;
 
   // Explicit app-layer gate check, in addition to RLS — belt and braces.
-  // This gives us a clean error message instead of a silent RLS-filtered failure.
   if (!isSolo) {
     const { data: hasFeature, error: featureError } = await supabase
       .rpc('org_has_feature', {
@@ -53,8 +51,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Build the rows. organization_id is stamped from the resolved user context,
-  // never trusted from client input, to prevent cross-org writes.
+  // organization_id is stamped from resolved user context, never trusted from client input
   const rows = records.map((r: { learnerId: string; status: string }) => ({
     organization_id: userRow.organization_id,
     group_id: groupId,
@@ -79,7 +76,7 @@ export async function POST(request: Request) {
 
 // GET /api/attendance?groupId=...&date=...
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const groupId = searchParams.get('groupId');
   const date = searchParams.get('date');
