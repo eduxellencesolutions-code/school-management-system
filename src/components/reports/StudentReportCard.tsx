@@ -47,13 +47,11 @@ const styles = StyleSheet.create({
   remarks: { borderWidth: 1, borderColor: gold, borderRadius: 4, padding: 8, marginBottom: 10 },
   remarksLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 2 },
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
-  // ✅ Footer styles for Option 2
-  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  footerSolo: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'column', alignItems: 'center', gap: 6 },
+  // ✅ Footer - Solo: Class Teacher centered | Institution: 3 columns
+  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'center' },
   footerInstitution: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
   sigBlock: { alignItems: 'center', width: '30%' },
-  sigBlockCentered: { alignItems: 'center', width: '100%' },
-  sigBlockSolo: { alignItems: 'center' },
+  sigBlockCentered: { alignItems: 'center' },
   sigImageWrap: { height: 26, width: 90, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 1 },
   sigImage: { maxWidth: 90, maxHeight: 26, objectFit: 'contain' },
   sigLine: { width: 90, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2 },
@@ -62,8 +60,6 @@ const styles = StyleSheet.create({
   sigTitle: { fontSize: 6, color: muted, fontFamily: 'Helvetica-Oblique', marginTop: 1 },
   sigFallbackBox: { width: 90, height: 26, borderWidth: 0.5, borderStyle: 'dashed', borderColor: border, justifyContent: 'center', alignItems: 'center', marginBottom: 1 },
   sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique' },
-  sigDate: { fontSize: 7, color: muted, marginTop: 2 },
-  sigDateValue: { fontSize: 7.5, color: dark, marginTop: 1 },
   metaFooter: { marginTop: 8, alignItems: 'center' },
   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
   sealBackground: {
@@ -222,13 +218,6 @@ export function StudentReportCard({
   const compCount = compNames.length
 
   const showPrincipalBlock = showSignatorySignature && !isSolo
-
-  // Format date for display
-  const dateDisplay = (generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', { 
-    day: 'numeric', 
-    month: 'long', 
-    year: 'numeric' 
-  })
 
   return (
     <Document>
@@ -405,24 +394,18 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ OPTION 2: Footer with Class Teacher dead-center for solo, Date below */}
+        {/* ✅ Footer: Solo = Class Teacher centered, Institution = 3 columns */}
         {isSolo ? (
-          // Solo Teacher: Class Teacher centered, Date below
-          <View style={styles.footerSolo}>
-            <View style={styles.sigBlockSolo}>
+          <View style={styles.footer}>
+            <View style={styles.sigBlockCentered}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
               <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
               <Text style={styles.sigName}>{teacherName || '—'}</Text>
               <Text style={styles.sigTitle}>Class Teacher</Text>
             </View>
-            <View style={styles.sigBlockSolo}>
-              <Text style={styles.sigDate}>Date</Text>
-              <Text style={styles.sigDateValue}>{dateDisplay}</Text>
-            </View>
           </View>
         ) : (
-          // Institution: Three-column footer (Class Teacher | Principal | Date)
           <View style={styles.footerInstitution}>
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
@@ -445,7 +428,13 @@ export function StudentReportCard({
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>Date</Text>
               <View style={[styles.sigLine, { marginTop: 18 }]} />
-              <Text style={styles.sigName}>{dateDisplay}</Text>
+              <Text style={styles.sigName}>
+                {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', { 
+                  day: 'numeric', 
+                  month: 'long', 
+                  year: 'numeric' 
+                })}
+              </Text>
             </View>
           </View>
         )}
