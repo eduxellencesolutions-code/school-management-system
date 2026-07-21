@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Trash2, RefreshCw, FileText, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Trash2, RefreshCw, FileText } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
-import { restoreReport, emptyTrash } from '@/app/(dashboard)/reports/actions'
+import EmptyTrashButton from '@/components/reports/EmptyTrashButton'
+import { restoreReport } from '@/app/(dashboard)/reports/actions'
 import ToastHandler from '@/components/ToastHandler'
 
 export const runtime = 'nodejs'
@@ -81,21 +82,7 @@ export default async function TrashPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {reports && reports.length > 0 && (
-            <form action={emptyTrash}>
-              <button
-                type="submit"
-                className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50 border-red-200"
-                onClick={(e) => {
-                  if (!confirm('Permanently delete all reports in trash? This action cannot be undone.')) {
-                    e.preventDefault()
-                  }
-                }}
-              >
-                <Trash2 size={14} /> Empty Trash
-              </button>
-            </form>
-          )}
+          {reports && reports.length > 0 && <EmptyTrashButton />}
         </div>
       </div>
 
