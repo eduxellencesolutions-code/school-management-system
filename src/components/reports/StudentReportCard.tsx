@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   remarks: { borderWidth: 1, borderColor: gold, borderRadius: 4, padding: 8, marginBottom: 10 },
   remarksLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 2 },
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
-  // ✅ Footer - Solo: Class Teacher centered | Institution: 3 columns
+  // ✅ Footer - Solo: Class Teacher centered, no Date | Institution: 3 columns (Class Teacher, Signatory, Date)
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'center' },
   footerInstitution: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
   sigBlock: { alignItems: 'center', width: '30%' },
@@ -394,7 +394,7 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ Footer: Solo = Class Teacher centered, Institution = 3 columns */}
+        {/* ✅ Footer: Solo = Class Teacher centered only, no Date block | Institution = 3 columns incl. Date */}
         {isSolo ? (
           <View style={styles.footer}>
             <View style={styles.sigBlockCentered}>
@@ -429,10 +429,10 @@ export function StudentReportCard({
               <Text style={styles.sigLabel}>Date</Text>
               <View style={[styles.sigLine, { marginTop: 18 }]} />
               <Text style={styles.sigName}>
-                {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', { 
-                  day: 'numeric', 
-                  month: 'long', 
-                  year: 'numeric' 
+                {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
                 })}
               </Text>
             </View>
