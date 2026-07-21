@@ -1,11 +1,10 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 // POST /api/domain-ratings
 // Body: { learnerId, termId, domainType: 'affective'|'psychomotor', traitName, rating }
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createClient();
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
@@ -23,8 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid domainType' }, { status: 400 });
   }
 
-  // Resolve learner's org through the learner record itself —
-  // never trust an org id passed from the client.
+  // Resolve learner's org through the learner record itself — never trust client-supplied org id
   const { data: learner, error: learnerError } = await supabase
     .from('learners')
     .select('organization_id')
@@ -80,7 +78,7 @@ export async function POST(request: Request) {
 
 // GET /api/domain-ratings?learnerId=...&termId=...
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const learnerId = searchParams.get('learnerId');
   const termId = searchParams.get('termId');
@@ -93,7 +91,7 @@ export async function GET(request: Request) {
     .from('domain_ratings')
     .select('domain_type, trait_name, rating, updated_at')
     .eq('learner_id', learnerId)
-    .eq('term_id', termId);
+    .eq('termId', termId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
