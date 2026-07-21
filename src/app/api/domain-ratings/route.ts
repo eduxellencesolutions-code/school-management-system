@@ -91,7 +91,7 @@ export async function GET(request: Request) {
     .from('domain_ratings')
     .select('domain_type, trait_name, rating, updated_at')
     .eq('learner_id', learnerId)
-    .eq('termId', termId);
+    .eq('term_id', termId);  // ✅ FIXED
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
