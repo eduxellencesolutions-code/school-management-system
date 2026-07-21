@@ -1,0 +1,102 @@
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+
+// POST /api/attendance
+// Body: { groupId, termId, sessionId, date, records: [{ learnerId, status }] }
+export async function POST(request: Request) {
+  const supabase = createRouteHandlerClient({ cookies });
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const { groupId, termId, sessionId, date, records } = body;
+
+  if (!groupId || !termId || !sessionId || !date || !Array.isArray(records) || records.length === 0) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  // Resolve the caller's org (null org = solo teacher, always allowed)
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single();
+
+  if (userError) {
+    return NextResponse.json({ error: 'Could not resolve user profile' }, { status: 500 });
+  }
+
+  const isSolo = userRow.organization_id === null;
+
+  // Explicit app-layer gate check, in addition to RLS — belt and braces.
+  // This gives us a clean error message instead of a silent RLS-filtered failure.
+  if (!isSolo) {
+    const { data: hasFeature, error: featureError } = await supabase
+      .rpc('org_has_feature', {
+        p_org_id: userRow.organization_id,
+        p_feature_key: 'basic_attendance',
+      });
+
+    if (featureError) {
+      return NextResponse.json({ error: 'Could not verify plan entitlement' }, { status: 500 });
+    }
+
+    if (!hasFeature) {
+      return NextResponse.json(
+        { error: 'Attendance is not available on your current plan' },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Build the rows. organization_id is stamped from the resolved user context,
+  // never trusted from client input, to prevent cross-org writes.
+  const rows = records.map((r: { learnerId: string; status: string }) => ({
+    organization_id: userRow.organization_id,
+    group_id: groupId,
+    learner_id: r.learnerId,
+    term_id: termId,
+    session_id: sessionId,
+    date,
+    status: r.status,
+    recorded_by: user.id,
+  }));
+
+  const { error: insertError } = await supabase
+    .from('attendance_records')
+    .upsert(rows, { onConflict: 'learner_id,date' });
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, count: rows.length });
+}
+
+// GET /api/attendance?groupId=...&date=...
+export async function GET(request: Request) {
+  const supabase = createRouteHandlerClient({ cookies });
+  const { searchParams } = new URL(request.url);
+  const groupId = searchParams.get('groupId');
+  const date = searchParams.get('date');
+
+  if (!groupId || !date) {
+    return NextResponse.json({ error: 'Missing groupId or date' }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('learner_id, status')
+    .eq('group_id', groupId)
+    .eq('date', date);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ records: data });
+}
