@@ -4,6 +4,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
 import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
 import ExpiredBanner from '@/components/billing/ExpiredBanner'
+import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
 import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {/* Expired banner - shown when subscription has expired */}
               {subState.isExpired && (
                 <ExpiredBanner />
+              )}
+
+              {/* ✅ NEW: Expiring soon banner - shown when subscription expires within 3 days */}
+              {subState.isExpiringSoon && subState.daysUntilExpiry !== null && (
+                <ExpiringSoonBanner daysUntilExpiry={subState.daysUntilExpiry} />
               )}
             </div>
             <div className="ml-4 shrink-0">
