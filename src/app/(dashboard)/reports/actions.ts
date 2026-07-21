@@ -352,3 +352,131 @@ export async function getReport(id: string) {
     throw error
   }
 }
+
+// ─── TRASH FUNCTIONS ───────────────────────────────────────────────
+
+// Restore report from trash
+export async function restoreReport(formData: FormData) {
+  const reportId = formData.get('id') as string
+  if (!reportId) {
+    return { success: false, message: 'Report ID is required' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, role').eq('id', user.id).single()
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isSolo = !profile?.organization_id
+
+  if (!isAdmin && !isSolo) {
+    return { success: false, message: 'Only administrators can restore reports' }
+  }
+
+  // Verify the report exists and belongs to this user/organization
+  let query = supabase
+    .from('reports')
+    .select('id')
+    .eq('id', reportId)
+    .eq('deleted', true)
+
+  if (profile?.organization_id) {
+    query = query.eq('organization_id', profile.organization_id)
+  } else {
+    query = query.eq('created_by', user.id)
+  }
+
+  const { data: existingReport, error: checkError } = await query
+
+  if (checkError || !existingReport || existingReport.length === 0) {
+    return { success: false, message: 'Report not found or you do not have permission' }
+  }
+
+  // Restore the report
+  const { data, error } = await supabase
+    .from('reports')
+    .update({ 
+      deleted: false, 
+      deleted_by: null, 
+      deleted_at: null 
+    })
+    .eq('id', reportId)
+    .select('id')
+
+  if (error) {
+    console.error('Error restoring report:', error)
+    return { success: false, message: 'Failed to restore report' }
+  }
+
+  if (!data || data.length === 0) {
+    return { success: false, message: 'Restore failed — you may not have permission to update this report' }
+  }
+
+  revalidatePath('/reports')
+  revalidatePath('/reports/trash')
+  return { success: true, message: 'Report restored successfully' }
+}
+
+// Empty trash - permanently delete all soft-deleted reports
+export async function emptyTrash() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, message: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('organization_id, role').eq('id', user.id).single()
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
+  const isSolo = !profile?.organization_id
+
+  if (!isAdmin && !isSolo) {
+    return { success: false, message: 'Only administrators can empty trash' }
+  }
+
+  let query = supabase
+    .from('reports')
+    .delete()
+    .eq('deleted', true)
+
+  if (profile?.organization_id) {
+    query = query.eq('organization_id', profile.organization_id)
+  } else {
+    query = query.eq('created_by', user.id)
+  }
+
+  const { error } = await query
+
+  if (error) {
+    console.error('Error emptying trash:', error)
+    return { success: false, message: 'Failed to empty trash' }
+  }
+
+  revalidatePath('/reports')
+  revalidatePath('/reports/trash')
+  return { success: true, message: 'Trash emptied successfully' }
+}
+
+// Get trash reports older than 30 days (for cron job)
+export async function getTrashReports() {
+  const supabase = await createClient()
+  
+  // Get reports deleted more than 30 days ago
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id')
+    .eq('deleted', true)
+    .lt('deleted_at', thirtyDaysAgo.toISOString())
+
+  if (error) {
+    console.error('Error fetching trash reports:', error)
+    return []
+  }
+
+  return data || []
+}
