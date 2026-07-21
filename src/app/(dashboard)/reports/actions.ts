@@ -359,12 +359,14 @@ export async function getReport(id: string) {
 export async function restoreReport(formData: FormData) {
   const reportId = formData.get('id') as string
   if (!reportId) {
-    return { success: false, message: 'Report ID is required' }
+    redirect('/reports/trash?error=missing_id')
   }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, message: 'Not authenticated' }
+  if (!user) {
+    redirect('/login')
+  }
 
   const { data: profile } = await supabase
     .from('users').select('organization_id, role').eq('id', user.id).single()
@@ -373,7 +375,7 @@ export async function restoreReport(formData: FormData) {
   const isSolo = !profile?.organization_id
 
   if (!isAdmin && !isSolo) {
-    return { success: false, message: 'Only administrators can restore reports' }
+    redirect('/reports/trash?error=unauthorized')
   }
 
   // Verify the report exists and belongs to this user/organization
@@ -392,11 +394,11 @@ export async function restoreReport(formData: FormData) {
   const { data: existingReport, error: checkError } = await query
 
   if (checkError || !existingReport || existingReport.length === 0) {
-    return { success: false, message: 'Report not found or you do not have permission' }
+    redirect('/reports/trash?error=not_found')
   }
 
   // Restore the report
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('reports')
     .update({ 
       deleted: false, 
@@ -404,27 +406,24 @@ export async function restoreReport(formData: FormData) {
       deleted_at: null 
     })
     .eq('id', reportId)
-    .select('id')
 
   if (error) {
     console.error('Error restoring report:', error)
-    return { success: false, message: 'Failed to restore report' }
-  }
-
-  if (!data || data.length === 0) {
-    return { success: false, message: 'Restore failed — you may not have permission to update this report' }
+    redirect('/reports/trash?error=failed')
   }
 
   revalidatePath('/reports')
   revalidatePath('/reports/trash')
-  return { success: true, message: 'Report restored successfully' }
+  redirect('/reports/trash?success=restored')
 }
 
 // Empty trash - permanently delete all soft-deleted reports
 export async function emptyTrash() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, message: 'Not authenticated' }
+  if (!user) {
+    redirect('/login')
+  }
 
   const { data: profile } = await supabase
     .from('users').select('organization_id, role').eq('id', user.id).single()
@@ -433,7 +432,7 @@ export async function emptyTrash() {
   const isSolo = !profile?.organization_id
 
   if (!isAdmin && !isSolo) {
-    return { success: false, message: 'Only administrators can empty trash' }
+    redirect('/reports/trash?error=unauthorized')
   }
 
   let query = supabase
@@ -451,12 +450,12 @@ export async function emptyTrash() {
 
   if (error) {
     console.error('Error emptying trash:', error)
-    return { success: false, message: 'Failed to empty trash' }
+    redirect('/reports/trash?error=failed')
   }
 
   revalidatePath('/reports')
   revalidatePath('/reports/trash')
-  return { success: true, message: 'Trash emptied successfully' }
+  redirect('/reports/trash?success=emptied')
 }
 
 // Get trash reports older than 30 days (for cron job)
