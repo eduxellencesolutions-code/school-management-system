@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, Trash2, RefreshCw, FileText, AlertTriangle } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import { restoreReport, emptyTrash } from '@/app/(dashboard)/reports/actions'
+import ToastHandler from '@/components/ToastHandler'
 
 export const runtime = 'nodejs'
 
@@ -64,6 +65,9 @@ export default async function TrashPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Toast Handler for URL params */}
+      <ToastHandler />
+
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
