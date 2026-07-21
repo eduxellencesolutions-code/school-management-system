@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getPlanConfig, PlanKey } from '@/lib/plans/config'
-import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown, Signature } from 'lucide-react'
+import { CheckCircle2, XCircle, FileSliders, BookOpen, User, Mail, Phone, Building, Calendar, Crown, Signature, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import PlanDowngradeCard from '@/components/billing/PlanDowngradeCard'
@@ -44,6 +44,15 @@ export default async function SettingsPage() {
                              profile?.role === 'lecturer' || 
                              profile?.role === 'assistant' || 
                              profile?.role === 'principal'
+
+  // ✅ NEW: Calculate days until expiry for early renewal banner
+  const expiresAt = isInstitution ? org?.subscription_expires_at : profile?.subscription_expires_at
+  const daysUntilExpiry = expiresAt
+    ? Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null
+
+  // Proactive window: show a heads-up while still 'active' but expiring soon
+  const isExpiringSoon = currentStatus === 'active' && daysUntilExpiry !== null && daysUntilExpiry <= 3 && daysUntilExpiry >= 0
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
@@ -253,6 +262,23 @@ export default async function SettingsPage() {
             <span className="badge badge-blue capitalize">{config.label}</span>
           </div>
           <div className="card-body flex flex-col gap-5">
+            {/* ✅ NEW: Early Renewal Banner - Show when expiring soon but still active */}
+            {isExpiringSoon && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    {daysUntilExpiry === 0
+                      ? 'Your subscription renews today'
+                      : `Your subscription renews in ${daysUntilExpiry} day${daysUntilExpiry > 1 ? 's' : ''}`}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Pay now to avoid any interruption to your account.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <span className={`badge ${currentStatus === 'active' ? 'badge-green' : currentStatus === 'trial' ? 'badge-blue' : 'badge-red'} capitalize`}>
                 {currentStatus}
@@ -299,11 +325,15 @@ export default async function SettingsPage() {
 
               return (
                 <div className="border-t border-surface-200 pt-4 flex flex-col gap-5">
-                  {/* ✅ NEW: Show Renew option when expired or in grace period (only for paid plans) */}
-                  {(currentStatus === 'expired' || currentStatus === 'grace_period') && isPaidPlan && (
+                  {/* ✅ UPDATED: Show Renew option when expired, grace_period, or expiring soon */}
+                  {(currentStatus === 'expired' || currentStatus === 'grace_period' || isExpiringSoon) && isPaidPlan && (
                     <div>
                       <p className="text-sm font-medium text-ink mb-3 text-red-600">
-                        {currentStatus === 'expired' ? 'Renew Your Subscription' : 'Renew Before Grace Period Ends'}
+                        {currentStatus === 'expired'
+                          ? 'Renew Your Subscription'
+                          : currentStatus === 'grace_period'
+                          ? 'Renew Before Grace Period Ends'
+                          : 'Renew Early to Avoid Interruption'}
                       </p>
                       <PlanUpgradeCard 
                         plan={currentPlan as PaidPlan} 
