@@ -22,10 +22,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
   }
 
-  // Resolve org through the assignment's group — never trust client-supplied org id
+  // Step 1: get the assignment's group_id
   const { data: assignment, error: assignmentError } = await supabase
     .from('homework_assignments')
-    .select('group_id, groups(organization_id)')
+    .select('group_id')
     .eq('id', assignmentId)
     .single();
 
@@ -33,12 +33,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
 
-  const orgId = (assignment.groups as unknown as { organization_id: string | null })?.organization_id;
-  const isSolo = orgId === null || orgId === undefined;
+  // Step 2: get the group's organization_id separately — avoids nested-join FK ambiguity
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('organization_id')
+    .eq('id', assignment.group_id)
+    .single();
+
+  if (groupError || !group) {
+    return NextResponse.json({ error: 'Group not found for this assignment' }, { status: 404 });
+  }
+
+  const isSolo = group.organization_id === null;
 
   if (!isSolo) {
     const { data: hasFeature, error: featureError } = await supabase
-      .rpc('org_has_feature', { p_org_id: orgId, p_feature_key: 'homework' });
+      .rpc('org_has_feature', { p_org_id: group.organization_id, p_feature_key: 'homework' });
 
     if (featureError) {
       return NextResponse.json({ error: 'Could not verify plan entitlement' }, { status: 500 });
