@@ -231,6 +231,7 @@ export default async function ReportDetailPage({ params }: Props) {
             studentRemarks={report.student_remarks ?? {}}
             generatedDate={report.completed_at ?? report.created_at}
             canDownloadPdf={canDownloadPdf}
+            isSolo={isSolo}  // ✅ ADDED: Pass isSolo to ReportDownloadButtons
             reportCardSettings={reportCardSettings}
             subjectComponentsMap={subjectComponentsMap}
           />
