@@ -7,6 +7,7 @@ import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import ReportLifecycleActions from '@/components/reports/ReportLifecycleActions'
 import RemarksEditor from '@/components/reports/RemarksEditor'
 import { hasFeature } from '@/lib/plans/gating'
+import { getPlanConfig } from '@/lib/plans/config'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -74,7 +75,7 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
   const isSolo = !profile?.organization_id
-  const isPrincipal = profile?.role === 'principal'  // ✅ NEW
+  const isPrincipal = profile?.role === 'principal'
 
   let isClassTeacher = false
   if (!isSolo && !isAdmin) {
@@ -90,7 +91,7 @@ export default async function ReportDetailPage({ params }: Props) {
 
   const canPublish = isAdmin || isSolo
   const canSubmit = isAdmin || isClassTeacher
-  const canApprove = isPrincipal && report.report_status === 'submitted'  // ✅ NEW
+  const canApprove = isPrincipal && report.report_status === 'submitted'
   const canDelete = isAdmin || isSolo
   const canEditRemarks = (isAdmin || isClassTeacher) && report.report_status !== 'published'
 
@@ -123,10 +124,8 @@ export default async function ReportDetailPage({ params }: Props) {
     remarkTemplates = data ?? []
   }
 
-  // ✅ FIX: Use show_signatory_comment instead of show_class_teacher_comment
   const showPrincipalRemark = orgFull?.report_card_settings?.show_signatory_comment ?? true
 
-  // ✅ Build report card settings object
   const reportCardSettings = {
     showAttendance: orgFull?.report_card_settings?.show_attendance ?? false,
     showTeacherRemark: orgFull?.report_card_settings?.show_remarks ?? true,
@@ -147,6 +146,9 @@ export default async function ReportDetailPage({ params }: Props) {
     currentPlan = soloProfile?.subscription_plan ?? 'free'
   }
 
+  // ✅ NEW: Check if PDF export is available on this plan
+  const canDownloadPdf = getPlanConfig(currentPlan).features.pdfReportCards
+
   const group = report.group as { id: string; name: string; code?: string } | null
   const data = report.report_data ?? {}
   const learners: Learner[] = data.learners ?? []
@@ -165,7 +167,7 @@ export default async function ReportDetailPage({ params }: Props) {
   const statusBadge: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700',
     submitted: 'bg-amber-100 text-amber-800',
-    approved: 'bg-blue-100 text-blue-800',  // ✅ NEW
+    approved: 'bg-blue-100 text-blue-800',
     published: 'bg-green-100 text-green-800',
     archived: 'bg-surface-200 text-ink-faint',
   }
@@ -198,7 +200,7 @@ export default async function ReportDetailPage({ params }: Props) {
             reportId={id}
             reportStatus={report.report_status ?? 'draft'}
             canSubmit={canSubmit}
-            canApprove={canApprove}  // ✅ NEW
+            canApprove={canApprove}
             canPublish={canPublish}
             isSolo={isSolo}
           />
@@ -222,7 +224,8 @@ export default async function ReportDetailPage({ params }: Props) {
             principalSignature={orgFull?.principal_signature_url}
             studentRemarks={report.student_remarks ?? {}}
             generatedDate={report.completed_at ?? report.created_at}
-            isInstitution={!!profile?.organization_id}
+            // ✅ FIX: Use canDownloadPdf instead of isInstitution
+            canDownloadPdf={canDownloadPdf}
             reportCardSettings={reportCardSettings}
             subjectComponentsMap={subjectComponentsMap}
           />
@@ -236,7 +239,6 @@ export default async function ReportDetailPage({ params }: Props) {
         </div>
       )}
 
-      {/* ✅ NEW: Show awaiting approval message for non-principals */}
       {report.report_status === 'submitted' && !isPrincipal && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
           This report has been submitted and is awaiting approval from the principal.
