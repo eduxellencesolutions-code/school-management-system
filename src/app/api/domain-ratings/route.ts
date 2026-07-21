@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     .from('domain_ratings')
     .upsert(
       {
+        organization_id: learner.organization_id,
         learner_id: learnerId,
         term_id: termId,
         domain_type: domainType,
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
     .from('domain_ratings')
     .select('domain_type, trait_name, rating, updated_at')
     .eq('learner_id', learnerId)
-    .eq('term_id', termId);  // ✅ FIXED
+    .eq('term_id', termId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
