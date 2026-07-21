@@ -47,11 +47,12 @@ const styles = StyleSheet.create({
   remarks: { borderWidth: 1, borderColor: gold, borderRadius: 4, padding: 8, marginBottom: 10 },
   remarksLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 2 },
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
-  // ✅ Footer - Solo: Class Teacher centered, no Date | Institution: 3 columns (Class Teacher, Signatory, Date)
+  // ✅ Footer styles
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'center' },
   footerInstitution: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
   sigBlock: { alignItems: 'center', width: '30%' },
   sigBlockCentered: { alignItems: 'center' },
+  sigBlockRight: { alignItems: 'center', width: '30%' },
   sigImageWrap: { height: 26, width: 90, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 1 },
   sigImage: { maxWidth: 90, maxHeight: 26, objectFit: 'contain' },
   sigLine: { width: 90, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2 },
@@ -394,7 +395,7 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ Footer: Solo = Class Teacher centered only, no Date block | Institution = 3 columns incl. Date */}
+        {/* ✅ Footer: Solo = Class Teacher centered | Institution = Class Teacher (Left) + Head Teacher (Right) - NO DATE */}
         {isSolo ? (
           <View style={styles.footer}>
             <View style={styles.sigBlockCentered}>
@@ -407,6 +408,7 @@ export function StudentReportCard({
           </View>
         ) : (
           <View style={styles.footerInstitution}>
+            {/* Class Teacher - Left */}
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
               <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
@@ -415,27 +417,16 @@ export function StudentReportCard({
               <Text style={styles.sigTitle}>Class Teacher</Text>
             </View>
 
+            {/* Head Teacher / Principal - Right (Far Right) */}
             {showPrincipalBlock && (
               <View style={styles.sigBlock}>
-                <Text style={styles.sigLabel}>{principalTitle || 'Principal'}'s Signature</Text>
+                <Text style={styles.sigLabel}>{principalTitle || 'Head Teacher'}'s Signature</Text>
                 <SafeSignature url={principalSignature} fallbackLabel="Signature" />
                 <View style={styles.sigLine} />
                 <Text style={styles.sigName}>{principalName || principalTitle || '—'}</Text>
-                <Text style={styles.sigTitle}>{principalTitle || 'Principal'}</Text>
+                <Text style={styles.sigTitle}>{principalTitle || 'Head Teacher'}</Text>
               </View>
             )}
-
-            <View style={styles.sigBlock}>
-              <Text style={styles.sigLabel}>Date</Text>
-              <View style={[styles.sigLine, { marginTop: 18 }]} />
-              <Text style={styles.sigName}>
-                {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </Text>
-            </View>
           </View>
         )}
 
