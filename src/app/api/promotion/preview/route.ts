@@ -49,9 +49,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const fromGroupId = searchParams.get('fromGroupId');
   const sessionId = searchParams.get('sessionId');
+  const termId = searchParams.get('termId');
 
-  if (!fromGroupId || !sessionId) {
-    return NextResponse.json({ error: 'Missing fromGroupId or sessionId' }, { status: 400 });
+  if (!fromGroupId || !sessionId || !termId) {
+    return NextResponse.json({ error: 'Missing fromGroupId, sessionId, or termId' }, { status: 400 });
   }
 
   // Confirm the source group belongs to this org AND is actually a class (not a course/department group)
@@ -71,6 +72,31 @@ export async function GET(request: Request) {
 
   if (group.type !== 'class') {
     return NextResponse.json({ error: 'Only class-type groups can be promoted' }, { status: 400 });
+  }
+
+  // ✅ FIX: Check for locked report (not published)
+  const { data: report, error: reportError } = await supabase
+    .from('reports')
+    .select('id, report_data, report_status, locked')
+    .eq('group_id', fromGroupId)
+    .eq('session_id', sessionId)
+    .eq('term_id', termId)
+    .eq('type', 'broadsheet')
+    .eq('locked', true)              // ← Changed from report_status = 'published'
+    .eq('deleted', false)
+    .order('locked_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (reportError) {
+    return NextResponse.json({ error: reportError.message }, { status: 500 });
+  }
+
+  if (!report) {
+    return NextResponse.json(
+      { error: 'Results for this class and term must be locked before promotion can be previewed. Use "Lock Results" first.' },
+      { status: 404 }
+    );
   }
 
   // Get this org's promotion rules (fall back to sensible defaults)
