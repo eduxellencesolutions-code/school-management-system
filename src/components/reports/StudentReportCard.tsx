@@ -47,9 +47,9 @@ const styles = StyleSheet.create({
   remarks: { borderWidth: 1, borderColor: gold, borderRadius: 4, padding: 8, marginBottom: 10 },
   remarksLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: muted, marginBottom: 2 },
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
-  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
+  // ✅ FIX: Changed from 'space-between' to 'center' with gap
+  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'center', gap: 40 },
   sigBlock: { alignItems: 'center', width: '40%' },
-  sigBlockCentered: { alignItems: 'center', width: '100%' },
   sigImageWrap: { height: 26, width: 90, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 1 },
   sigImage: { maxWidth: 90, maxHeight: 26, objectFit: 'contain' },
   sigLine: { width: 90, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2 },
@@ -150,7 +150,7 @@ interface Props {
   showTeacherRemark?: boolean
   showSignatoryRemark?: boolean
   showSignatorySignature?: boolean
-  isSolo?: boolean  // ✅ NEW - to determine if solo teacher
+  isSolo?: boolean
 }
 
 function gradeColor(grade: string): string {
@@ -202,7 +202,7 @@ export function StudentReportCard({
   showTeacherRemark = true,
   showSignatoryRemark = true,
   showSignatorySignature = true,
-  isSolo = false,  // ✅ NEW - default to false for institutions
+  isSolo = false,
 }: Props) {
   const compNames: string[] = []
   if (showComponents) {
@@ -393,11 +393,11 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ FIX: Footer with Class Teacher (Centered for solo, Left for institutions) and Principal (Right for institutions) */}
+        {/* ✅ FIX: Footer with centered alignment and gap between blocks */}
         <View style={styles.footer}>
-          {/* Class Teacher Signature - Centered for solo, Left for institutions */}
+          {/* Class Teacher Signature */}
           {showTeacherRemark && (
-            <View style={isSolo ? styles.sigBlockCentered : styles.sigBlock}>
+            <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
               <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
@@ -416,6 +416,19 @@ export function StudentReportCard({
               <Text style={styles.sigTitle}>{principalTitle || 'Principal'}</Text>
             </View>
           )}
+
+          {/* Date block - always shown */}
+          <View style={styles.sigBlock}>
+            <Text style={styles.sigLabel}>Date</Text>
+            <View style={[styles.sigLine, { marginTop: 18 }]} />
+            <Text style={styles.sigName}>
+              {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG', { 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+              })}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.metaFooter}>
