@@ -49,16 +49,13 @@ const styles = StyleSheet.create({
   remarksText: { fontSize: 8.5, color: dark, lineHeight: 1.5 },
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
   sigBlock: { alignItems: 'center', width: '40%' },
-  // ✅ FIX 1: Fixed-height image container with consistent baseline
+  sigBlockCentered: { alignItems: 'center', width: '100%' },
   sigImageWrap: { height: 26, width: 90, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 1 },
-  // ✅ FIX 1: Image with max dimensions
   sigImage: { maxWidth: 90, maxHeight: 26, objectFit: 'contain' },
-  // ✅ FIX 2: Tight line under signature
   sigLine: { width: 90, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2 },
   sigLabel: { fontSize: 7, color: muted, marginBottom: 2 },
   sigName: { fontSize: 7.5, color: dark, marginTop: 1 },
   sigTitle: { fontSize: 6, color: muted, fontFamily: 'Helvetica-Oblique', marginTop: 1 },
-  // ✅ FIX 4: Fallback with dashed border
   sigFallbackBox: { width: 90, height: 26, borderWidth: 0.5, borderStyle: 'dashed', borderColor: border, justifyContent: 'center', alignItems: 'center', marginBottom: 1 },
   sigFallback: { fontSize: 6.5, color: muted, fontFamily: 'Helvetica-Oblique' },
   metaFooter: { marginTop: 8, alignItems: 'center' },
@@ -153,6 +150,7 @@ interface Props {
   showTeacherRemark?: boolean
   showSignatoryRemark?: boolean
   showSignatorySignature?: boolean
+  isSolo?: boolean  // ✅ NEW - to determine if solo teacher
 }
 
 function gradeColor(grade: string): string {
@@ -166,7 +164,6 @@ function gradeColor(grade: string): string {
   }
 }
 
-// ✅ FIX 1 & 4: Safe signature with fixed-height container and fallback
 function SafeSignature({ url, fallbackLabel }: { url?: string; fallbackLabel: string }) {
   if (!url) {
     return (
@@ -205,6 +202,7 @@ export function StudentReportCard({
   showTeacherRemark = true,
   showSignatoryRemark = true,
   showSignatorySignature = true,
+  isSolo = false,  // ✅ NEW - default to false for institutions
 }: Props) {
   const compNames: string[] = []
   if (showComponents) {
@@ -216,6 +214,9 @@ export function StudentReportCard({
   }
   const hasComponents = showComponents && compNames.length > 0
   const compCount = compNames.length
+
+  // ✅ Determine if we should show the principal signature block
+  const showPrincipalBlock = showSignatorySignature && !isSolo
 
   return (
     <Document>
@@ -392,28 +393,26 @@ export function StudentReportCard({
           </View>
         )}
 
-        {/* ✅ FIX: Footer with Class Teacher (Left) and Principal (Right) - Date removed */}
+        {/* ✅ FIX: Footer with Class Teacher (Centered for solo, Left for institutions) and Principal (Right for institutions) */}
         <View style={styles.footer}>
-          {/* Class Teacher Signature - Left */}
+          {/* Class Teacher Signature - Centered for solo, Left for institutions */}
           {showTeacherRemark && (
-            <View style={styles.sigBlock}>
+            <View style={isSolo ? styles.sigBlockCentered : styles.sigBlock}>
               <Text style={styles.sigLabel}>Class Teacher's Signature</Text>
               <SafeSignature url={teacherSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
               <Text style={styles.sigName}>{teacherName || '—'}</Text>
-              {/* ✅ FIX 3: "Verified" cue - Class Teacher title */}
               <Text style={styles.sigTitle}>Class Teacher</Text>
             </View>
           )}
 
-          {/* Principal Signature - Right (moved from center) */}
-          {showSignatorySignature && (
+          {/* Principal Signature - Right (only for institutions) */}
+          {showPrincipalBlock && (
             <View style={styles.sigBlock}>
               <Text style={styles.sigLabel}>{principalTitle || 'Principal'}'s Signature</Text>
               <SafeSignature url={principalSignature} fallbackLabel="Signature" />
               <View style={styles.sigLine} />
               <Text style={styles.sigName}>{principalName || principalTitle || '—'}</Text>
-              {/* ✅ FIX 3: "Verified" cue - Principal title */}
               <Text style={styles.sigTitle}>{principalTitle || 'Principal'}</Text>
             </View>
           )}
