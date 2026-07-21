@@ -39,7 +39,7 @@ interface Props {
   principalSignature?: string
   studentRemarks: Record<string, { teacher_remark?: string; principal_remark?: string }>
   generatedDate?: string
-  isInstitution: boolean
+  canDownloadPdf: boolean  // ✅ NEW — driven by plan config
   reportCardSettings?: ReportCardSettings
   subjectComponentsMap: Record<string, string[]>  // ✅ NEW
 }
@@ -47,7 +47,7 @@ interface Props {
 export default function ReportDownloadButtons({
   reportId, groupName, termName, sessionName, learners, subjects,
   school, teacherName, teacherSignature, principalName, principalTitle, principalSignature,
-  studentRemarks, generatedDate, isInstitution, reportCardSettings,
+  studentRemarks, generatedDate, canDownloadPdf, reportCardSettings,
   subjectComponentsMap,  // ✅ NEW
 }: Props) {
   const [generatingPdf, setGeneratingPdf] = useState(false)
@@ -127,8 +127,9 @@ export default function ReportDownloadButtons({
   }
 
   async function downloadPDF() {
-    if (!isInstitution) {
-      toast.error('PDF export is only available for institution accounts')
+    // ✅ FIX: Use canDownloadPdf instead of isInstitution
+    if (!canDownloadPdf) {
+      toast.error('PDF export is not available on your current plan. Upgrade to unlock this feature.')
       return
     }
     if (learners.length === 0) {
@@ -240,7 +241,7 @@ export default function ReportDownloadButtons({
       <button onClick={downloadExcel} className="btn-secondary btn-sm btn flex items-center gap-1.5">
         <FileSpreadsheet size={13} /> Excel
       </button>
-      {isInstitution && (
+      {canDownloadPdf && (
         <button onClick={downloadPDF} disabled={generatingPdf} className="btn-primary btn-sm btn flex items-center gap-1.5 disabled:opacity-50">
           {generatingPdf ? <><Loader2 size={13} className="animate-spin" /> Generating…</> : <><FileDown size={13} /> PDF (per student)</>}
         </button>
