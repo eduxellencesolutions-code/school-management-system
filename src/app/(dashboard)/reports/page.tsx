@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Archive } from 'lucide-react'
+import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Archive, Trash2 } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import ApproveButton from '@/components/reports/ApproveButton'
 
@@ -269,6 +269,9 @@ export default async function ReportsPage() {
           )}
           <Link href="/reports/archive" className="btn-secondary btn">
             <Archive size={15} /> View Archive
+          </Link>
+          <Link href="/reports/trash" className="btn-secondary btn">
+            <Trash2 size={15} /> View Trash
           </Link>
         </div>
       </div>
