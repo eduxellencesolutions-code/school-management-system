@@ -372,14 +372,36 @@ export async function unarchiveReport(formData: FormData) {
   return { success: true }
 }
 
+// ✅ UPDATED: Soft delete now handles permanent delete too
 export async function softDeleteReport(formData: FormData) {
   const reportId = formData.get('id') as string
+  const permanent = formData.get('permanent') === 'true'
+  
   const { report, isAdmin, isSolo, user } = await getReportContext(reportId)
   if (!report) return { success: false, message: 'Report not found' }
   if (!isAdmin && !isSolo) return { success: false, message: 'Only administrators can delete generated reports' }
 
   const supabase = await createClient()
   
+  // If permanent delete
+  if (permanent) {
+    const { data, error } = await supabase
+      .from('reports')
+      .delete()
+      .eq('id', reportId)
+      .select('id')
+
+    if (error) return { success: false, message: 'Failed to permanently delete report' }
+    if (!data || data.length === 0) {
+      return { success: false, message: 'Permanent delete failed — you may not have permission to delete this report' }
+    }
+
+    revalidatePath('/reports')
+    revalidatePath('/reports/trash')
+    return { success: true, message: 'Report permanently deleted' }
+  }
+
+  // Soft delete - move to trash
   const { data, error } = await supabase
     .from('reports')
     .update({ 
@@ -396,8 +418,9 @@ export async function softDeleteReport(formData: FormData) {
   }
 
   revalidatePath('/reports')
+  revalidatePath('/reports/trash')
   revalidatePath('/dashboard')
-  return { success: true }
+  return { success: true, message: 'Report moved to trash' }
 }
 
 export async function restoreReport(formData: FormData) {
@@ -424,6 +447,7 @@ export async function restoreReport(formData: FormData) {
   }
 
   revalidatePath('/reports')
+  revalidatePath('/reports/trash')
   return { success: true }
 }
 
@@ -447,5 +471,6 @@ export async function permanentlyDeleteReport(formData: FormData) {
   }
 
   revalidatePath('/reports')
+  revalidatePath('/reports/trash')
   return { success: true }
 }
