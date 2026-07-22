@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
-// GET /api/promotion/preview?fromGroupId=...&toGroupId=...&sessionId=...
+// GET /api/promotion/preview?fromGroupId=...&toGroupId=...&sessionId=...&termId=...
 // Read-only: computes promotion recommendations for every learner in fromGroupId. Writes nothing.
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Only class-type groups can be promoted' }, { status: 400 });
   }
 
-  // ✅ FIX: Check for locked report (not published)
+  // ✅ FIX: Explicit filter on report_status = 'published'
   const { data: report, error: reportError } = await supabase
     .from('reports')
     .select('id, report_data, report_status, locked')
@@ -82,9 +82,9 @@ export async function GET(request: Request) {
     .eq('session_id', sessionId)
     .eq('term_id', termId)
     .eq('type', 'broadsheet')
-    .eq('locked', true)              // ← Changed from report_status = 'published'
+    .eq('report_status', 'published') // ← Explicit filter, not just sort order
     .eq('deleted', false)
-    .order('locked_at', { ascending: false })
+    .order('created_at', { ascending: false }) // ← Sort by created_at, not published_at
     .limit(1)
     .maybeSingle();
 
@@ -94,8 +94,16 @@ export async function GET(request: Request) {
 
   if (!report) {
     return NextResponse.json(
-      { error: 'Results for this class and term must be locked before promotion can be previewed. Use "Lock Results" first.' },
+      { error: 'No published broadsheet found for this class and term. The report must be published before promotion can be previewed.' },
       { status: 404 }
+    );
+  }
+
+  // Check if the report is locked
+  if (!report.locked) {
+    return NextResponse.json(
+      { error: 'Results for this class and term must be locked before promotion can be previewed. Use "Lock Results" first.' },
+      { status: 400 }
     );
   }
 
