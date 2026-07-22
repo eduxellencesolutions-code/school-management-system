@@ -34,7 +34,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/reset-password?error=invalid_token', request.url))
   }
 
-  // ── OAuth / magic link flow (code) ──
+  // ── Parent access code / magic link flow (token_hash + type=magiclink) ──
+  if (token_hash && type === 'magiclink') {
+    const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
+    if (!error) {
+      const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+      const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+      return NextResponse.redirect(new URL(destination, request.url))
+    }
+    return NextResponse.redirect(new URL('/access?error=invalid_code', request.url))
+  }
+
+  // ── OAuth / code flow ──
   if (code) {
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
