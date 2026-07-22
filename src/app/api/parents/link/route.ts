@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, generateAccessCode } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 // POST /api/parents/link
@@ -65,6 +66,61 @@ export async function POST(request: Request) {
 
   if (linkError) {
     return NextResponse.json({ error: linkError.message }, { status: 500 });
+  }
+
+  // ✅ NEW: Check if this parent already has a real auth identity + access code.
+  // If not (first time this parent record was created), set both up now.
+  const { data: existingParent } = await supabase
+    .from('parent_accounts')
+    .select('auth_user_id, access_code')
+    .eq('id', parentId)
+    .single();
+
+  if (existingParent && (!existingParent.auth_user_id || !existingParent.access_code)) {
+    const admin = createAdminClient();
+
+    let authUserId = existingParent.auth_user_id;
+
+    if (!authUserId) {
+      // Create the parent's real, permanent auth identity. They never see or use this
+      // email/password directly — it exists so Supabase Auth and existing RLS work normally.
+      const ghostEmail = `parent-${parentId}@parents.eduxellence.internal`;
+      const { data: newAuthUser, error: createUserError } = await admin.auth.admin.createUser({
+        email: ghostEmail,
+        email_confirm: true,
+        user_metadata: { is_parent_account: true, parent_account_id: parentId },
+      });
+
+      if (createUserError || !newAuthUser?.user) {
+        return NextResponse.json(
+          { error: `Parent linked, but failed to create parent authentication identity: ${createUserError?.message}` },
+          { status: 500 }
+        );
+      }
+
+      authUserId = newAuthUser.user.id;
+    }
+
+    let accessCode = existingParent.access_code;
+    if (!accessCode) {
+      // Ensure uniqueness — retry on the rare collision
+      let attempts = 0;
+      while (!accessCode && attempts < 5) {
+        const candidate = generateAccessCode();
+        const { data: clash } = await supabase
+          .from('parent_accounts')
+          .select('id')
+          .eq('access_code', candidate)
+          .maybeSingle();
+        if (!clash) accessCode = candidate;
+        attempts++;
+      }
+    }
+
+    await supabase
+      .from('parent_accounts')
+      .update({ auth_user_id: authUserId, access_code: accessCode })
+      .eq('id', parentId);
   }
 
   return NextResponse.json({ success: true, parentId });
