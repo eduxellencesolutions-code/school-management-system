@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Only class-type groups can be locked' }, { status: 400 });
   }
 
+  // ✅ FIX: Explicit filter on report_status = 'published'
   const { data: report, error: reportError } = await supabase
     .from('reports')
     .select('id, report_data, report_status, locked')
@@ -61,8 +62,9 @@ export async function POST(request: Request) {
     .eq('session_id', sessionId)
     .eq('term_id', termId)
     .eq('type', 'broadsheet')
+    .eq('report_status', 'published') // ← Explicit filter, not just sort order
     .eq('deleted', false)
-    .order('published_at', { ascending: false })
+    .order('created_at', { ascending: false }) // ← Sort by created_at, not published_at
     .limit(1)
     .maybeSingle();
 
@@ -70,13 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: reportError.message }, { status: 500 });
   }
   if (!report) {
-    return NextResponse.json({ error: 'No broadsheet found for this class and term' }, { status: 404 });
-  }
-  if (report.report_status !== 'published') {
-    return NextResponse.json(
-      { error: `Cannot lock: report status is "${report.report_status}", must be "published" first` },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'No published broadsheet found for this class and term' }, { status: 404 });
   }
   if (report.locked) {
     return NextResponse.json({ error: 'This report is already locked' }, { status: 400 });
