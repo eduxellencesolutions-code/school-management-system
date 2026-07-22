@@ -6,19 +6,12 @@ import { cn, getInitials } from '@/lib/utils'
 import type { User, Organization } from '@/types'
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
-  FileText, Settings, LogOut, ChevronRight, Bell,
+  FileText, Settings, LogOut, ChevronRight,
+  CalendarCheck, Smile, ClipboardCheck, Wallet,
+  Lock, TrendingUp,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-
-const NAV = [
-  { label: 'Dashboard',  href: '/dashboard',  icon: LayoutDashboard },
-  { label: 'Classes',    href: '/classes',     icon: BookOpen },
-  { label: 'Students',   href: '/students',    icon: Users },
-  { label: 'Scores',     href: '/scores',      icon: ClipboardList },
-  { label: 'Reports',    href: '/reports',     icon: FileText },
-  { label: 'Settings',   href: '/settings',    icon: Settings },
-]
 
 interface Props {
   user: User
@@ -37,24 +30,78 @@ export default function Sidebar({ user, org }: Props) {
   }
 
   const plan = org?.subscription_plan ?? 'free'
+  const isSoloTeacher = !org
+  const isAdmin = user?.role === 'admin'
+
   const planLabel: Record<string, string> = {
     free: 'Free',
     teacher: 'Teacher',
+    solo_teacher_pro: 'Solo Teacher Pro',
     small_school: 'Small School',
     standard_school: 'Standard School',
     premium_school: 'Premium',
   }
 
+  // Feature availability per plan — mirrors the backend plan_features seed.
+  // Solo teachers never see any of these, matching backend gating rules.
+  const PLAN_FEATURES: Record<string, string[]> = {
+    free: [],
+    small_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion'],
+    standard_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework'],
+    premium_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework', 'fees'],
+  }
+
+  const features = isSoloTeacher ? [] : (PLAN_FEATURES[plan] ?? [])
+  const has = (key: string) => features.includes(key)
+
+  const coreNav = [
+    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { label: 'Classes', href: '/classes', icon: BookOpen },
+    { label: 'Students', href: '/students', icon: Users },
+    { label: 'Scores', href: '/scores', icon: ClipboardList },
+    { label: 'Reports', href: '/reports', icon: FileText },
+  ]
+
+  const studentLifeNav = [
+    ...(has('attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
+    ...(has('psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
+    ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
+    ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
+  ]
+
+  const governanceNav = [
+    ...(isAdmin ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
+    ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
+  ]
+
+  const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
+    const active = pathname === href || pathname.startsWith(href + '/')
+    return (
+      <Link
+        key={href}
+        href={href}
+        className={cn(
+          'flex items-center gap-2.5 px-3 py-2 rounded text-sm font-medium transition-colors',
+          active
+            ? 'bg-brand-50 text-brand-700'
+            : 'text-ink-muted hover:bg-surface-50 hover:text-ink'
+        )}
+      >
+        <Icon size={15} className="shrink-0" />
+        {label}
+        {active && <ChevronRight size={12} className="ml-auto text-brand-400" />}
+      </Link>
+    )
+  }
+
   return (
     <aside className="flex flex-col w-56 shrink-0 border-r border-surface-200 bg-white h-screen sticky top-0">
-      {/* Logo */}
       <div className="px-4 py-4 border-b border-surface-200">
         <span className="font-bold text-sm text-ink">
           Eduxellence <span className="text-brand-500">Results</span>
         </span>
       </div>
 
-      {/* Org info */}
       {org && (
         <div className="px-4 py-3 border-b border-surface-200">
           <div className="flex items-center gap-2">
@@ -69,30 +116,34 @@ export default function Sidebar({ user, org }: Props) {
         </div>
       )}
 
-      {/* Nav */}
-      <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5 overflow-y-auto">
-        {NAV.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded text-sm font-medium transition-colors',
-                active
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-ink-muted hover:bg-surface-50 hover:text-ink'
-              )}
-            >
-              <Icon size={15} className="shrink-0" />
-              {label}
-              {active && <ChevronRight size={12} className="ml-auto text-brand-400" />}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+        <div className="flex flex-col gap-0.5">
+          {coreNav.map(renderLink)}
+        </div>
+
+        {studentLifeNav.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+              Student Life
+            </p>
+            {studentLifeNav.map(renderLink)}
+          </div>
+        )}
+
+        {governanceNav.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+              Academic Governance
+            </p>
+            {governanceNav.map(renderLink)}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-0.5 mt-auto">
+          {renderLink({ label: 'Settings', href: '/settings', icon: Settings })}
+        </div>
       </nav>
 
-      {/* User footer */}
       <div className="border-t border-surface-200 p-3 flex flex-col gap-1">
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
