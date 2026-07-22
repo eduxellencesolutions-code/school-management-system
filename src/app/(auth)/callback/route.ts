@@ -36,15 +36,19 @@ export async function GET(request: NextRequest) {
 
   // ── Parent access code / magic link flow (token_hash + type=magiclink) ──
   if (token_hash && type === 'magiclink') {
-    const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
-    if (!error) {
-      const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
-      const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
-      return NextResponse.redirect(new URL(destination, request.url))
+    try {
+      const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
+      if (!error) {
+        const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+        const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+        return NextResponse.redirect(new URL(destination, request.url))
+      }
+      console.error('verifyOtp magiclink error:', error)
+      return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(error.message)}`, request.url))
+    } catch (err) {
+      console.error('verifyOtp magiclink THREW:', err)
+      return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(String(err))}`, request.url))
     }
-    // TEMPORARY: surface the real error so we can diagnose
-    console.error('verifyOtp magiclink error:', error)
-    return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(error.message)}`, request.url))
   }
 
   // ── OAuth / code flow ──
