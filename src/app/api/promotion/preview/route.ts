@@ -1,8 +1,20 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
-// GET /api/promotion/preview?fromGroupId=...&toGroupId=...&sessionId=...&termId=...
-// Read-only: computes promotion recommendations for every learner in fromGroupId. Writes nothing.
+const GLOBAL_FAIL_THRESHOLD = 40;
+
+interface SubjectDetail {
+  subject_id: string;
+  subject_name: string;
+  percentage: number;
+}
+
+interface ReportLearner {
+  learner_id: string;
+  average: number;
+  subject_details: SubjectDetail[];
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
 
@@ -30,20 +42,13 @@ export async function GET(request: Request) {
   }
 
   const { data: hasFeature, error: featureError } = await supabase
-    .rpc('org_has_feature', {
-      p_org_id: userRow.organization_id,
-      p_feature_key: 'promotion_wizard',
-    });
+    .rpc('org_has_feature', { p_org_id: userRow.organization_id, p_feature_key: 'promotion_wizard' });
 
   if (featureError) {
     return NextResponse.json({ error: 'Could not verify plan entitlement' }, { status: 500 });
   }
-
   if (!hasFeature) {
-    return NextResponse.json(
-      { error: 'Promotion wizard is not available on your current plan' },
-      { status: 403 }
-    );
+    return NextResponse.json({ error: 'Promotion wizard is not available on your current plan' }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -55,7 +60,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing fromGroupId, sessionId, or termId' }, { status: 400 });
   }
 
-  // Confirm the source group belongs to this org AND is actually a class (not a course/department group)
   const { data: group, error: groupError } = await supabase
     .from('groups')
     .select('id, name, organization_id, type')
@@ -65,16 +69,13 @@ export async function GET(request: Request) {
   if (groupError || !group) {
     return NextResponse.json({ error: 'Class not found' }, { status: 404 });
   }
-
   if (group.organization_id !== userRow.organization_id) {
     return NextResponse.json({ error: 'Class does not belong to your organization' }, { status: 403 });
   }
-
   if (group.type !== 'class') {
     return NextResponse.json({ error: 'Only class-type groups can be promoted' }, { status: 400 });
   }
 
-  // ✅ FIX: Explicit filter on report_status = 'published'
   const { data: report, error: reportError } = await supabase
     .from('reports')
     .select('id, report_data, report_status, locked')
@@ -82,32 +83,52 @@ export async function GET(request: Request) {
     .eq('session_id', sessionId)
     .eq('term_id', termId)
     .eq('type', 'broadsheet')
-    .eq('report_status', 'published') // ← Explicit filter, not just sort order
+    .eq('locked', true)
     .eq('deleted', false)
-    .order('created_at', { ascending: false }) // ← Sort by created_at, not published_at
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (reportError) {
     return NextResponse.json({ error: reportError.message }, { status: 500 });
   }
-
   if (!report) {
     return NextResponse.json(
-      { error: 'No published broadsheet found for this class and term. The report must be published before promotion can be previewed.' },
+      { error: 'Results for this class and term must be locked before promotion can be previewed. Use "Lock Results" first.' },
       { status: 404 }
     );
   }
 
-  // Check if the report is locked
-  if (!report.locked) {
-    return NextResponse.json(
-      { error: 'Results for this class and term must be locked before promotion can be previewed. Use "Lock Results" first.' },
-      { status: 400 }
-    );
+  const reportData = report.report_data as { learners: ReportLearner[] };
+  const reportLearners = reportData?.learners ?? [];
+
+  if (reportLearners.length === 0) {
+    return NextResponse.json({ group, recommendations: [] });
   }
 
-  // Get this org's promotion rules (fall back to sensible defaults)
+  const learnerIds = reportLearners.map((l) => l.learner_id);
+
+  const { data: activeLearners, error: learnersError } = await supabase
+    .from('learners')
+    .select('id, first_name, last_name, admission_number')
+    .in('id', learnerIds)
+    .eq('group_id', fromGroupId)
+    .eq('is_active', true);
+
+  if (learnersError) {
+    return NextResponse.json({ error: learnersError.message }, { status: 500 });
+  }
+
+  const activeLearnerMap = new Map((activeLearners ?? []).map((l) => [l.id, l]));
+
+  const { data: attendance } = await supabase
+    .from('attendance_summary')
+    .select('learner_id, rate')
+    .in('learner_id', learnerIds)
+    .eq('term_id', termId);
+
+  const attendanceMap = new Map((attendance ?? []).map((a) => [a.learner_id, a.rate]));
+
   const { data: rules } = await supabase
     .from('promotion_rules')
     .select('*')
@@ -119,81 +140,51 @@ export async function GET(request: Request) {
   const minAttendance = rules?.min_attendance ?? 75;
   const autoPromoteAll = rules?.auto_promote_all ?? false;
 
-  // Get every active learner in this class
-  const { data: learners, error: learnersError } = await supabase
-    .from('learners')
-    .select('id, first_name, last_name, admission_number')
-    .eq('group_id', fromGroupId)
-    .eq('is_active', true);
+  const recommendations = reportLearners
+    .filter((rl) => activeLearnerMap.has(rl.learner_id))
+    .map((rl) => {
+      const learnerInfo = activeLearnerMap.get(rl.learner_id)!;
+      const average = rl.average;
+      const failedSubjects = (rl.subject_details ?? []).filter(
+        (s) => s.percentage < GLOBAL_FAIL_THRESHOLD
+      ).length;
+      const attendanceRate = attendanceMap.get(rl.learner_id) ?? null;
 
-  if (learnersError) {
-    return NextResponse.json({ error: learnersError.message }, { status: 500 });
-  }
+      let recommended: 'promote' | 'repeat' | 'insufficient_data' = 'insufficient_data';
+      let reason = 'Missing attendance data for this term';
 
-  if (!learners || learners.length === 0) {
-    return NextResponse.json({ group, recommendations: [] });
-  }
-
-  const learnerIds = learners.map((l) => l.id);
-
-  // Pull attendance rate per learner for the relevant term(s) — using the materialized summary table
-  const { data: attendance } = await supabase
-    .from('attendance_summary')
-    .select('learner_id, rate')
-    .in('learner_id', learnerIds);
-
-  const attendanceMap = new Map((attendance ?? []).map((a) => [a.learner_id, a.rate]));
-
-  // Pull latest report/score average per learner — adjust table/column names to match your actual reports schema
-  const { data: reports } = await supabase
-    .from('reports')
-    .select('learner_id, average, failed_subjects_count')
-    .in('learner_id', learnerIds)
-    .eq('session_id', sessionId);
-
-  const reportMap = new Map((reports ?? []).map((r) => [r.learner_id, r]));
-
-  const recommendations = learners.map((learner) => {
-    const report = reportMap.get(learner.id);
-    const average = report?.average ?? null;
-    const failedSubjects = report?.failed_subjects_count ?? null;
-    const attendanceRate = attendanceMap.get(learner.id) ?? null;
-
-    let recommended: 'promote' | 'repeat' | 'insufficient_data' = 'insufficient_data';
-    let reason = 'Missing report or attendance data';
-
-    if (autoPromoteAll) {
-      recommended = 'promote';
-      reason = 'School policy: promote all students';
-    } else if (average !== null && failedSubjects !== null && attendanceRate !== null) {
-      const meetsAverage = average >= minAverage;
-      const meetsFailedSubjects = failedSubjects <= maxFailedSubjects;
-      const meetsAttendance = attendanceRate >= minAttendance;
-
-      if (meetsAverage && meetsFailedSubjects && meetsAttendance) {
+      if (autoPromoteAll) {
         recommended = 'promote';
-        reason = 'Meets all promotion criteria';
-      } else {
-        recommended = 'repeat';
-        const reasons: string[] = [];
-        if (!meetsAverage) reasons.push(`average ${average}% below minimum ${minAverage}%`);
-        if (!meetsFailedSubjects) reasons.push(`${failedSubjects} failed subjects exceeds max ${maxFailedSubjects}`);
-        if (!meetsAttendance) reasons.push(`attendance ${attendanceRate}% below minimum ${minAttendance}%`);
-        reason = reasons.join('; ');
-      }
-    }
+        reason = 'School policy: promote all students';
+      } else if (attendanceRate !== null) {
+        const meetsAverage = average >= minAverage;
+        const meetsFailedSubjects = failedSubjects <= maxFailedSubjects;
+        const meetsAttendance = attendanceRate >= minAttendance;
 
-    return {
-      learnerId: learner.id,
-      name: `${learner.first_name} ${learner.last_name}`,
-      admissionNumber: learner.admission_number,
-      average,
-      failedSubjects,
-      attendanceRate,
-      recommended,
-      reason,
-    };
-  });
+        if (meetsAverage && meetsFailedSubjects && meetsAttendance) {
+          recommended = 'promote';
+          reason = 'Meets all promotion criteria';
+        } else {
+          recommended = 'repeat';
+          const reasons: string[] = [];
+          if (!meetsAverage) reasons.push(`average ${average}% below minimum ${minAverage}%`);
+          if (!meetsFailedSubjects) reasons.push(`${failedSubjects} failed subjects exceeds max ${maxFailedSubjects}`);
+          if (!meetsAttendance) reasons.push(`attendance ${attendanceRate}% below minimum ${minAttendance}%`);
+          reason = reasons.join('; ');
+        }
+      }
+
+      return {
+        learnerId: rl.learner_id,
+        name: `${learnerInfo.first_name} ${learnerInfo.last_name}`,
+        admissionNumber: learnerInfo.admission_number,
+        average,
+        failedSubjects,
+        attendanceRate,
+        recommended,
+        reason,
+      };
+    });
 
   const summary = {
     total: recommendations.length,
@@ -202,5 +193,11 @@ export async function GET(request: Request) {
     insufficientData: recommendations.filter((r) => r.recommended === 'insufficient_data').length,
   };
 
-  return NextResponse.json({ group, rules: { minAverage, maxFailedSubjects, minAttendance, autoPromoteAll }, summary, recommendations });
+  return NextResponse.json({
+    group,
+    reportId: report.id,
+    rules: { minAverage, maxFailedSubjects, minAttendance, autoPromoteAll },
+    summary,
+    recommendations,
+  });
 }
