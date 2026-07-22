@@ -42,7 +42,9 @@ export async function GET(request: NextRequest) {
       const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
       return NextResponse.redirect(new URL(destination, request.url))
     }
-    return NextResponse.redirect(new URL('/access?error=invalid_code', request.url))
+    // TEMPORARY: surface the real error so we can diagnose
+    console.error('verifyOtp magiclink error:', error)
+    return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(error.message)}`, request.url))
   }
 
   // ── OAuth / code flow ──
