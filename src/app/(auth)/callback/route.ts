@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
     }
   )
 
-  // ── Password reset flow (token_hash + type=recovery) ──
   if (token_hash && type === 'recovery') {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
     if (!error) {
@@ -34,33 +33,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/reset-password?error=invalid_token', request.url))
   }
 
-  // ── Parent access code / magic link flow (token_hash + type=magiclink) ──
   if (token_hash && type === 'magiclink') {
     try {
       const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
       if (!error) {
         const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
         const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
-        return NextResponse.redirect(new URL(destination, request.url))
+        return NextResponse.redirect(new URL(`${destination}?debug=success`, request.url))
       }
-      console.error('verifyOtp magiclink error:', error)
-      return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(error.message)}`, request.url))
+      return NextResponse.redirect(
+        new URL(`/access?debug=verify_otp_error&msg=${encodeURIComponent(error.message)}&status=${error.status ?? 'none'}`, request.url)
+      )
     } catch (err) {
-      console.error('verifyOtp magiclink THREW:', err)
-      return NextResponse.redirect(new URL(`/access?error=${encodeURIComponent(String(err))}`, request.url))
+      return NextResponse.redirect(
+        new URL(`/access?debug=verify_otp_threw&msg=${encodeURIComponent(String(err))}`, request.url)
+      )
     }
   }
 
-  // ── OAuth / code flow ──
   if (code) {
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
       const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
       const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
-      return NextResponse.redirect(new URL(destination, request.url))
+      return NextResponse.redirect(new URL(`${destination}?debug=success_code`, request.url))
     }
+    return NextResponse.redirect(new URL(`/login?debug=code_error&msg=${encodeURIComponent(error.message)}`, request.url))
   }
 
-  // Fallback
-  return NextResponse.redirect(new URL('/login?error=auth_failed', request.url))
+  // Fallback — this branch now tells us if token_hash/type never matched at all
+  return NextResponse.redirect(
+    new URL(`/login?error=auth_failed&debug=fallback_hit&had_code=${!!code}&had_token_hash=${!!token_hash}&had_type=${type ?? 'none'}`, request.url)
+  )
 }
