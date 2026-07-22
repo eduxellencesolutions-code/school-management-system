@@ -25,34 +25,6 @@ export async function GET() {
     return NextResponse.json({ error: 'No parent account found for this user' }, { status: 404 });
   }
 
-  // ============================================
-  // TEMPORARY DEBUG - Bypasses everything else
-  // ============================================
-  const { data: debugLinks, error: debugLinksError } = await supabase
-    .from('parent_learner_links')
-    .select('*')
-    .eq('parent_id', parentAccount.id);
-
-  const { data: debugLearners, error: debugLearnersError } = await supabase
-    .from('learners')
-    .select('id, first_name, last_name, group_id, organization_id')
-    .in('id', ['13554512-df8d-4e56-9537-b53197bd2ba4']);
-
-  return NextResponse.json({
-    debug: {
-      auth_uid: user.id,
-      parent_account_id: parentAccount.id,
-      raw_links_query_result: debugLinks,
-      raw_links_query_error: debugLinksError,
-      raw_learners_query_result: debugLearners,
-      raw_learners_query_error: debugLearnersError,
-    }
-  });
-
-  // ============================================
-  // ORIGINAL CODE BELOW (commented out for debug)
-  // ============================================
-  /*
   const { data: links, error: linksError } = await supabase
     .from('parent_learner_links')
     .select('learner_id, relationship')
@@ -79,54 +51,64 @@ export async function GET() {
 
   const groupIds = [...new Set((learners ?? []).map((l) => l.group_id).filter(Boolean))];
 
-  const { data: groups } = await supabase
+  const { data: groups, error: groupsError } = await supabase
     .from('groups')
     .select('id, name')
     .in('id', groupIds.length > 0 ? groupIds : ['00000000-0000-0000-0000-000000000000']);
 
   const groupMap = new Map((groups ?? []).map((g) => [g.id, g.name]));
 
-  const { data: attendance } = await supabase
+  const { data: attendance, error: attendanceError } = await supabase
     .from('attendance_summary')
     .select('learner_id, rate')
     .in('learner_id', learnerIds);
 
   const attendanceMap = new Map((attendance ?? []).map((a) => [a.learner_id, a.rate]));
 
-  const childrenWithAverages = await Promise.all(
-    (learners ?? []).map(async (learner) => {
-      let average: number | null = null;
+  try {
+    const childrenWithAverages = await Promise.all(
+      (learners ?? []).map(async (learner) => {
+        let average: number | null = null;
 
-      if (learner.group_id) {
-        const { data: report } = await supabase
-          .from('reports')
-          .select('report_data')
-          .eq('group_id', learner.group_id)
-          .eq('type', 'broadsheet')
-          .eq('report_status', 'published')
-          .eq('deleted', false)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        if (learner.group_id) {
+          const { data: report } = await supabase
+            .from('reports')
+            .select('report_data')
+            .eq('group_id', learner.group_id)
+            .eq('type', 'broadsheet')
+            .eq('report_status', 'published')
+            .eq('deleted', false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (report?.report_data) {
-          const reportData = report.report_data as { learners: ReportLearner[] };
-          const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
-          if (entry) average = entry.average;
+          if (report?.report_data) {
+            const reportData = report.report_data as { learners: ReportLearner[] };
+            const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
+            if (entry) average = entry.average;
+          }
         }
-      }
 
-      return {
-        id: learner.id,
-        name: `${learner.first_name} ${learner.last_name}`,
-        admissionNumber: learner.admission_number,
-        className: learner.group_id ? groupMap.get(learner.group_id) ?? null : null,
-        average,
-        attendanceRate: attendanceMap.get(learner.id) ?? null,
-      };
-    })
-  );
+        return {
+          id: learner.id,
+          name: `${learner.first_name} ${learner.last_name}`,
+          admissionNumber: learner.admission_number,
+          className: learner.group_id ? groupMap.get(learner.group_id) ?? null : null,
+          average,
+          attendanceRate: attendanceMap.get(learner.id) ?? null,
+        };
+      })
+    );
 
-  return NextResponse.json({ parent: parentAccount, children: childrenWithAverages });
-  */
+    return NextResponse.json({
+      parent: parentAccount,
+      children: childrenWithAverages,
+      debug: { groupsError, attendanceError, groupMapSize: groupMap.size },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: 'Enrichment step threw', debug_message: String(err) },
+      { status: 500 }
+    );
+  }
 }
