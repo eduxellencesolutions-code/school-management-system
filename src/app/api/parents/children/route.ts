@@ -25,6 +25,27 @@ export async function GET() {
     return NextResponse.json({ error: 'No parent account found for this user' }, { status: 404 });
   }
 
+  // ============================================
+  // TEMPORARY DEBUG - Bypasses everything else
+  // ============================================
+  const { data: debugLinks, error: debugLinksError } = await supabase
+    .from('parent_learner_links')
+    .select('*')
+    .eq('parent_id', parentAccount.id);
+
+  return NextResponse.json({
+    debug: {
+      auth_uid: user.id,
+      parent_account_id: parentAccount.id,
+      raw_links_query_result: debugLinks,
+      raw_links_query_error: debugLinksError,
+    }
+  });
+
+  // ============================================
+  // ORIGINAL CODE BELOW (commented out for debug)
+  // ============================================
+  /*
   const { data: links, error: linksError } = await supabase
     .from('parent_learner_links')
     .select('learner_id, relationship')
@@ -100,4 +121,5 @@ export async function GET() {
   );
 
   return NextResponse.json({ parent: parentAccount, children: childrenWithAverages });
+  */
 }
