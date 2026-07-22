@@ -57,8 +57,8 @@ export async function POST(request: Request) {
 
   // Build our own confirm URL using the token_hash, rather than trusting Supabase's
   // action_link — that link uses implicit/hash-fragment flow which our server route
-  // can't read. This gives us a query-param URL our /auth/confirm route can process.
-  const confirmUrl = `https://results.eduxellence.org/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=magiclink`;
+  // can't read. This gives us a query-param URL our /auth/callback route can process.
+  const confirmUrl = `https://results.eduxellence.org/auth/callback?token_hash=${linkData.properties.hashed_token}&type=magiclink`;
 
   return NextResponse.json({
     success: true,
