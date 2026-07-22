@@ -74,7 +74,7 @@ export default function ParentDashboard() {
                   <TrendingUp size={12} /> Average
                 </div>
                 <p className="text-sm font-semibold text-ink font-mono">
-                  {child.average !== null ? `${child.average}%` : 'Not yet published'}
+                  {child.average !== null && child.average !== undefined ? `${child.average}%` : 'Not yet published'}
                 </p>
               </div>
               <div className="text-right">
@@ -82,7 +82,7 @@ export default function ParentDashboard() {
                   <CalendarCheck size={12} /> Attendance
                 </div>
                 <p className="text-sm font-semibold text-ink font-mono">
-                  {child.attendanceRate !== null ? `${child.attendanceRate}%` : '—'}
+                  {child.attendanceRate !== null && child.attendanceRate !== undefined ? `${child.attendanceRate}%` : '—'}
                 </p>
               </div>
             </div>
