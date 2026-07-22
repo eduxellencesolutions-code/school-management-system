@@ -49,9 +49,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not resolve parent identity' }, { status: 500 });
   }
 
+  // ✅ FIX: Added redirectTo option
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email: authUser.user.email,
+    options: {
+      redirectTo: 'https://results.eduxellence.org/auth/confirm',
+    },
   });
 
   if (linkError || !linkData?.properties?.action_link) {
