@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 // POST /api/reports/lock
-// Body: { groupId, sessionId, termId }
+// Body: { groupId, sessionId, termId, dryRun }
 // Admin-only. Validates completeness, then locks the broadsheet for this class/term —
 // making it the official, promotion-eligible academic record.
 export async function POST(request: Request) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { groupId, sessionId, termId } = body;
+  const { groupId, sessionId, termId, dryRun } = body; // ← Added dryRun
 
   if (!groupId || !sessionId || !termId) {
     return NextResponse.json({ error: 'Missing groupId, sessionId, or termId' }, { status: 400 });
@@ -142,11 +142,17 @@ export async function POST(request: Request) {
     }
   }
 
+  // ✅ Updated: Include ready: false in problem response
   if (problems.length > 0) {
     return NextResponse.json(
-      { error: 'Cannot lock results — required data is incomplete', problems },
+      { ready: false, error: 'Cannot lock results — required data is incomplete', problems },
       { status: 422 }
     );
+  }
+
+  // ✅ Dry-run: admin is just checking readiness, not committing to lock
+  if (dryRun) {
+    return NextResponse.json({ ready: true, reportId: report.id });
   }
 
   const { error: lockError } = await supabase
