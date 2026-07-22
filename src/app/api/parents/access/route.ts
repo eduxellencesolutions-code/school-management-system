@@ -1,14 +1,11 @@
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 // POST /api/parents/access
 // Body: { code }
 // Public endpoint — no auth required to call this, since this IS the login mechanism.
-// Resolves an access code to a parent, then issues a one-time sign-in link for their
-// real (never-seen) auth identity.
+// Must use the admin client: no one is authenticated yet, so RLS would block this lookup.
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const admin = createAdminClient();
 
   const body = await request.json();
@@ -18,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please enter an access code' }, { status: 400 });
   }
 
-  const { data: parent, error: parentError } = await supabase
+  const { data: parent, error: parentError } = await admin
     .from('parent_accounts')
     .select('id, full_name, auth_user_id, access_code_active')
     .eq('access_code', code)
@@ -42,14 +39,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Look up the ghost email tied to this auth identity, so we can generate a sign-in link for it
   const { data: authUser, error: authLookupError } = await admin.auth.admin.getUserById(parent.auth_user_id);
 
   if (authLookupError || !authUser?.user?.email) {
     return NextResponse.json({ error: 'Could not resolve parent identity' }, { status: 500 });
   }
 
-  // ✅ FIX: Added redirectTo option
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email: authUser.user.email,
