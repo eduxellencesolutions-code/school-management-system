@@ -22,8 +22,6 @@ export default function ParentAccessPage() {
     const data = await res.json()
 
     if (data.success && data.actionLink) {
-      // Sends the browser to Supabase's verification URL, which sets the real session
-      // cookie and redirects back into the app — the parent never sees a password screen.
       window.location.href = data.actionLink
     } else {
       setError(data.error ?? 'Could not verify this code.')
