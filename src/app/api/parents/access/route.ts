@@ -45,21 +45,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not resolve parent identity' }, { status: 500 });
   }
 
+  // ✅ FIX: Generate magic link without redirectTo, use token_hash manually
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email: authUser.user.email,
-    options: {
-      redirectTo: 'https://results.eduxellence.org/auth/confirm',
-    },
   });
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return NextResponse.json({ error: 'Could not generate sign-in session' }, { status: 500 });
   }
 
+  // Build our own confirm URL using the token_hash, rather than trusting Supabase's
+  // action_link — that link uses implicit/hash-fragment flow which our server route
+  // can't read. This gives us a query-param URL our /auth/confirm route can process.
+  const confirmUrl = `https://results.eduxellence.org/auth/confirm?token_hash=${linkData.properties.hashed_token}&type=magiclink`;
+
   return NextResponse.json({
     success: true,
-    actionLink: linkData.properties.action_link,
+    actionLink: confirmUrl,
     parentName: parent.full_name,
   });
 }
