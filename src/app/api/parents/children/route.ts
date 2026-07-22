@@ -51,64 +51,53 @@ export async function GET() {
 
   const groupIds = [...new Set((learners ?? []).map((l) => l.group_id).filter(Boolean))];
 
-  const { data: groups, error: groupsError } = await supabase
+  const { data: groups } = await supabase
     .from('groups')
     .select('id, name')
     .in('id', groupIds.length > 0 ? groupIds : ['00000000-0000-0000-0000-000000000000']);
 
   const groupMap = new Map((groups ?? []).map((g) => [g.id, g.name]));
 
-  const { data: attendance, error: attendanceError } = await supabase
+  const { data: attendance } = await supabase
     .from('attendance_summary')
     .select('learner_id, rate')
     .in('learner_id', learnerIds);
 
   const attendanceMap = new Map((attendance ?? []).map((a) => [a.learner_id, a.rate]));
 
-  try {
-    const childrenWithAverages = await Promise.all(
-      (learners ?? []).map(async (learner) => {
-        let average: number | null = null;
+  const childrenWithAverages = await Promise.all(
+    (learners ?? []).map(async (learner) => {
+      let average: number | null = null;
 
-        if (learner.group_id) {
-          const { data: report } = await supabase
-            .from('reports')
-            .select('report_data')
-            .eq('group_id', learner.group_id)
-            .eq('type', 'broadsheet')
-            .eq('report_status', 'published')
-            .eq('deleted', false)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      if (learner.group_id) {
+        const { data: report } = await supabase
+          .from('reports')
+          .select('report_data')
+          .eq('group_id', learner.group_id)
+          .eq('type', 'broadsheet')
+          .eq('report_status', 'published')
+          .eq('deleted', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-          if (report?.report_data) {
-            const reportData = report.report_data as { learners: ReportLearner[] };
-            const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
-            if (entry) average = entry.average;
-          }
+        if (report?.report_data) {
+          const reportData = report.report_data as { learners: ReportLearner[] };
+          const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
+          if (entry) average = entry.average;
         }
+      }
 
-        return {
-          id: learner.id,
-          name: `${learner.first_name} ${learner.last_name}`,
-          admissionNumber: learner.admission_number,
-          className: learner.group_id ? groupMap.get(learner.group_id) ?? null : null,
-          average,
-          attendanceRate: attendanceMap.get(learner.id) ?? null,
-        };
-      })
-    );
+      return {
+        id: learner.id,
+        name: `${learner.first_name} ${learner.last_name}`,
+        admissionNumber: learner.admission_number,
+        className: learner.group_id ? groupMap.get(learner.group_id) ?? null : null,
+        average,
+        attendanceRate: attendanceMap.get(learner.id) ?? null,
+      };
+    })
+  );
 
-    return NextResponse.json({
-      parent: parentAccount,
-      children: childrenWithAverages,
-      debug: { groupsError, attendanceError, groupMapSize: groupMap.size },
-    });
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Enrichment step threw', debug_message: String(err) },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ parent: parentAccount, children: childrenWithAverages });
 }
