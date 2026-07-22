@@ -54,7 +54,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Only class-type groups can be locked' }, { status: 400 });
   }
 
-  // Step 1: find the published broadsheet for this class/term
   const { data: report, error: reportError } = await supabase
     .from('reports')
     .select('id, report_data, report_status, locked')
@@ -87,11 +86,8 @@ export async function POST(request: Request) {
   const reportLearners = reportData?.learners ?? [];
   const learnerIds = reportLearners.map((l) => l.learner_id);
 
-  // Step 2: completeness checks — collect ALL problems, don't stop at the first one,
-  // so the admin sees the full picture in one pass (per the original "Cannot Publish" UX spec).
   const problems: string[] = [];
 
-  // Active learners actually in the class right now
   const { data: activeLearners } = await supabase
     .from('learners')
     .select('id, first_name, last_name')
@@ -108,7 +104,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Attendance completeness
   const { data: attendance } = await supabase
     .from('attendance_summary')
     .select('learner_id')
@@ -121,7 +116,6 @@ export async function POST(request: Request) {
     problems.push(`${missingAttendance.length} student(s) have no attendance record for this term`);
   }
 
-  // Affective + psychomotor completeness (only enforced if the org's plan includes this feature)
   const { data: hasAffectiveFeature } = await supabase.rpc('org_has_feature', {
     p_org_id: userRow.organization_id,
     p_feature_key: 'affective_psychomotor',
@@ -154,15 +148,11 @@ export async function POST(request: Request) {
 
   if (problems.length > 0) {
     return NextResponse.json(
-      {
-        error: 'Cannot lock results — required data is incomplete',
-        problems,
-      },
+      { error: 'Cannot lock results — required data is incomplete', problems },
       { status: 422 }
     );
   }
 
-  // Step 3: all checks passed — lock it
   const { error: lockError } = await supabase
     .from('reports')
     .update({
