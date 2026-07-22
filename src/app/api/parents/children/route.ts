@@ -33,12 +33,19 @@ export async function GET() {
     .select('*')
     .eq('parent_id', parentAccount.id);
 
+  const { data: debugLearners, error: debugLearnersError } = await supabase
+    .from('learners')
+    .select('id, first_name, last_name, group_id, organization_id')
+    .in('id', ['13554512-df8d-4e56-9537-b53197bd2ba4']);
+
   return NextResponse.json({
     debug: {
       auth_uid: user.id,
       parent_account_id: parentAccount.id,
       raw_links_query_result: debugLinks,
       raw_links_query_error: debugLinksError,
+      raw_learners_query_result: debugLearners,
+      raw_learners_query_error: debugLearnersError,
     }
   });
 
