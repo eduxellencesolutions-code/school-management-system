@@ -71,6 +71,7 @@ export default function Sidebar({ user, org }: Props) {
 
   const governanceNav = [
     ...(isAdmin ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
+    ...(isAdmin ? [{ label: 'Parent Management', href: '/admin/parents', icon: Users }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
   ]
 
