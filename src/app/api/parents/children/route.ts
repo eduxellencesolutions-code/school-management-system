@@ -65,27 +65,32 @@ export async function GET() {
 
   const attendanceMap = new Map((attendance ?? []).map((a) => [a.learner_id, a.rate]));
 
+  // ✅ FIX: Search every published broadsheet in this org, most recent first,
+  // and use whichever one actually contains this learner — not just the report
+  // for their CURRENT class. A promoted/repeated student's most recent result
+  // often lives in a class they've since left.
   const childrenWithAverages = await Promise.all(
     (learners ?? []).map(async (learner) => {
       let average: number | null = null;
 
-      if (learner.group_id) {
-        const { data: report } = await supabase
-          .from('reports')
-          .select('report_data')
-          .eq('group_id', learner.group_id)
-          .eq('type', 'broadsheet')
-          .eq('report_status', 'published')
-          .eq('deleted', false)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const { data: candidateReports } = await supabase
+        .from('reports')
+        .select('report_data')
+        .eq('type', 'broadsheet')
+        .eq('report_status', 'published')
+        .eq('deleted', false)
+        .eq('organization_id', learner.organization_id)
+        .order('published_at', { ascending: false });
 
-        if (report?.report_data) {
-          const reportData = report.report_data as { learners: ReportLearner[] };
-          const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
-          if (entry) average = entry.average;
-        }
+      const report = (candidateReports ?? []).find((r) => {
+        const data = r.report_data as { learners?: Array<{ learner_id: string }> };
+        return (data?.learners ?? []).some((l) => l.learner_id === learner.id);
+      });
+
+      if (report?.report_data) {
+        const reportData = report.report_data as { learners: ReportLearner[] };
+        const entry = (reportData.learners ?? []).find((rl) => rl.learner_id === learner.id);
+        if (entry) average = entry.average;
       }
 
       return {
