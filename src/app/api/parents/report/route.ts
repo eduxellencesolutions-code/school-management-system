@@ -1,19 +1,21 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+interface ComponentScore {
+  name: string;
+  score: number;
+  max_score: number;
+}
+
 interface SubjectDetail {
   subject_id: string;
   subject_name: string;
   grade: string;
   remark: string;
   total: number;
+  max_score: number;
   percentage: number;
-  component_scores: Array<{
-    name: string;
-    score: number;
-    max_score: number;
-    percentage: number;
-  }>;
+  component_scores: ComponentScore[];
 }
 
 interface ReportLearnerEntry {
@@ -21,11 +23,17 @@ interface ReportLearnerEntry {
   first_name: string;
   last_name: string;
   average: number;
+  overall_total: number;
   percentage: number;
   position: number;
   grade: string;
   remark: string;
   subject_details: SubjectDetail[];
+}
+
+interface StudentRemarkEntry {
+  teacher_remark?: string;
+  principal_remark?: string;
 }
 
 export async function GET(request: Request) {
@@ -66,7 +74,7 @@ export async function GET(request: Request) {
 
   const { data: learner, error: learnerError } = await supabase
     .from('learners')
-    .select('id, first_name, last_name, admission_number, group_id, organization_id')
+    .select('id, first_name, last_name, admission_number, gender, group_id, organization_id')
     .eq('id', learnerId)
     .single();
 
@@ -74,17 +82,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 });
   }
 
-  // ✅ FIX: Look up group name if learner has a group_id
-  const { data: group } = learner.group_id
+  const { data: currentGroup } = learner.group_id
     ? await supabase.from('groups').select('name').eq('id', learner.group_id).single()
     : { data: null };
 
-  // ✅ FIX: Search every published broadsheet that actually contains this learner,
-  // not just the one for their CURRENT class. A promoted/repeated student's most
-  // recent report often lives in a class they've since left.
   const { data: candidateReports, error: reportError } = await supabase
     .from('reports')
-    .select('id, group_id, report_data, published_at')
+    .select('id, group_id, term_id, session_id, report_data, student_remarks, published_at')
     .eq('type', 'broadsheet')
     .eq('report_status', 'published')
     .eq('deleted', false)
@@ -95,7 +99,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: reportError.message }, { status: 500 });
   }
 
-  // Find the first report that actually contains this learner
   const report = (candidateReports ?? []).find((r) => {
     const data = r.report_data as { learners?: Array<{ learner_id: string }> };
     return (data?.learners ?? []).some((l) => l.learner_id === learnerId);
@@ -103,7 +106,7 @@ export async function GET(request: Request) {
 
   if (!report) {
     return NextResponse.json({
-      learner: { name: `${learner.first_name} ${learner.last_name}`, className: group?.name ?? null },
+      learner: { name: `${learner.first_name} ${learner.last_name}`, className: currentGroup?.name ?? null },
       report: null,
       message: 'No published result is available for this student yet.',
     });
@@ -114,33 +117,82 @@ export async function GET(request: Request) {
 
   if (!entry) {
     return NextResponse.json({
-      learner: { name: `${learner.first_name} ${learner.last_name}`, className: group?.name ?? null },
+      learner: { name: `${learner.first_name} ${learner.last_name}`, className: currentGroup?.name ?? null },
       report: null,
       message: 'This student was not found in the published result.',
     });
   }
 
-  // ✅ FIX: Show the class the report was actually generated for,
-  // since that may differ from the student's current class if they've since been promoted.
   const { data: reportGroup } = await supabase
     .from('groups')
-    .select('name')
+    .select('name, instructor_id')
     .eq('id', report.group_id)
     .single();
 
+  const { data: teacher } = reportGroup?.instructor_id
+    ? await supabase.from('users').select('name').eq('id', reportGroup.instructor_id).single()
+    : { data: null };
+
+  const { data: term } = await supabase
+    .from('terms')
+    .select('name, session:academic_sessions(name)')
+    .eq('id', report.term_id)
+    .single();
+
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name, motto, address, logo_url, principal_name, principal_title, principal_signature_url, teacher_signature_url')
+    .eq('id', learner.organization_id)
+    .single();
+
+  const remarksMap = (report.student_remarks ?? {}) as Record<string, StudentRemarkEntry>;
+  const studentRemarks = remarksMap[learnerId] ?? null;
+
+  const classSize = (reportData.learners ?? []).length;
+  const classAverageTotal =
+    classSize > 0
+      ? (reportData.learners ?? []).reduce((sum, l) => sum + (l.overall_total ?? 0), 0) / classSize
+      : null;
+
   return NextResponse.json({
+    school: {
+      name: org?.name ?? null,
+      motto: org?.motto ?? null,
+      address: org?.address ?? null,
+      logoUrl: org?.logo_url ?? null,
+    },
     learner: {
       name: `${learner.first_name} ${learner.last_name}`,
       admissionNumber: learner.admission_number,
-      className: reportGroup?.name ?? group?.name ?? null,
+      gender: learner.gender,
+      className: reportGroup?.name ?? currentGroup?.name ?? null,
+    },
+    term: {
+      name: term?.name ?? null,
+      sessionName: (term?.session as unknown as { name: string } | null)?.name ?? null,
     },
     report: {
       average: entry.average,
+      grandTotal: entry.overall_total,
       position: entry.position,
+      classSize,
+      classAverageTotal,
       grade: entry.grade,
       remark: entry.remark,
       publishedAt: report.published_at,
       subjects: entry.subject_details,
     },
+    remarks: {
+      teacher: studentRemarks?.teacher_remark ?? null,
+      principal: studentRemarks?.principal_remark ?? null,
+    },
+    signatories: {
+      teacherName: teacher?.name ?? null,
+      teacherSignatureUrl: org?.teacher_signature_url ?? null,
+      principalName: org?.principal_name ?? null,
+      principalTitle: org?.principal_title ?? 'Head Teacher',
+      principalSignatureUrl: org?.principal_signature_url ?? null,
+    },
+    reportId: report.id,
   });
 }
