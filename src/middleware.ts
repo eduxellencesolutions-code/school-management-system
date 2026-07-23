@@ -6,7 +6,6 @@ export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const { pathname } = request.nextUrl
 
-  // ✅ Admin subdomain — route into the super-admin app, before anything else
   if (hostname.startsWith('admin.')) {
     const url = request.nextUrl.clone()
     if (url.pathname === '/' || url.pathname === '/dashboard') {
@@ -15,7 +14,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url)
   }
 
-  // ✅ Let ALL public routes through immediately
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -25,14 +23,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/parent') ||
-    pathname.startsWith('/access') ||   // ← Added
+    pathname.startsWith('/access') ||
     pathname === '/' ||
     pathname.includes('.')
   ) {
     return NextResponse.next()
   }
 
-  // ✅ Only run session check for protected routes
   let response = NextResponse.next({ request })
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,7 +37,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
@@ -51,11 +48,9 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
-
   return response
 }
 
