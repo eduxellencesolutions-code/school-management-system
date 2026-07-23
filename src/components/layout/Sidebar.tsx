@@ -73,6 +73,7 @@ export default function Sidebar({ user, org }: Props) {
     ...(isAdmin ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
     ...(isAdmin ? [{ label: 'Parent Management', href: '/admin/parents', icon: Users }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
+    ...(isAdmin && has('promotion') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
