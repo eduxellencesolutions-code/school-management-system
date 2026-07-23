@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, User, CalendarCheck, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
 
 interface Child {
   id: string
@@ -86,6 +87,11 @@ export default function ParentDashboard() {
                 </p>
               </div>
             </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-surface-100 flex justify-end">
+            <Link href={`/parent/report/${child.id}`} className="btn-primary btn-sm btn">
+              View Report Card
+            </Link>
           </div>
         </div>
       ))}
