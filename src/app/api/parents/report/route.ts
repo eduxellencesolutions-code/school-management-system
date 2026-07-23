@@ -133,11 +133,16 @@ export async function GET(request: Request) {
     ? await supabase.from('users').select('name').eq('id', reportGroup.instructor_id).single()
     : { data: null };
 
+  // ✅ FIX: Fetch term name and session separately
   const { data: term } = await supabase
     .from('terms')
-    .select('name, session:academic_sessions(name)')
+    .select('name, session_id')
     .eq('id', report.term_id)
     .single();
+
+  const { data: session } = term?.session_id
+    ? await supabase.from('academic_sessions').select('name').eq('id', term.session_id).single()
+    : { data: null };
 
   const { data: org } = await supabase
     .from('organizations')
@@ -167,9 +172,10 @@ export async function GET(request: Request) {
       gender: learner.gender,
       className: reportGroup?.name ?? currentGroup?.name ?? null,
     },
+    // ✅ FIX: Updated term object with sessionName from separate query
     term: {
       name: term?.name ?? null,
-      sessionName: (term?.session as unknown as { name: string } | null)?.name ?? null,
+      sessionName: session?.name ?? null,
     },
     report: {
       average: entry.average,
