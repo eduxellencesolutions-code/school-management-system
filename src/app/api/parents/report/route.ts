@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
   const { data: learner, error: learnerError } = await supabase
     .from('learners')
-    .select('id, first_name, last_name, admission_number, group_id')
+    .select('id, first_name, last_name, admission_number, group_id, organization_id')
     .eq('id', learnerId)
     .single();
 
@@ -74,36 +74,38 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Student not found' }, { status: 404 });
   }
 
-  if (!learner.group_id) {
-    return NextResponse.json({ error: 'This student is not currently assigned to a class' }, { status: 404 });
-  }
+  // ✅ FIX: Look up group name if learner has a group_id
+  const { data: group } = learner.group_id
+    ? await supabase.from('groups').select('name').eq('id', learner.group_id).single()
+    : { data: null };
 
-  const { data: group } = await supabase
-    .from('groups')
-    .select('name')
-    .eq('id', learner.group_id)
-    .single();
-
-  const { data: report, error: reportError } = await supabase
+  // ✅ FIX: Search every published broadsheet that actually contains this learner,
+  // not just the one for their CURRENT class. A promoted/repeated student's most
+  // recent report often lives in a class they've since left.
+  const { data: candidateReports, error: reportError } = await supabase
     .from('reports')
-    .select('id, report_data, published_at')
-    .eq('group_id', learner.group_id)
+    .select('id, group_id, report_data, published_at')
     .eq('type', 'broadsheet')
     .eq('report_status', 'published')
     .eq('deleted', false)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq('organization_id', learner.organization_id)
+    .order('published_at', { ascending: false });
 
   if (reportError) {
     return NextResponse.json({ error: reportError.message }, { status: 500 });
   }
 
+  // Find the first report that actually contains this learner
+  const report = (candidateReports ?? []).find((r) => {
+    const data = r.report_data as { learners?: Array<{ learner_id: string }> };
+    return (data?.learners ?? []).some((l) => l.learner_id === learnerId);
+  });
+
   if (!report) {
     return NextResponse.json({
       learner: { name: `${learner.first_name} ${learner.last_name}`, className: group?.name ?? null },
       report: null,
-      message: 'No published result is available for this term yet.',
+      message: 'No published result is available for this student yet.',
     });
   }
 
@@ -118,11 +120,19 @@ export async function GET(request: Request) {
     });
   }
 
+  // ✅ FIX: Show the class the report was actually generated for,
+  // since that may differ from the student's current class if they've since been promoted.
+  const { data: reportGroup } = await supabase
+    .from('groups')
+    .select('name')
+    .eq('id', report.group_id)
+    .single();
+
   return NextResponse.json({
     learner: {
       name: `${learner.first_name} ${learner.last_name}`,
       admissionNumber: learner.admission_number,
-      className: group?.name ?? null,
+      className: reportGroup?.name ?? group?.name ?? null,
     },
     report: {
       average: entry.average,
