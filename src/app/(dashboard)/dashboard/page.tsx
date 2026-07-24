@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react'
 import { getTeacherDashboardData } from '@/lib/teacher-utils'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
+import FeatureCards from '@/components/dashboard/FeatureCards'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -17,6 +18,15 @@ export default async function DashboardPage() {
   const orgId = user?.organization_id
   const userRole = user?.role || 'teacher'
   const currentPlanKey = user?.subscription_plan ?? 'free'
+
+  const PLAN_FEATURES: Record<string, string[]> = {
+    free: [],
+    small_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion'],
+    standard_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion', 'homework'],
+    premium_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion', 'homework', 'fees'],
+  }
+  const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
+  const planFeatures = (!orgId) ? [] : (PLAN_FEATURES[orgPlanKey] ?? [])
 
   // ── Determine user type ──
   const isSoloTeacher = !orgId
@@ -354,6 +364,8 @@ export default async function DashboardPage() {
           <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
         )}
       </div>
+
+      <FeatureCards isAdmin={!!isInstitutionAdmin} isSoloTeacher={isSoloTeacher} planFeatures={planFeatures} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, href, color, bg }) => (
