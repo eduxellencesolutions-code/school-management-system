@@ -365,7 +365,7 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <FeatureCards isAdmin={!!isInstitutionAdmin} isSoloTeacher={isSoloTeacher} planFeatures={planFeatures} />
+      <FeatureCards isAdmin={!!isInstitutionAdmin} isSoloTeacher={isSoloTeacher} planFeatures={planFeatures} currentPlanKey={orgPlanKey} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, href, color, bg }) => (
