@@ -137,12 +137,18 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
 
   if (visibleCards.length === 0) return null
 
-  function handleClick(card: typeof allCards[number]) {
-    const unlocked = card.key === 'lock_results' || card.key === 'parent_management' || card.key === 'announcements'
-      ? true // these aren't plan-gated features, just admin-gated — always available to admins
-      : has(card.key)
+  // ✅ FIX 1: isUnlocked helper (fixes Promotion Rules)
+  const ALWAYS_UNLOCKED_FOR_ADMIN = ['lock_results', 'parent_management', 'announcements']
 
-    if (unlocked) {
+  function isUnlocked(card: typeof allCards[number]): boolean {
+    if (ALWAYS_UNLOCKED_FOR_ADMIN.includes(card.key)) return true
+    if (card.key === 'promotion_rules') return has('promotion')
+    return has(card.key)
+  }
+
+  // ✅ FIX 2: use the shared helper in handleClick
+  function handleClick(card: typeof allCards[number]) {
+    if (isUnlocked(card)) {
       router.push(card.href)
     } else {
       setLockedFeature({ label: card.label, requiredPlan: card.requiredPlan ?? 'a higher plan' })
@@ -157,9 +163,8 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 p-4">
           {visibleCards.map((card) => {
-            const unlocked = card.key === 'lock_results' || card.key === 'parent_management' || card.key === 'announcements'
-              ? true
-              : has(card.key)
+            // ✅ FIX 3: use the shared helper in render
+            const unlocked = isUnlocked(card)
             const Icon = card.icon
 
             return (
@@ -213,7 +218,8 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
               <button onClick={() => setLockedFeature(null)} className="btn-secondary btn-sm btn flex-1">
                 Maybe later
               </button>
-              <button onClick={() => router.push('/settings/billing')} className="btn-primary btn-sm btn flex-1">
+              {/* ✅ FIX 4: correct "View Plans" link */}
+              <button onClick={() => router.push('/settings#billing')} className="btn-primary btn-sm btn flex-1">
                 View Plans
               </button>
             </div>
