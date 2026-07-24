@@ -88,7 +88,10 @@ export default function ParentDashboard() {
               </div>
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-surface-100 flex justify-end">
+          <div className="mt-4 pt-4 border-t border-surface-100 flex justify-end gap-2">
+            <Link href={`/parent/history/${child.id}`} className="btn-secondary btn-sm btn">
+              Academic History
+            </Link>
             <Link href={`/parent/report/${child.id}`} className="btn-primary btn-sm btn">
               View Report Card
             </Link>
