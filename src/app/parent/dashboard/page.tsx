@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ParentDashboard from '@/components/parents/ParentDashboard'
+import ParentAnnouncements from '@/components/parents/ParentAnnouncements'
 
 export default async function ParentDashboardPage() {
   const supabase = await createClient()
@@ -24,6 +25,7 @@ export default async function ParentDashboardPage() {
           <h1 className="page-title">Welcome, {parentAccount.full_name}</h1>
           <p className="page-subtitle">Here's how your children are doing this term.</p>
         </div>
+        <ParentAnnouncements />
         <ParentDashboard />
       </div>
     </div>

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
-  Lock, TrendingUp,
+  Lock, TrendingUp, Megaphone,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -60,6 +60,7 @@ export default function Sidebar({ user, org }: Props) {
     { label: 'Students', href: '/students', icon: Users },
     { label: 'Scores', href: '/scores', icon: ClipboardList },
     { label: 'Reports', href: '/reports', icon: FileText },
+    ...(isAdmin ? [{ label: 'Announcements', href: '/announcements', icon: Megaphone }] : []),
   ]
 
   const studentLifeNav = [
