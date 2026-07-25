@@ -347,6 +347,59 @@ export default async function DashboardPage() {
     roleDisplay = isClassTeacher ? 'Class Teacher' : 'Subject Teacher'
   }
 
+  // ── Fetch full teaching assignments + custom role assignments for the banner ──
+  // This runs for ANY institution user (admin, teacher, or custom-role staff), since
+  // any of them can simultaneously hold a class-teacher/subject-teacher assignment
+  // AND a custom role (Bursar, Academic Director, etc.) — the two systems are independent.
+  let teachingAssignments: Array<{ role: string; className: string | null; subjectName: string | null }> = []
+  let customRoles: string[] = []
+
+  if (orgId) {
+    const { data: taRows } = await supabase
+      .from('teacher_assignments')
+      .select('role, class_id, subject_id')
+      .eq('teacher_id', authUser.id)
+      .eq('is_active', true)
+
+    if (taRows && taRows.length > 0) {
+      const classIds = [...new Set(taRows.map(t => t.class_id).filter(Boolean))]
+      const subjectIds = [...new Set(taRows.map(t => t.subject_id).filter(Boolean))]
+
+      const [{ data: taClasses }, { data: taSubjects }] = await Promise.all([
+        classIds.length > 0
+          ? supabase.from('groups').select('id, name').in('id', classIds)
+          : Promise.resolve({ data: [] }),
+        subjectIds.length > 0
+          ? supabase.from('subjects').select('id, name').in('id', subjectIds)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      const classMap = new Map((taClasses ?? []).map(c => [c.id, c.name]))
+      const subjectMap = new Map((taSubjects ?? []).map(s => [s.id, s.name]))
+
+      teachingAssignments = taRows.map(t => ({
+        role: t.role,
+        className: t.class_id ? classMap.get(t.class_id) ?? null : null,
+        subjectName: t.subject_id ? subjectMap.get(t.subject_id) ?? null : null,
+      }))
+    }
+
+    const { data: roleAssignments } = await supabase
+      .from('staff_role_assignments')
+      .select('role_id')
+      .eq('user_id', authUser.id)
+      .eq('is_active', true)
+
+    if (roleAssignments && roleAssignments.length > 0) {
+      const roleIds = roleAssignments.map(r => r.role_id)
+      const { data: roleNames } = await supabase
+        .from('school_roles')
+        .select('name')
+        .in('id', roleIds)
+      customRoles = (roleNames ?? []).map(r => r.name)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -359,6 +412,23 @@ export default async function DashboardPage() {
             }
             {isInstitutionTeacher && assignedSubjects.length > 0 && !hasSubjectsOnly && ` You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}.`}
           </p>
+
+          {(teachingAssignments.length > 0 || customRoles.length > 0) && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {teachingAssignments.map((ta, i) => (
+                <span key={`ta-${i}`} className="badge badge-blue text-[11px]">
+                  {ta.role === 'class_teacher'
+                    ? `Class Teacher of ${ta.className ?? '—'}`
+                    : `${ta.subjectName ?? 'Subject'} Teacher${ta.className ? ` — ${ta.className}` : ''}`}
+                </span>
+              ))}
+              {customRoles.map((name, i) => (
+                <span key={`role-${i}`} className="badge badge-gold text-[11px]">
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {(isSoloTeacher || isInstitutionAdmin) && (
           <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
