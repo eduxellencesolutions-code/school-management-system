@@ -18,7 +18,13 @@ export default async function LockResultsPage() {
   const org = user?.organization
 
   if (!orgId) redirect('/dashboard') // solo teachers don't have this feature
-  if (user?.role !== 'admin') redirect('/dashboard')
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canLockResults } = await supabase.rpc('has_permission', { 
+    p_user_id: authUser.id, 
+    p_permission_key: 'results.lock' 
+  })
+  if (user?.role !== 'admin' && !canLockResults) redirect('/dashboard')
 
   // Current session/term — adjust if your org stores these differently
   const sessionId = org?.current_term_id ? org?.session_name : null

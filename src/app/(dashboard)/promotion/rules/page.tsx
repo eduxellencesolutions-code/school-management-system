@@ -14,7 +14,13 @@ export default async function PromotionRulesPage() {
     .single()
 
   if (!user?.organization_id) redirect('/dashboard')
-  if (user.role !== 'admin') redirect('/dashboard')
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canConfigureRules } = await supabase.rpc('has_permission', { 
+    p_user_id: authUser.id, 
+    p_permission_key: 'promotion.configure_rules' 
+  })
+  if (user.role !== 'admin' && !canConfigureRules) redirect('/dashboard')
 
   return (
     <div className="flex flex-col gap-6">

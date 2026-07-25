@@ -37,8 +37,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Promotion is not available for solo teacher accounts' }, { status: 403 });
   }
 
-  if (userRow.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can preview promotion' }, { status: 403 });
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'promotion.view' 
+  });
+  if (userRow.role !== 'admin' && !hasPerm) {
+    return NextResponse.json({ error: 'You do not have permission to preview promotion' }, { status: 403 });
   }
 
   const { data: hasFeature, error: featureError } = await supabase

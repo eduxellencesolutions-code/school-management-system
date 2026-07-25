@@ -11,6 +11,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single();
+
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'attendance.mark' 
+  });
+  if (userRow?.role !== 'admin' && !hasPerm) {
+    return NextResponse.json({ error: 'You do not have permission to mark attendance' }, { status: 403 });
+  }
+
   const body = await request.json();
   const { groupId, termId, sessionId, date, records } = body;
 
@@ -19,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   // Resolve the caller's org (null org = solo teacher, always allowed)
-  const { data: userRow, error: userError } = await supabase
+  const { data: userRowOrg, error: userError } = await supabase
     .from('users')
     .select('organization_id')
     .eq('id', user.id)
@@ -29,13 +44,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not resolve user profile' }, { status: 500 });
   }
 
-  const isSolo = userRow.organization_id === null;
+  const isSolo = userRowOrg.organization_id === null;
 
   // Explicit app-layer gate check, in addition to RLS — belt and braces.
   if (!isSolo) {
     const { data: hasFeature, error: featureError } = await supabase
       .rpc('org_has_feature', {
-        p_org_id: userRow.organization_id,
+        p_org_id: userRowOrg.organization_id,
         p_feature_key: 'basic_attendance',
       });
 
@@ -53,7 +68,7 @@ export async function POST(request: Request) {
 
   // organization_id is stamped from resolved user context, never trusted from client input
   const rows = records.map((r: { learnerId: string; status: string }) => ({
-    organization_id: userRow.organization_id,
+    organization_id: userRowOrg.organization_id,
     group_id: groupId,
     learner_id: r.learnerId,
     term_id: termId,

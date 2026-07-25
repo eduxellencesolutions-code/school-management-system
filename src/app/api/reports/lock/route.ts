@@ -27,12 +27,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'This feature is not available for solo teacher accounts' }, { status: 403 });
   }
 
-  if (userRow.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can lock results' }, { status: 403 });
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'results.lock' 
+  });
+  if (userRow.role !== 'admin' && !hasPerm) {
+    return NextResponse.json({ error: 'You do not have permission to lock results' }, { status: 403 });
   }
 
   const body = await request.json();
-  const { groupId, sessionId, termId, dryRun } = body; // ← Added dryRun
+  const { groupId, sessionId, termId, dryRun } = body;
 
   if (!groupId || !sessionId || !termId) {
     return NextResponse.json({ error: 'Missing groupId, sessionId, or termId' }, { status: 400 });
@@ -62,9 +67,9 @@ export async function POST(request: Request) {
     .eq('session_id', sessionId)
     .eq('term_id', termId)
     .eq('type', 'broadsheet')
-    .eq('report_status', 'published') // ← Explicit filter, not just sort order
+    .eq('report_status', 'published')
     .eq('deleted', false)
-    .order('created_at', { ascending: false }) // ← Sort by created_at, not published_at
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 

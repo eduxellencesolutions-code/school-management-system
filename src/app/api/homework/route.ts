@@ -11,6 +11,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('organization_id, role')
+    .eq('id', user.id)
+    .single();
+
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'homework.manage' 
+  });
+  if (userRow?.role !== 'admin' && !hasPerm) {
+    return NextResponse.json({ error: 'You do not have permission to manage homework' }, { status: 403 });
+  }
+
   const body = await request.json();
   const { groupId, subjectId, title, issuedDate, dueDate } = body;
 

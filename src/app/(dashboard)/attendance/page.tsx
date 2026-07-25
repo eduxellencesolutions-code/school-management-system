@@ -9,12 +9,23 @@ export default async function AttendancePage() {
 
   const { data: user } = await supabase
     .from('users')
-    .select('*')
+    .select('*, organization:organizations!users_organization_id_fkey(*)')
     .eq('id', authUser.id)
     .single()
 
   const orgId = user?.organization_id
   const isSoloTeacher = !orgId
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canViewAttendance } = orgId
+    ? await supabase.rpc('has_permission', { 
+        p_user_id: authUser.id, 
+        p_permission_key: 'attendance.view' 
+      })
+    : { data: false }
+
+  // If not admin and doesn't have permission, redirect
+  if (user?.role !== 'admin' && !canViewAttendance) redirect('/dashboard')
 
   // Resolve the current term/session — institutions use organizations.current_term_id,
   // solo teachers use users.current_term_id. Same pattern as your report generator page.

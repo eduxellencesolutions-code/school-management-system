@@ -26,8 +26,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'This feature is not available for solo teacher accounts' }, { status: 403 });
   }
 
-  if (userRow.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can correct promotion decisions' }, { status: 403 });
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'promotion.confirm' 
+  });
+  if (userRow.role !== 'admin' && !hasPerm) {
+    return NextResponse.json({ error: 'You do not have permission to correct promotion decisions' }, { status: 403 });
   }
 
   const body = await request.json();

@@ -11,10 +11,14 @@ interface Notification {
   id: string
   type: string
   report_id: string
-  title: string  // ✅ FIX: Added title field
-  body: string   // ✅ FIX: Changed from 'message' to 'body'
+  title: string
+  body: string
   is_read: boolean
   created_at: string
+  metadata?: {
+    link?: string
+    category?: string
+  }
 }
 
 export default function NotificationBell() {
@@ -151,8 +155,10 @@ export default function NotificationBell() {
     }
   }
 
+  // ✅ FIX: Use metadata.link instead of hardcoded report_id
   function getNotificationLink(notification: Notification) {
-    return `/reports/${notification.report_id}`
+    const link = notification.metadata?.link
+    return link || '/dashboard'
   }
 
   return (
@@ -219,11 +225,9 @@ export default function NotificationBell() {
                       {getNotificationIcon(notification.type)}
                     </span>
                     <div className="flex-1 min-w-0">
-                      {/* ✅ FIX: Show title as bold header */}
                       <p className={`text-sm font-semibold ${!notification.is_read ? 'text-ink' : 'text-ink-muted'}`}>
                         {notification.title}
                       </p>
-                      {/* ✅ FIX: Show body as the message content */}
                       <p className={`text-xs ${!notification.is_read ? 'text-ink-muted' : 'text-ink-faint'}`}>
                         {notification.body}
                       </p>

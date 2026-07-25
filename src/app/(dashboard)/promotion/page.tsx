@@ -15,9 +15,15 @@ export default async function PromotionPage() {
 
   const orgId = user?.organization_id
 
-  // Promotion is never available to solo teachers or non-admins — matches backend gating exactly.
+  // Promotion is never available to solo teachers
   if (!orgId) redirect('/dashboard')
-  if (user?.role !== 'admin') redirect('/dashboard')
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canViewPromotion } = await supabase.rpc('has_permission', { 
+    p_user_id: authUser.id, 
+    p_permission_key: 'promotion.view' 
+  })
+  if (user?.role !== 'admin' && !canViewPromotion) redirect('/dashboard')
 
   const { data: org } = await supabase
     .from('organizations')

@@ -9,12 +9,23 @@ export default async function HomeworkPage() {
 
   const { data: user } = await supabase
     .from('users')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', authUser.id)
     .single()
 
   const orgId = user?.organization_id
   const isSoloTeacher = !orgId
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canViewHomework } = orgId
+    ? await supabase.rpc('has_permission', { 
+        p_user_id: authUser.id, 
+        p_permission_key: 'homework.view' 
+      })
+    : { data: false }
+
+  // If not admin and doesn't have permission, redirect
+  if (user?.role !== 'admin' && !canViewHomework) redirect('/dashboard')
 
   const groupsQuery = supabase
     .from('groups')
