@@ -15,8 +15,14 @@ export async function GET(request: Request) {
     .eq('id', user.id)
     .single();
 
-  if (!userRow?.organization_id || userRow.role !== 'admin') {
-    return NextResponse.json({ error: 'Only admins can manage fee accounts' }, { status: 403 });
+  // ✅ FIX: Replace admin role check with permission check
+  const { data: hasPerm } = await supabase.rpc('has_permission', { 
+    p_user_id: user.id, 
+    p_permission_key: 'fees.view' 
+  });
+
+  if (!userRow?.organization_id || (userRow.role !== 'admin' && !hasPerm)) {
+    return NextResponse.json({ error: 'You do not have permission to view fee accounts' }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);

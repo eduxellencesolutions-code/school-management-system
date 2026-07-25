@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, BookOpen, ClipboardList,
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
-  Lock, TrendingUp, Megaphone,
+  Lock, TrendingUp, Megaphone, ShieldCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -75,6 +75,7 @@ export default function Sidebar({ user, org }: Props) {
     ...(isAdmin ? [{ label: 'Parent Management', href: '/parents', icon: Users }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
+    ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {

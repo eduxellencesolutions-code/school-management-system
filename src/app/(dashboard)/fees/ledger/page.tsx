@@ -14,7 +14,13 @@ export default async function FeeLedgerPage() {
     .single()
 
   if (!user?.organization_id) redirect('/dashboard')
-  if (user.role !== 'admin') redirect('/dashboard')
+
+  // ✅ FIX: Check permission instead of hard role check
+  const { data: canViewFees } = await supabase.rpc('has_permission', { 
+    p_user_id: authUser.id, 
+    p_permission_key: 'fees.view' 
+  })
+  if (user.role !== 'admin' && !canViewFees) redirect('/dashboard')
 
   const { data: classes } = await supabase
     .from('groups')
