@@ -28,6 +28,12 @@ export default async function ReportsPage() {
   const isPrincipal = profile?.role === 'principal'
   const isSolo = !profile?.organization_id
 
+  // ✅ FIX: Add permission check for results.view
+  const { data: hasResultsViewData } = orgId
+    ? await supabase.rpc('has_permission', { p_user_id: authUser.id, p_permission_key: 'results.view' })
+    : { data: false }
+  const hasResultsView = !!hasResultsViewData
+
   let myClassTeacherOf: string[] = []
   // Only fetch class teacher assignments if not admin, not solo, and not principal
   if (!isSolo && !isAdmin && !isPrincipal) {
@@ -58,8 +64,9 @@ export default async function ReportsPage() {
   let pendingApprovalReports: any[] = []
   let reportsError = null
 
-  if (orgId && isAdmin) {
-    // Admin sees all reports in the organization (excluding archived)
+  // ✅ FIX: Branch the query logic to treat hasResultsView like admin-level access
+  if (orgId && (isAdmin || hasResultsView)) {
+    // Admin (or a staff member with results.view permission) sees all reports in the organization
     const res = await supabase.from('reports')
       .select('*, group:groups(name, id), learner:learners(first_name, last_name), created_by_user:users!reports_created_by_fkey(name)')
       .eq('organization_id', orgId)

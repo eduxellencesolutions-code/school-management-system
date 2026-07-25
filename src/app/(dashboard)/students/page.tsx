@@ -30,6 +30,15 @@ export default async function StudentsPage({ searchParams }: Props) {
   const orgId = profile?.organization_id
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
 
+  // ✅ FIX: Add permission checks for students.view and fees.view
+  const { data: hasStudentsViewData } = orgId
+    ? await supabase.rpc('has_permission', { p_user_id: authUser.id, p_permission_key: 'students.view' })
+    : { data: false }
+  const { data: hasFeesViewData } = orgId
+    ? await supabase.rpc('has_permission', { p_user_id: authUser.id, p_permission_key: 'fees.view' })
+    : { data: false }
+  const hasFullStudentAccess = !!hasStudentsViewData || !!hasFeesViewData
+
   let groupsQuery = supabase
     .from('groups')
     .select('id, name')
@@ -45,8 +54,9 @@ export default async function StudentsPage({ searchParams }: Props) {
 
   let userType = ''
 
-  if (orgId && isAdmin) {
-    // ✅ Institution admin: full access
+  // ✅ FIX: Branch the query logic to treat hasFullStudentAccess like admin-level access
+  if (orgId && (isAdmin || hasFullStudentAccess)) {
+    // ✅ Institution admin, or staff with students.view/fees.view: full access
     userType = 'institution'
     groupsQuery = groupsQuery.eq('organization_id', orgId)
     query = query.eq('organization_id', orgId)
