@@ -4,17 +4,22 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Wallet } from 'lucide-react'
 
-interface Fee {
+interface Payment {
+  id: string
+  amount: number
+  method: string
+  paid_date: string
+  status: string
+}
+
+interface Account {
   termName: string | null
-  totalExpected: number
-  totalPaid: number
-  outstanding: number
-  dueDate: string | null
-  updatedAt: string
+  balance: { totalCharged: number; totalAdjusted: number; totalPaid: number; outstanding: number }
+  payments: Payment[]
 }
 
 export default function FeesView({ learnerId }: { learnerId: string }) {
-  const [fees, setFees] = useState<Fee[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [featureDisabled, setFeatureDisabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +31,7 @@ export default function FeesView({ learnerId }: { learnerId: string }) {
         if (data.error) {
           setError(data.error)
         } else {
-          setFees(data.fees ?? [])
+          setAccounts(data.accounts ?? [])
           setFeatureDisabled(!!data.featureDisabled)
         }
       })
@@ -54,47 +59,69 @@ export default function FeesView({ learnerId }: { learnerId: string }) {
 
       <div>
         <h1 className="page-title">Fees</h1>
-        <p className="page-subtitle">Fee balance by term.</p>
+        <p className="page-subtitle">Fee balance and payment history by term.</p>
       </div>
 
       {featureDisabled ? (
         <div className="card p-8 text-center text-sm text-ink-muted">
           Fee tracking is not enabled for this school.
         </div>
-      ) : fees.length === 0 ? (
+      ) : accounts.length === 0 ? (
         <div className="card p-8 text-center text-sm text-ink-muted">
           No fee records available yet.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {fees.map((f, i) => (
-            <div key={i} className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-ink flex items-center gap-2">
-                  <Wallet size={15} className="text-brand-500" /> {f.termName ?? 'Term'}
+          {accounts.map((acc, i) => {
+            const { totalCharged, totalPaid, outstanding } = acc.balance
+            const percentPaid = totalCharged > 0 ? Math.min(100, Math.max(0, (totalPaid / totalCharged) * 100)) : 0
+
+            return (
+              <div key={i} className="card p-5">
+                <p className="text-sm font-semibold text-ink flex items-center gap-2 mb-3">
+                  <Wallet size={15} className="text-brand-500" /> {acc.termName ?? 'Term'}
                 </p>
-                {f.dueDate && (
-                  <p className="text-xs text-ink-faint">Due {new Date(f.dueDate).toLocaleDateString('en-NG')}</p>
+
+                <div className="grid grid-cols-3 gap-3 text-center mb-3">
+                  <div>
+                    <p className="text-sm font-bold text-ink font-mono">₦{totalCharged.toLocaleString('en-NG')}</p>
+                    <p className="text-[10px] text-ink-faint">Total Fee</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-green-600 font-mono">₦{totalPaid.toLocaleString('en-NG')}</p>
+                    <p className="text-[10px] text-ink-faint">Paid</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold font-mono ${outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₦{outstanding.toLocaleString('en-NG')}
+                    </p>
+                    <p className="text-[10px] text-ink-faint">Outstanding</p>
+                  </div>
+                </div>
+
+                <div className="w-full h-2 bg-surface-100 rounded-full overflow-hidden mb-4">
+                  <div className="h-full bg-brand-500" style={{ width: `${percentPaid}%` }} />
+                </div>
+
+                {acc.payments.length > 0 && (
+                  <div className="border-t border-surface-100 pt-3">
+                    <p className="text-xs font-semibold text-ink-muted mb-2">Payment History</p>
+                    <div className="flex flex-col gap-2">
+                      {acc.payments.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between text-sm">
+                          <span className="text-ink">₦{p.amount.toLocaleString('en-NG')} · {p.method}</span>
+                          <span className="text-xs text-ink-faint">
+                            {new Date(p.paid_date).toLocaleDateString('en-NG')}
+                            {p.status === 'pending' && ' · Awaiting confirmation'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <p className="text-sm font-bold text-ink font-mono">₦{f.totalExpected.toLocaleString('en-NG')}</p>
-                  <p className="text-[10px] text-ink-faint">Expected</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-green-600 font-mono">₦{f.totalPaid.toLocaleString('en-NG')}</p>
-                  <p className="text-[10px] text-ink-faint">Paid</p>
-                </div>
-                <div>
-                  <p className={`text-sm font-bold font-mono ${f.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    ₦{f.outstanding.toLocaleString('en-NG')}
-                  </p>
-                  <p className="text-[10px] text-ink-faint">Outstanding</p>
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

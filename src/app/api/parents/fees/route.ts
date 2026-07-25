@@ -53,39 +53,49 @@ export async function GET(request: Request) {
   });
 
   if (!hasFeature) {
-    return NextResponse.json({ fees: [], featureDisabled: true });
+    return NextResponse.json({ accounts: [], featureDisabled: true });
   }
 
-  const { data: fees, error: feesError } = await supabase
-    .from('fee_records')
-    .select('term_id, total_expected, total_paid, due_date, updated_at')
+  const { data: accounts, error: accountsError } = await supabase
+    .from('student_fee_accounts')
+    .select('id, term_id')
     .eq('learner_id', learnerId)
-    .order('updated_at', { ascending: false });
+    .order('created_at', { ascending: false });
 
-  if (feesError) {
-    return NextResponse.json({ error: feesError.message }, { status: 500 });
+  if (accountsError) {
+    return NextResponse.json({ error: accountsError.message }, { status: 500 });
   }
 
-  if (!fees || fees.length === 0) {
-    return NextResponse.json({ fees: [] });
+  if (!accounts || accounts.length === 0) {
+    return NextResponse.json({ accounts: [] });
   }
 
-  const termIds = [...new Set(fees.map((f) => f.term_id))];
+  const termIds = [...new Set(accounts.map((a) => a.term_id))];
   const { data: terms } = await supabase
     .from('terms')
     .select('id, name')
-    .in('id', termIds.length > 0 ? termIds : ['00000000-0000-0000-0000-000000000000']);
-
+    .in('id', termIds);
   const termMap = new Map((terms ?? []).map((t) => [t.id, t.name]));
 
-  const enriched = fees.map((f) => ({
-    termName: termMap.get(f.term_id) ?? null,
-    totalExpected: f.total_expected,
-    totalPaid: f.total_paid,
-    outstanding: f.total_expected - f.total_paid,
-    dueDate: f.due_date,
-    updatedAt: f.updated_at,
-  }));
+  const enriched = await Promise.all(
+    accounts.map(async (acc) => {
+      const [{ data: balance }, { data: payments }] = await Promise.all([
+        supabase.rpc('calculate_fee_balance', { p_account_id: acc.id }),
+        supabase
+          .from('fee_payments')
+          .select('id, amount, method, paid_date, status, voided')
+          .eq('account_id', acc.id)
+          .eq('voided', false)
+          .order('paid_date', { ascending: false }),
+      ]);
 
-  return NextResponse.json({ fees: enriched });
+      return {
+        termName: termMap.get(acc.term_id) ?? null,
+        balance: balance ?? { totalCharged: 0, totalAdjusted: 0, totalPaid: 0, outstanding: 0 },
+        payments: payments ?? [],
+      };
+    })
+  );
+
+  return NextResponse.json({ accounts: enriched });
 }
