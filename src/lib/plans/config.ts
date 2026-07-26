@@ -135,7 +135,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   small_school: {
     label: 'Small School',
     limits: {
-      maxStudents: 500,
+      maxStudents: 100, // was 500
       maxTeachers: 25,
       maxAdmins: 2,
       maxAcademicSessions: 'unlimited',
@@ -175,7 +175,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   standard_school: {
     label: 'Standard School',
     limits: {
-      maxStudents: 2000,
+      maxStudents: 300, // was 2000
       maxTeachers: 100,
       maxAdmins: 10,
       maxAcademicSessions: 'unlimited',
@@ -215,7 +215,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   premium_school: {
     label: 'Premium School',
     limits: {
-      maxStudents: 5000,
+      maxStudents: 500, // was 5000 — this becomes the BASE tier; capacity extensions override this per-org
       maxTeachers: 300,
       maxAdmins: 'unlimited',
       maxAcademicSessions: 'unlimited',
@@ -258,3 +258,12 @@ export function getPlanConfig(plan: string | null | undefined): PlanConfig {
   const key = (plan ?? 'free') as PlanKey
   return PLANS[key] ?? PLANS.free
 }
+
+// Premium capacity bands for organizations that need more than the base 500 students
+export const PREMIUM_CAPACITY_BANDS = [
+  { capacity: 500, priceLabel: '₦75,000/term' },
+  { capacity: 750, priceLabel: '₦90,000/term' },
+  { capacity: 1000, priceLabel: '₦110,000/term' },
+  { capacity: 1500, priceLabel: '₦140,000/term' },
+  { capacity: 2500, priceLabel: '₦180,000/term' },
+] as const
