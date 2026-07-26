@@ -220,7 +220,7 @@ const PLANS = [
   },
   {
     name: 'Solo Teacher Pro',
-    price: '₦1,000',
+    price: '₦3,000',
     period: 'per term',
     description: 'For individual teachers managing any number of classes.',
     featured: false,
@@ -228,8 +228,8 @@ const PLANS = [
   },
   {
     name: 'Small School',
-    price: '₦10,000',
-    period: 'per year',
+    price: '₦15,000',
+    period: 'per term',
     description: 'For nursery, primary, and small secondary schools.',
     featured: true,
     features: [
@@ -242,8 +242,8 @@ const PLANS = [
   },
   {
     name: 'Standard School',
-    price: '₦20,000',
-    period: 'per year',
+    price: '₦35,000',
+    period: 'per term',
     description: 'For larger schools with more students and staff.',
     featured: false,
     features: [
@@ -256,8 +256,8 @@ const PLANS = [
   },
   {
     name: 'Premium School',
-    price: '₦50,000',
-    period: 'per year',
+    price: '₦75,000',
+    period: 'per term',
     description: 'For large private schools and multi-campus institutions.',
     featured: false,
     features: [
