@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSearchParams } from 'next/navigation'  // ← ADDITION 1: Added import
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,14 +11,24 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
+const NIGERIAN_STATES = [
+  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue',
+  'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu',
+  'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi',
+  'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun',
+  'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
+]
+
 const schema = z.object({
   name:         z.string().min(2, 'Enter your full name'),
   email:        z.string().email('Enter a valid email'),
   password:     z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string().min(8, 'Please confirm your password'),
-  account_type: z.enum(['individual', 'organization']),
+  account_type: z.enum(['individual', 'organization', 'representative']),
   org_name:     z.string().optional(),
   org_type:     z.enum(['school', 'university', 'centre']).optional(),
+  rep_phone:    z.string().optional(),
+  rep_state:    z.string().optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -30,6 +40,14 @@ const schema = z.object({
 }, {
   message: 'School name is required',
   path: ['org_name'],
+}).refine(data => {
+  if (data.account_type === 'representative' && !data.rep_state) {
+    return false
+  }
+  return true
+}, {
+  message: 'Select your state',
+  path: ['rep_state'],
 })
 
 type FormData = z.infer<typeof schema>
@@ -44,8 +62,8 @@ export default function SignupPage() {
 
 function SignupForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()  // ← ADDITION 2: Added searchParams
-  const referralCode = searchParams.get('ref')  // ← ADDITION 2: Get referral code from URL
+  const searchParams = useSearchParams()
+  const referralCode = searchParams.get('ref')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
   const [showPassword, setShowPassword] = useState(false)
@@ -84,7 +102,6 @@ function SignupForm() {
       if (authError) throw new Error(authError.message)
       if (!authData.user) throw new Error('Signup failed — please try again')
 
-      // ← ADDITION 3: Record referral BEFORE the confirm email check
       if (referralCode) {
         await fetch('/api/representatives/record-referral', {
           method: 'POST',
@@ -99,8 +116,42 @@ function SignupForm() {
       }
 
       if (authData.session === null) {
-        toast.success('Account created! Check your email to confirm before logging in.')
+        // Email confirmation required — we can't call the representative
+        // apply endpoint yet because there's no active session to authenticate it.
+        if (data.account_type === 'representative') {
+          toast.success('Account created! Confirm your email, then log in and visit "Apply to become a Representative" to finish setup.')
+        } else {
+          toast.success('Account created! Check your email to confirm before logging in.')
+        }
         router.push('/login?msg=confirm_email')
+        return
+      }
+
+      // Session exists immediately (no email confirmation required) —
+      // safe to complete the representative application right now.
+      if (data.account_type === 'representative') {
+        const repRes = await fetch('/api/representatives/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: data.name.trim(),
+            email: data.email.trim(),
+            phone: data.rep_phone?.trim() || undefined,
+            state: data.rep_state,
+          }),
+        })
+        const repResult = await repRes.json()
+
+        if (!repRes.ok) {
+          // Account was created successfully even if the rep application failed —
+          // don't lose that. Send them to apply-representative to retry manually.
+          toast.error(repResult.error || 'Account created, but representative application failed. Try again from your dashboard.')
+          router.push('/apply-representative')
+          return
+        }
+
+        toast.success(`Welcome! Your referral code is ${repResult.referralCode}.`)
+        router.push('/rep')
         return
       }
 
@@ -129,19 +180,19 @@ function SignupForm() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
 
-        {/* ── STEP 1 ── */}
         {step === 1 && (
           <>
             <div>
               <label className="block text-sm font-medium text-ink mb-2">I am signing up as</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {[
-                  { value: 'individual',   label: '👤 Individual Teacher' },
-                  { value: 'organization', label: '🏫 School / Institution' },
+                  { value: 'individual',     label: '👤 Individual Teacher' },
+                  { value: 'organization',   label: '🏫 School / Institution' },
+                  { value: 'representative', label: '🤝 Representative' },
                 ].map(opt => (
                   <label
                     key={opt.value}
-                    className={`flex items-center justify-center gap-2 p-3 border rounded cursor-pointer text-sm font-medium transition-colors
+                    className={`flex items-center justify-center gap-2 p-3 border rounded cursor-pointer text-xs font-medium text-center transition-colors
                       ${accountType === opt.value
                         ? 'border-brand-500 bg-brand-50 text-brand-700'
                         : 'border-surface-200 text-ink-muted hover:border-brand-300'
@@ -166,7 +217,6 @@ function SignupForm() {
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
             </div>
 
-            {/* ✅ Password with Eye Toggle */}
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Password</label>
               <div className="relative">
@@ -187,7 +237,6 @@ function SignupForm() {
               {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
             </div>
 
-            {/* ✅ Confirm Password with Eye Toggle */}
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Confirm Password</label>
               <div className="relative">
@@ -216,6 +265,28 @@ function SignupForm() {
               )}
             </div>
 
+            {accountType === 'representative' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">Phone number</label>
+                  <input type="tel" placeholder="08012345678" className="input" {...register('rep_phone')} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1">State</label>
+                  <select className="input" {...register('rep_state')} defaultValue="">
+                    <option value="" disabled>Select your state</option>
+                    {NIGERIAN_STATES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {errors.rep_state && <p className="text-xs text-red-500 mt-1">{errors.rep_state.message}</p>}
+                </div>
+                <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">
+                  You&apos;ll get a referral code and a dashboard to track referrals and commission.
+                </div>
+              </>
+            )}
+
             {accountType === 'organization' ? (
               <button
                 type="button"
@@ -229,18 +300,23 @@ function SignupForm() {
               </button>
             ) : (
               <>
-                <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
-                  Individual teachers get <strong>1 class, up to 30 students</strong>, and Excel/CSV exports free.
-                </div>
+                {accountType === 'individual' && (
+                  <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
+                    Individual teachers get <strong>1 class, up to 30 students</strong>, and Excel/CSV exports free.
+                  </div>
+                )}
                 <button type="submit" disabled={loading} className="btn-primary btn mt-2">
-                  {loading ? 'Creating account…' : 'Create free account'}
+                  {loading
+                    ? 'Creating account…'
+                    : accountType === 'representative'
+                    ? 'Create account & apply'
+                    : 'Create free account'}
                 </button>
               </>
             )}
           </>
         )}
 
-        {/* ── STEP 2: INSTITUTION DETAILS ── */}
         {step === 2 && (
           <>
             <div className="flex items-center gap-2 mb-2">
