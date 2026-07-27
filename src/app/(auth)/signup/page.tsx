@@ -86,7 +86,12 @@ function SignupForm() {
 
       const metadata: Record<string, string> = {
         name: data.name.trim(),
-        role: data.account_type === 'organization' ? 'admin' : 'teacher',
+        role:
+          data.account_type === 'organization'
+            ? 'admin'
+            : data.account_type === 'representative'
+            ? 'representative'
+            : 'teacher',
       }
 
       if (data.account_type === 'organization' && data.org_name) {

@@ -45,7 +45,17 @@ export default function LoginPage() {
       toast.success('Welcome back!')
       await new Promise(resolve => setTimeout(resolve, 500))
       router.refresh()
-      router.push('/dashboard')
+
+      const meRes = await fetch('/api/workspaces')
+      const { workspaces } = await meRes.json()
+
+      if (!workspaces || workspaces.length === 0) {
+        router.push('/dashboard')
+      } else if (workspaces.length === 1) {
+        router.push(workspaces[0].href)
+      } else {
+        router.push('/workspaces')
+      }
     } catch (err) {
       console.error('Login error:', err)
       toast.error('Something went wrong. Please try again.')

@@ -21,6 +21,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', authUser.id)
     .single()
 
+  // Block access if this account has no legitimate school/teacher context
+  // (e.g. a Representative-only account) but redirect them somewhere useful
+  // instead of rendering an empty teacher shell.
+  if (!user?.organization_id) {
+    const { data: ownedGroup } = await supabase
+      .from('groups')
+      .select('id')
+      .eq('instructor_id', authUser.id)
+      .limit(1)
+      .maybeSingle()
+
+    if (!ownedGroup) {
+      const { data: rep } = await supabase
+        .from('representatives')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .maybeSingle()
+
+      redirect(rep ? '/rep' : '/workspaces')
+    }
+  }
+
   // Fetch org if linked
   const { data: org } = user?.organization_id
     ? await supabase
