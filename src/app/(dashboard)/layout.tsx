@@ -6,6 +6,7 @@ import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
 import ExpiredBanner from '@/components/billing/ExpiredBanner'
 import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -55,6 +56,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // ✅ Get subscription state for grace period and expired banners
   const subState = await getSubscriptionState(supabase, authUser.id)
 
+  // Only promote the rep program to people who aren't already a rep
+  const { data: existingRep } = await supabase
+    .from('representatives')
+    .select('id')
+    .eq('user_id', authUser.id)
+    .maybeSingle()
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-50">
       <Sidebar 
@@ -72,6 +80,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {/* ✅ Header with Notification Bell */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex-1">
+              {!existingRep && <RepresentativeBanner />}
               {/* Grace period banner - shown when subscription is in grace period */}
               {subState.isGracePeriod && subState.daysRemaining !== null && (
                 <GracePeriodBanner daysRemaining={subState.daysRemaining} />
