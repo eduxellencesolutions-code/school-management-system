@@ -45,10 +45,10 @@ export async function applySuccessfulSubscription(metadata: CheckoutMetadata): P
 
     const { data: referral } = await referralQuery.maybeSingle()
 
-    if (referral && metadata.plan !== 'free') {
+    if (referral) {
       // CheckoutMetadata has no currency field — hardcode NGN, the platform's primary market
       const amount = getPrice(
-        metadata.plan as PaidPlan,
+        metadata.plan,
         'NGN' as Currency,
         metadata.cycle as BillingCycle
       )
