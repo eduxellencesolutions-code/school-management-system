@@ -10,6 +10,21 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Check if user already has a representative account
+  const { data: existingRep } = await admin
+    .from('representatives')
+    .select('id, referral_code')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (existingRep) {
+    return NextResponse.json(
+      { error: 'You already have a representative account.', referralCode: existingRep.referral_code },
+      { status: 409 }
+    );
+  }
+
   const body = await request.json();
   const { fullName, email, phone, state } = body;
 

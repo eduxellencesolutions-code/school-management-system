@@ -56,6 +56,11 @@ export default function ApplyRepresentativePage() {
           router.push('/login?redirect=/apply-representative')
           return
         }
+        if (res.status === 409) {
+          toast.success("You're already a representative — redirecting to your dashboard.")
+          router.push('/rep')
+          return
+        }
         throw new Error(result.error || 'Application failed')
       }
 
