@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'  // ← ADDITION 1: Added import
 import Link from 'next/link'
@@ -35,6 +35,14 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()  // ← ADDITION 2: Added searchParams
   const referralCode = searchParams.get('ref')  // ← ADDITION 2: Get referral code from URL
