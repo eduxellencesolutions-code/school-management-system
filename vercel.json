@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/clean-trash",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/release-commissions",
+      "schedule": "0 3 * * *"
     }
   ]
 }

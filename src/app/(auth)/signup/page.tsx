@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'  // ← ADDITION 1: Added import
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -35,6 +36,8 @@ type FormData = z.infer<typeof schema>
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()  // ← ADDITION 2: Added searchParams
+  const referralCode = searchParams.get('ref')  // ← ADDITION 2: Get referral code from URL
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
   const [showPassword, setShowPassword] = useState(false)
@@ -72,6 +75,15 @@ export default function SignupPage() {
 
       if (authError) throw new Error(authError.message)
       if (!authData.user) throw new Error('Signup failed — please try again')
+
+      // ← ADDITION 3: Record referral BEFORE the confirm email check
+      if (referralCode) {
+        await fetch('/api/representatives/record-referral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ referralCode, userId: authData.user.id }),
+        }).catch(() => {}) // non-fatal — never block signup on this
+      }
 
       if (authData.session === null && authData.user.identities?.length === 0) {
         toast.error('An account with this email already exists.')

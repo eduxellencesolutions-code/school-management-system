@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { CheckoutMetadata } from './types'
-import { getCycleDurationDays } from './pricing'
+import { getCycleDurationDays, getPrice, PaidPlan, Currency, BillingCycle } from './pricing'
 
 function serviceClient() {
   return createClient(
@@ -34,6 +34,35 @@ export async function applySuccessfulSubscription(metadata: CheckoutMetadata): P
   if (error) {
     console.error('Error applying subscription:', error)
     return { success: false, error: error.message }
+  }
+
+  // ── Representative commission check ──
+  // Only fires if this account was referred and the plan is a commissionable paid plan.
+  try {
+    const referralQuery = metadata.accountType === 'org'
+      ? admin.from('referrals').select('id').eq('organization_id', metadata.accountId).eq('status', 'pending')
+      : admin.from('referrals').select('id').eq('referred_user_id', metadata.accountId).eq('status', 'pending')
+
+    const { data: referral } = await referralQuery.maybeSingle()
+
+    if (referral && metadata.plan !== 'free') {
+      // CheckoutMetadata has no currency field — hardcode NGN, the platform's primary market
+      const amount = getPrice(
+        metadata.plan as PaidPlan,
+        'NGN' as Currency,
+        metadata.cycle as BillingCycle
+      )
+
+      if (amount > 0) {
+        await admin.rpc('record_commission', {
+          p_referral_id: referral.id,
+          p_plan: metadata.plan,
+          p_amount: amount,
+        })
+      }
+    }
+  } catch (err) {
+    console.error('Commission recording failed (non-fatal):', err)
   }
 
   return { success: true }
