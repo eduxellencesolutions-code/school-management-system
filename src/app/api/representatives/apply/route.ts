@@ -1,7 +1,14 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
   const admin = createAdminClient();
   const body = await request.json();
   const { fullName, email, phone, state } = body;
@@ -15,7 +22,7 @@ export async function POST(request: Request) {
 
   const { data: rep, error } = await admin
     .from('representatives')
-    .insert({ full_name: fullName, email, phone: phone ?? null, referral_code: referralCode, territory_state: state ?? null })
+    .insert({ user_id: user.id, full_name: fullName, email, phone: phone ?? null, referral_code: referralCode, territory_state: state ?? null })
     .select('id, referral_code')
     .single();
 
