@@ -5,15 +5,10 @@ import type { NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const { pathname } = request.nextUrl
+  const isAdminHost = hostname.startsWith('admin.')
 
-  if (hostname.startsWith('admin.')) {
-    const url = request.nextUrl.clone()
-    if (url.pathname === '/' || url.pathname === '/dashboard') {
-      url.pathname = '/overview'
-    }
-    return NextResponse.rewrite(url)
-  }
-
+  // Public / unauthenticated paths — allowed through on ANY host, including admin.*,
+  // so the shared /login page still works regardless of which domain someone arrives from.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -48,9 +43,33 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
+
+  if (isAdminHost) {
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+
+    if (!isSuperAdmin) {
+      // Logged in, but not a super admin — admin.* is not for this account,
+      // regardless of which path they typed. Send them to their real dashboard
+      // on the main domain instead of letting them browse anything here.
+      const redirectUrl = new URL('/dashboard', request.url)
+      redirectUrl.hostname = 'results.eduxellence.org'
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // Confirmed super admin — root/dashboard requests land on the overview page.
+    if (pathname === '/dashboard') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/overview'
+      return NextResponse.rewrite(url)
+    }
+
+    return response
+  }
+
   return response
 }
 
