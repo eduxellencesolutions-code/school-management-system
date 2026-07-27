@@ -20,15 +20,16 @@ const NIGERIAN_STATES = [
 ]
 
 const schema = z.object({
-  name:         z.string().min(2, 'Enter your full name'),
-  email:        z.string().email('Enter a valid email'),
-  password:     z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string().min(8, 'Please confirm your password'),
-  account_type: z.enum(['individual', 'organization', 'representative']),
-  org_name:     z.string().optional(),
-  org_type:     z.enum(['school', 'university', 'centre']).optional(),
-  rep_phone:    z.string().optional(),
-  rep_state:    z.string().optional(),
+  name:             z.string().min(2, 'Enter your full name'),
+  email:            z.string().email('Enter a valid email'),
+  password:         z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword:  z.string().min(8, 'Please confirm your password'),
+  account_type:     z.enum(['individual', 'organization', 'representative']),
+  org_name:         z.string().optional(),
+  org_type:         z.enum(['school', 'university', 'centre']).optional(),
+  rep_phone:        z.string().optional(),
+  rep_state:        z.string().optional(),
+  referral_code:    z.string().optional(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -71,7 +72,7 @@ function SignupForm() {
 
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { account_type: 'individual', org_type: 'school' },
+    defaultValues: { account_type: 'individual', org_type: 'school', referral_code: referralCode ?? '' },
   })
 
   const accountType = watch('account_type')
@@ -102,11 +103,12 @@ function SignupForm() {
       if (authError) throw new Error(authError.message)
       if (!authData.user) throw new Error('Signup failed — please try again')
 
-      if (referralCode) {
+      const submittedReferralCode = data.referral_code?.trim()
+      if (submittedReferralCode) {
         await fetch('/api/representatives/record-referral', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ referralCode, userId: authData.user.id }),
+          body: JSON.stringify({ referralCode: submittedReferralCode, userId: authData.user.id }),
         }).catch(() => {}) // non-fatal — never block signup on this
       }
 
@@ -264,6 +266,24 @@ function SignupForm() {
                 <p className="text-xs text-green-500 mt-1">✓ Passwords match</p>
               )}
             </div>
+
+            {/* ── Referral code field (visible for everyone except representatives) ── */}
+            {accountType !== 'representative' && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">
+                  Referral code <span className="text-ink-faint font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. JEREMI-BAU-927"
+                  className="input"
+                  {...register('referral_code')}
+                />
+                <p className="text-xs text-ink-faint mt-1">
+                  Were you referred by someone? Enter their code here.
+                </p>
+              </div>
+            )}
 
             {accountType === 'representative' && (
               <>
