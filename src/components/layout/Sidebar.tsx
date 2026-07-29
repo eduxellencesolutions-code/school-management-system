@@ -9,6 +9,7 @@ import {
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
+  TicketIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -76,6 +77,9 @@ export default function Sidebar({ user, org }: Props) {
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ label: 'Support', href: '/support', icon: TicketIcon }] : []),
+    ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
+    ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
