@@ -59,6 +59,13 @@ export async function POST(request: Request) {
     targetUserId = newUser.user.id;
   }
 
+  // Get role name for email
+  const { data: roleData } = await supabase
+    .from('platform_roles')
+    .select('name')
+    .eq('id', roleId)
+    .single();
+
   const { error: insertError } = await admin
     .from('platform_staff')
     .insert({ user_id: targetUserId, email, full_name: fullName, role_id: roleId, invited_by: user.id, activated_at: new Date().toISOString() });
@@ -75,6 +82,37 @@ export async function POST(request: Request) {
     p_reason: null,
     p_metadata: { email, roleId },
   });
+
+  // ── SEND INVITE EMAIL ──
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      const adminUrl = 'https://admin.eduxellence.org';
+      
+      await resend.emails.send({
+        from: 'Eduxellence Team <notifications@eduxellence.org>',
+        to: email,
+        subject: `You've been added to the Eduxellence Platform Team`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #0B1829;">Welcome to the Eduxellence Platform Team!</h2>
+            <p>Hi ${fullName},</p>
+            <p>You have been added as a <strong>${roleData?.name || 'team member'}</strong> on the Eduxellence platform.</p>
+            <p>You can access the admin area at:</p>
+            <p><a href="${adminUrl}" style="display: inline-block; padding: 10px 20px; background: #1E6BFF; color: white; text-decoration: none; border-radius: 6px;">Go to Admin Dashboard</a></p>
+            <p>Use your existing Eduxellence credentials to log in. If you don't have an account yet, you'll be prompted to set one up.</p>
+            <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;" />
+            <p style="color: #64748B; font-size: 12px;">This is an automated message from Eduxellence. Please do not reply to this email.</p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error('Failed to send invite email:', emailError);
+      // Don't fail the request - the staff record was created successfully
+    }
+  }
 
   return NextResponse.json({ success: true });
 }
