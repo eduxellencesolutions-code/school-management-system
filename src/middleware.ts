@@ -48,16 +48,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // ✅ FIX: Allow through anyone who is either a super admin OR an active platform_staff member
   if (isAdminHost) {
     const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
 
     if (!isSuperAdmin) {
-      // Logged in, but not a super admin — admin.* is not for this account,
-      // regardless of which path they typed. Send them to their real dashboard
-      // on the main domain instead of letting them browse anything here.
-      const redirectUrl = new URL('/dashboard', request.url)
-      redirectUrl.hostname = 'results.eduxellence.org'
-      return NextResponse.redirect(redirectUrl)
+      const { data: staffRow } = await supabase
+        .from('platform_staff')
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (!staffRow) {
+        // Logged in, but neither super admin nor active platform staff —
+        // admin.* is not for this account, regardless of which path they typed.
+        const redirectUrl = new URL('/dashboard', request.url)
+        redirectUrl.hostname = 'results.eduxellence.org'
+        return NextResponse.redirect(redirectUrl)
+      }
+
+      // Active platform staff — let them through, but they're not super admin,
+      // so don't auto-rewrite /dashboard to /overview (that's super-admin-only).
+      return response
     }
 
     // Confirmed super admin — root/dashboard requests land on the overview page.
