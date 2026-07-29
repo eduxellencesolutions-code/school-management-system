@@ -4,6 +4,7 @@ export type Workspace =
   | { type: 'school'; label: string; href: string }
   | { type: 'representative'; label: string; href: string }
   | { type: 'super_admin'; label: string; href: string }
+  | { type: 'staff'; label: string; href: string }
 
 export async function getUserWorkspaces(
   supabase: SupabaseClient,
@@ -20,11 +21,28 @@ export async function getUserWorkspaces(
   // Super admin check first — independent of role/org.
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (isSuperAdmin) {
-    workspaces.push({ type: 'super_admin', label: 'Super Admin Console', href: '/overview' })
+    workspaces.push({ type: 'super_admin', label: 'Super Admin Console', href: 'https://admin.eduxellence.org/overview' })
+  }
+
+  // Platform staff workspace — active platform_staff row is the source of truth.
+  // Skip this if already flagged super_admin, since that console supersedes it.
+  if (!isSuperAdmin) {
+    const { data: staffRow } = await supabase
+      .from('platform_staff')
+      .select('id, status, platform_roles(name)')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    if (staffRow) {
+      const roleName = (staffRow as { platform_roles?: { name?: string } }).platform_roles?.name ?? 'Staff'
+      workspaces.push({ type: 'staff', label: `${roleName} (Staff)`, href: 'https://admin.eduxellence.org/overview' })
+    }
   }
 
   // Representative workspace — presence of a representatives row is the source of truth,
   // not the users.role value (role is just a hint used at signup time).
+  // Retained even after staff promotion so commission history stays viewable.
   const { data: rep } = await supabase
     .from('representatives')
     .select('id')

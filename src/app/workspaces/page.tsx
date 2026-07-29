@@ -2,9 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getUserWorkspaces } from '@/lib/workspaces/getUserWorkspaces'
 import Link from 'next/link'
-import { School, Handshake, ShieldCheck } from 'lucide-react'
+import { School, Handshake, ShieldCheck, Briefcase } from 'lucide-react'
 
-const ICONS = { school: School, representative: Handshake, super_admin: ShieldCheck }
+const ICONS = { school: School, representative: Handshake, super_admin: ShieldCheck, staff: Briefcase }
 
 export default async function WorkspacesPage() {
   const supabase = await createClient()
