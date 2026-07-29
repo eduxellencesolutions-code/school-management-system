@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import TicketQueue from '@/components/super-admin/TicketQueue'
+import TicketQueue from './TicketQueueLoader'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,10 @@ export default async function SupportPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: canView } = await supabase.rpc('has_platform_permission', { p_user_id: user.id, p_permission_key: 'support.view' })
+  const { data: canView } = await supabase.rpc('has_platform_permission', {
+    p_user_id: user.id,
+    p_permission_key: 'support.view'
+  })
   if (!canView) redirect('/dashboard')
 
   return (
