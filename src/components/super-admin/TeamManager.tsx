@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, Plus, Sparkles, ShieldOff, ShieldCheck } from 'lucide-react'
+import { Loader2, Plus, Sparkles, ShieldOff, ShieldCheck, Trash2 } from 'lucide-react'
 
 interface Staff { id: string; email: string; full_name: string; status: string; roleName: string }
 interface Role { id: string; name: string }
@@ -15,6 +15,7 @@ export default function TeamManager() {
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [roleId, setRoleId] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -58,6 +59,20 @@ export default function TeamManager() {
     else setError(data.error)
   }
 
+  async function deleteStaff(id: string, fullName: string) {
+    if (!confirm(`Are you sure you want to permanently delete ${fullName}? This action cannot be undone.`)) return
+    
+    setDeletingId(id)
+    const res = await fetch(`/api/platform-staff/${id}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    setDeletingId(null)
+    
+    if (data.success) load()
+    else setError(data.error)
+  }
+
   if (loading) return <div className="p-8 text-center flex items-center justify-center gap-2"><Loader2 className="animate-spin" /></div>
 
   return (
@@ -90,11 +105,20 @@ export default function TeamManager() {
               <p className="text-sm font-medium text-ink">{s.full_name} <span className="text-xs text-ink-faint">({s.email})</span></p>
               <p className="text-xs text-ink-faint">{s.roleName} · <span className={s.status === 'active' ? 'text-green-600' : 'text-red-600'}>{s.status}</span></p>
             </div>
-            {s.status === 'active' ? (
-              <button onClick={() => setStatus(s.id, 'suspended')} className="btn-sm btn bg-red-50 text-red-600 flex items-center gap-1"><ShieldOff size={13} /> Suspend</button>
-            ) : (
-              <button onClick={() => setStatus(s.id, 'active')} className="btn-sm btn bg-green-50 text-green-600 flex items-center gap-1"><ShieldCheck size={13} /> Reactivate</button>
-            )}
+            <div className="flex items-center gap-2">
+              {s.status === 'active' ? (
+                <button onClick={() => setStatus(s.id, 'suspended')} className="btn-sm btn bg-red-50 text-red-600 flex items-center gap-1"><ShieldOff size={13} /> Suspend</button>
+              ) : (
+                <button onClick={() => setStatus(s.id, 'active')} className="btn-sm btn bg-green-50 text-green-600 flex items-center gap-1"><ShieldCheck size={13} /> Reactivate</button>
+              )}
+              <button 
+                onClick={() => deleteStaff(s.id, s.full_name)} 
+                disabled={deletingId === s.id}
+                className="btn-sm btn bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-1 disabled:opacity-50"
+              >
+                <Trash2 size={13} /> {deletingId === s.id ? '...' : 'Delete'}
+              </button>
+            </div>
           </div>
         ))}
       </div>
