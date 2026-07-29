@@ -45,9 +45,13 @@ export async function POST(request: Request) {
 
   // Reuse existing auth user if this email already has an account; otherwise create one
   const { data: existingUsers } = await admin.auth.admin.listUsers();
-  let targetUserId = existingUsers?.users.find(u => u.email === email)?.id;
+  const existingUser = existingUsers?.users.find(u => u.email === email);
+  let targetUserId = existingUser?.id;
+  let isNewUser = false;
+  let accessLink = 'https://admin.eduxellence.org'; // existing users just log in as normal
 
   if (!targetUserId) {
+    isNewUser = true;
     const { data: newUser, error: createError } = await admin.auth.admin.createUser({
       email,
       email_confirm: true,
@@ -57,6 +61,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Failed to create staff account: ${createError?.message}` }, { status: 500 });
     }
     targetUserId = newUser.user.id;
+
+    // Brand-new account has no password yet — generate a real invite link
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { redirectTo: 'https://admin.eduxellence.org/set-password' },
+    });
+    if (linkError || !linkData?.properties?.action_link) {
+      return NextResponse.json({ error: `Failed to generate invite link: ${linkError?.message}` }, { status: 500 });
+    }
+    accessLink = linkData.properties.action_link;
   }
 
   // Get role name for email
@@ -88,11 +103,10 @@ export async function POST(request: Request) {
     try {
       const { Resend } = await import('resend');
       const resend = new Resend(process.env.RESEND_API_KEY);
-      
-      const adminUrl = 'https://admin.eduxellence.org';
+
+      const adminUrl = accessLink;
       const roleName = roleData?.name || 'team member';
-      
-      // Role-specific descriptions and duties
+
       const roleDetails: Record<string, { title: string; duties: string[]; impact: string }> = {
         'Operations Manager': {
           title: 'Operations Manager',
@@ -164,81 +178,72 @@ export async function POST(request: Request) {
 
       const dutiesHtml = details.duties.map(d => `<li style="color: #475569; font-size: 14px; line-height: 1.8;">${d}</li>`).join('');
 
+      const nextStepsHtml = isNewUser
+        ? `<li>Click the button above to set your password</li>
+           <li>Log in using your new Eduxellence credentials</li>
+           <li>Familiarize yourself with your tools and team</li>
+           <li>Your team lead will reach out to schedule an orientation</li>`
+        : `<li>Click the button above and log in with your existing Eduxellence credentials</li>
+           <li>You'll now see your new role available after login</li>
+           <li>Familiarize yourself with your tools and team</li>
+           <li>Your team lead will reach out to schedule an orientation</li>`;
+
       await resend.emails.send({
         from: 'Eduxellence Team <notifications@eduxellence.org>',
         to: email,
         subject: `Appointment: ${details.title} at Eduxellence`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E2E8F0; border-radius: 8px;">
-            
-            <!-- Header -->
             <div style="background: #0B1829; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
               <h1 style="color: #FFFFFF; margin: 0; font-size: 24px;">Eduxellence</h1>
               <p style="color: #0FC9A0; margin: 0; font-size: 14px;">School Management System</p>
             </div>
-
-            <!-- Body -->
             <div style="padding: 30px 20px;">
               <h2 style="color: #0B1829; margin-top: 0;">Appointment Notification</h2>
-              
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
                 Dear <strong>${fullName}</strong>,
               </p>
-              
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-                We are pleased to inform you that you have been appointed as 
-                <strong style="color: #1E6BFF;">${details.title}</strong> 
+                We are pleased to inform you that you have been appointed as
+                <strong style="color: #1E6BFF;">${details.title}</strong>
                 on the Eduxellence Platform Team.
               </p>
-
-              <!-- Role Overview -->
               <div style="background: #F7F9FC; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #0B1829; margin-top: 0;">Your Role</h3>
                 <p style="color: #475569; font-size: 14px; line-height: 1.6;">
                   ${details.impact}
                 </p>
               </div>
-
-              <!-- Key Responsibilities -->
               <div style="margin: 20px 0;">
                 <h3 style="color: #0B1829;">Key Responsibilities</h3>
                 <ul style="padding-left: 20px; margin: 0;">
                   ${dutiesHtml}
                 </ul>
               </div>
-
-              <!-- Access Information -->
               <div style="background: #1E6BFF; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
                 <p style="color: #FFFFFF; font-size: 14px; margin: 0 0 10px 0;">
                   <strong>Access the Admin Dashboard</strong>
                 </p>
-                <a href="${adminUrl}" 
+                <a href="${adminUrl}"
                    style="background: #FFFFFF; color: #1E6BFF; padding: 10px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
                   Go to Admin Dashboard →
                 </a>
               </div>
-
-              <!-- Welcome Message -->
               <div style="border-top: 2px solid #0FC9A0; padding-top: 20px; margin-top: 20px;">
                 <p style="color: #0B1829; font-size: 16px; font-weight: bold;">
                   Welcome to the Eduxellence Platform Team! 🎉
                 </p>
                 <p style="color: #475569; font-size: 14px; line-height: 1.6;">
-                  We are excited to have you on board. Your expertise and dedication will be instrumental 
+                  We are excited to have you on board. Your expertise and dedication will be instrumental
                   in delivering exceptional service to schools and teachers across Nigeria.
                 </p>
                 <p style="color: #475569; font-size: 14px; line-height: 1.6;">
                   <strong>Next Steps:</strong>
                   <ol style="color: #475569; font-size: 14px; line-height: 1.8; padding-left: 20px;">
-                    <li>Click the button above to access the Admin Dashboard</li>
-                    <li>Log in using your Eduxellence credentials</li>
-                    <li>Familiarize yourself with your tools and team</li>
-                    <li>Your team lead will reach out to schedule an orientation</li>
+                    ${nextStepsHtml}
                   </ol>
                 </p>
               </div>
-
-              <!-- Footer -->
               <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;">
               <p style="color: #94A3B8; font-size: 12px; text-align: center;">
                 This is an automated message from Eduxellence. Please do not reply to this email.<br>
