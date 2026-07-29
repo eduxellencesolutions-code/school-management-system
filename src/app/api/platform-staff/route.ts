@@ -83,34 +83,173 @@ export async function POST(request: Request) {
     p_metadata: { email, roleId },
   });
 
-  // ── SEND INVITE EMAIL ──
+  // ── SEND PROFESSIONAL INVITE EMAIL ──
   if (process.env.RESEND_API_KEY) {
     try {
       const { Resend } = await import('resend');
       const resend = new Resend(process.env.RESEND_API_KEY);
       
       const adminUrl = 'https://admin.eduxellence.org';
+      const roleName = roleData?.name || 'team member';
       
+      // Role-specific descriptions and duties
+      const roleDetails: Record<string, { title: string; duties: string[]; impact: string }> = {
+        'Operations Manager': {
+          title: 'Operations Manager',
+          duties: [
+            'Oversee day-to-day platform operations and service delivery',
+            'Monitor system performance and escalate technical issues',
+            'Lead and support the Support Agent team',
+            'Ensure timely resolution of all support tickets',
+            'Contribute to platform improvement initiatives',
+            'Coordinate with cross-functional teams for seamless operations'
+          ],
+          impact: 'You will be the backbone of our platform operations, ensuring that schools and teachers across Nigeria experience reliable, high-quality service every day.'
+        },
+        'Support Agent': {
+          title: 'Support Agent',
+          duties: [
+            'Respond to customer inquiries and support tickets promptly',
+            'Assist schools and teachers with platform onboarding',
+            'Troubleshoot and resolve technical issues',
+            'Document common issues and contribute to the knowledge base',
+            'Escalate complex issues to the Operations Manager',
+            'Maintain high customer satisfaction ratings'
+          ],
+          impact: 'You will be the first point of contact for our users, making a direct impact on their experience and success with Eduxellence.'
+        },
+        'Finance Officer': {
+          title: 'Finance Officer',
+          duties: [
+            'Manage payments, billing, and subscription processing',
+            'Review and approve representative commissions',
+            'Ensure accurate financial records and reconciliation',
+            'Monitor subscription revenue and payment trends',
+            'Handle refund requests and payment disputes',
+            'Prepare financial reports for management'
+          ],
+          impact: 'You will ensure the financial integrity of Eduxellence, enabling us to grow sustainably and reward our representatives fairly.'
+        },
+        'Representative Manager': {
+          title: 'Representative Manager',
+          duties: [
+            'Oversee the Eduxellence Growth Representative network',
+            'Review and approve representative applications',
+            'Monitor representative performance and commission payouts',
+            'Provide training and support to representatives',
+            'Develop strategies to grow the representative network',
+            'Ensure compliance with representative program policies'
+          ],
+          impact: 'You will build and lead a nationwide network of education advocates, driving our growth across Nigeria.'
+        },
+        'Security Administrator': {
+          title: 'Security Administrator',
+          duties: [
+            'Monitor audit logs and platform security events',
+            'Investigate suspicious activities and security incidents',
+            'Ensure compliance with data protection policies',
+            'Manage user access and permissions',
+            'Conduct regular security reviews and assessments',
+            'Recommend security improvements and best practices'
+          ],
+          impact: 'You will protect the trust that schools and teachers place in Eduxellence, ensuring their data remains safe and secure.'
+        }
+      };
+
+      const details = roleDetails[roleName] || {
+        title: roleName,
+        duties: ['Perform duties as assigned by the Super Admin'],
+        impact: 'Your contribution will help Eduxellence deliver exceptional service to schools and teachers across Nigeria.'
+      };
+
+      const dutiesHtml = details.duties.map(d => `<li style="color: #475569; font-size: 14px; line-height: 1.8;">${d}</li>`).join('');
+
       await resend.emails.send({
         from: 'Eduxellence Team <notifications@eduxellence.org>',
         to: email,
-        subject: `You've been given an appointment to the Eduxellence Platform Team`,
+        subject: `Appointment: ${details.title} at Eduxellence`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #0B1829;">Welcome to the Eduxellence Platform Team!</h2>
-            <p>Hi ${fullName},</p>
-            <p>You have been added as a <strong>${roleData?.name || 'team member'}</strong> on the Eduxellence platform.</p>
-            <p>You can access the admin area at:</p>
-            <p><a href="${adminUrl}" style="display: inline-block; padding: 10px 20px; background: #1E6BFF; color: white; text-decoration: none; border-radius: 6px;">Go to Admin Dashboard</a></p>
-            <p>Use your existing Eduxellence credentials to log in. If you don't have an account yet, you'll be prompted to set one up.</p>
-            <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;" />
-            <p style="color: #64748B; font-size: 12px;">This is an automated message from Eduxellence. Please do not reply to this email.</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E2E8F0; border-radius: 8px;">
+            
+            <!-- Header -->
+            <div style="background: #0B1829; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+              <h1 style="color: #FFFFFF; margin: 0; font-size: 24px;">Eduxellence</h1>
+              <p style="color: #0FC9A0; margin: 0; font-size: 14px;">School Management System</p>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 30px 20px;">
+              <h2 style="color: #0B1829; margin-top: 0;">Appointment Notification</h2>
+              
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+                Dear <strong>${fullName}</strong>,
+              </p>
+              
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+                We are pleased to inform you that you have been appointed as 
+                <strong style="color: #1E6BFF;">${details.title}</strong> 
+                on the Eduxellence Platform Team.
+              </p>
+
+              <!-- Role Overview -->
+              <div style="background: #F7F9FC; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #0B1829; margin-top: 0;">Your Role</h3>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                  ${details.impact}
+                </p>
+              </div>
+
+              <!-- Key Responsibilities -->
+              <div style="margin: 20px 0;">
+                <h3 style="color: #0B1829;">Key Responsibilities</h3>
+                <ul style="padding-left: 20px; margin: 0;">
+                  ${dutiesHtml}
+                </ul>
+              </div>
+
+              <!-- Access Information -->
+              <div style="background: #1E6BFF; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <p style="color: #FFFFFF; font-size: 14px; margin: 0 0 10px 0;">
+                  <strong>Access the Admin Dashboard</strong>
+                </p>
+                <a href="${adminUrl}" 
+                   style="background: #FFFFFF; color: #1E6BFF; padding: 10px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">
+                  Go to Admin Dashboard →
+                </a>
+              </div>
+
+              <!-- Welcome Message -->
+              <div style="border-top: 2px solid #0FC9A0; padding-top: 20px; margin-top: 20px;">
+                <p style="color: #0B1829; font-size: 16px; font-weight: bold;">
+                  Welcome to the Eduxellence Platform Team! 🎉
+                </p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                  We are excited to have you on board. Your expertise and dedication will be instrumental 
+                  in delivering exceptional service to schools and teachers across Nigeria.
+                </p>
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                  <strong>Next Steps:</strong>
+                  <ol style="color: #475569; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+                    <li>Click the button above to access the Admin Dashboard</li>
+                    <li>Log in using your Eduxellence credentials</li>
+                    <li>Familiarize yourself with your tools and team</li>
+                    <li>Your team lead will reach out to schedule an orientation</li>
+                  </ol>
+                </p>
+              </div>
+
+              <!-- Footer -->
+              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;">
+              <p style="color: #94A3B8; font-size: 12px; text-align: center;">
+                This is an automated message from Eduxellence. Please do not reply to this email.<br>
+                © 2026 Eduxellence. All rights reserved.
+              </p>
+            </div>
           </div>
         `,
       });
     } catch (emailError) {
       console.error('Failed to send invite email:', emailError);
-      // Don't fail the request - the staff record was created successfully
     }
   }
 
