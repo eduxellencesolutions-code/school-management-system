@@ -48,33 +48,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // ✅ FIX: Allow through anyone who is either a super admin OR an active platform_staff member
+  // ✅ UPDATED: Admin host — only allow paths that belong to (super-admin) route group
   if (isAdminHost) {
     const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
 
-    if (!isSuperAdmin) {
-      const { data: staffRow } = await supabase
-        .from('platform_staff')
-        .select('id, status')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle()
+    const { data: staffRow } = isSuperAdmin
+      ? { data: null }
+      : await supabase
+          .from('platform_staff')
+          .select('id, status')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle()
 
-      if (!staffRow) {
-        // Logged in, but neither super admin nor active platform staff —
-        // admin.* is not for this account, regardless of which path they typed.
-        const redirectUrl = new URL('/dashboard', request.url)
-        redirectUrl.hostname = 'results.eduxellence.org'
-        return NextResponse.redirect(redirectUrl)
-      }
-
-      // Active platform staff — let them through, but they're not super admin,
-      // so don't auto-rewrite /dashboard to /overview (that's super-admin-only).
-      return response
+    if (!isSuperAdmin && !staffRow) {
+      const redirectUrl = new URL('/dashboard', request.url)
+      redirectUrl.hostname = 'results.eduxellence.org'
+      return NextResponse.redirect(redirectUrl)
     }
 
-    // Confirmed super admin — root/dashboard requests land on the overview page.
-    if (pathname === '/dashboard') {
+    // Whitelist of paths that actually belong to the (super-admin) route group.
+    const ADMIN_PATHS = ['/overview', '/schools', '/solo-teachers', '/commissions', '/representatives', '/support', '/team']
+    const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+    if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
+      // Any non-admin route (old teacher/rep pages, generic /dashboard, /workspaces, etc.)
+      // requested on admin.* gets redirected to the correct admin landing page instead.
       const url = request.nextUrl.clone()
       url.pathname = '/overview'
       return NextResponse.rewrite(url)
