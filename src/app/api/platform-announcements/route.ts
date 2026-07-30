@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing title, message, or audience' }, { status: 400 })
   }
 
-  const { error } = await supabase.from('announcements').insert({
+  // Insert the announcement
+  const { error: insertError } = await supabase.from('announcements').insert({
     title,
     body: message,
     audience,
@@ -55,6 +56,40 @@ export async function POST(request: Request) {
     expires_at: expiresAt || null,
   })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
+
+  // ── Fan out in-app notification to every user ──
+  const { createClient: createServiceClient } = await import('@supabase/supabase-js')
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  // Platform-wide: fetch all users
+  const { data: targetUsers } = await admin
+    .from('users')
+    .select('id, organization_id')
+
+  if (targetUsers && targetUsers.length > 0) {
+    const notificationRows = targetUsers.map(u => ({
+      user_id: u.id,
+      organization_id: u.organization_id,
+      title: title,
+      body: message,
+      is_read: false,
+      metadata: { type: 'platform_announcement' },
+    }))
+    
+    const { error: notifError } = await admin
+      .from('notifications')
+      .insert(notificationRows)
+
+    if (notifError) {
+      console.error('Failed to fan out notifications:', notifError)
+      // Don't fail the request - announcement was created successfully
+    }
+  }
+
   return NextResponse.json({ success: true })
 }

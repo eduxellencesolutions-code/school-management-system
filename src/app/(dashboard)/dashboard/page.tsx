@@ -5,6 +5,7 @@ import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarCh
 import { getTeacherDashboardData } from '@/lib/teacher-utils'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import FeatureCards from '@/components/dashboard/FeatureCards'
+import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'  // ✅ NEW
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -402,6 +403,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* ✅ NEW: Announcement Banner */}
+      <AnnouncementBanner />
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
