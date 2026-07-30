@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
 // ✅ FIX: Changed from '@/components/admin/' to '@/components/super-admin/'
 import SoloTeacherStatusActions from '@/components/super-admin/SoloTeacherStatusActions'
 
@@ -15,8 +16,10 @@ export default async function SoloTeacherManagePage({ params }: Props) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-  if (!isSuperAdmin) redirect('/dashboard')
+
+  // ✅ Use shared helper
+  const allowed = await isAdminAllowed(supabase, user.id)
+  if (!allowed) redirect('/dashboard')
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

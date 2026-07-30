@@ -6,6 +6,7 @@ import { ArrowLeft, Building, Users, BookOpen, Calendar, ShieldAlert, Ticket, Us
 import SchoolStatusActions from '@/components/super-admin/SchoolStatusActions'
 import ReassignAdminForm from '@/components/super-admin/ReassignAdminForm'
 import DeleteSchoolForm from '@/components/super-admin/DeleteSchoolForm'
+import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +18,9 @@ export default async function SchoolDetailPage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-  if (!isSuperAdmin) redirect('/dashboard')
+  // ✅ Use shared helper
+  const allowed = await isAdminAllowed(supabase, user.id)
+  if (!allowed) redirect('/dashboard')
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

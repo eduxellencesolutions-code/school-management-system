@@ -3,6 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { Building, Users, GraduationCap, FileText, TrendingUp, AlertTriangle, DollarSign, UserPlus, AlertCircle, Clock, Ticket } from 'lucide-react'
 import Link from 'next/link'
+import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,8 +12,9 @@ export default async function SuperAdminOverview() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-  if (!isSuperAdmin) redirect('/dashboard')
+  // ✅ Use shared helper
+  const allowed = await isAdminAllowed(supabase, user.id)
+  if (!allowed) redirect('/dashboard')
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

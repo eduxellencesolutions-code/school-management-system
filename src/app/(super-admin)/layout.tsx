@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
 import Link from 'next/link'
 import { LayoutDashboard, Building, Users, UsersRound } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
@@ -10,8 +11,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-  if (!isSuperAdmin) redirect('/dashboard')
+  const allowed = await isAdminAllowed(supabase, user.id)
+  if (!allowed) redirect('/dashboard')
 
   return (
     <div className="min-h-screen bg-surface-50">
