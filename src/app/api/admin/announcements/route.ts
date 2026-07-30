@@ -19,10 +19,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Only admins can view this' }, { status: 403 });
   }
 
+  // ✅ Include both org-specific AND platform-wide announcements
   const { data: announcements, error } = await supabase
     .from('announcements')
-    .select('id, title, body, audience, created_at, expires_at')
-    .eq('organization_id', userRow.organization_id)
+    .select('id, title, body, audience, created_at, expires_at, organization_id')
+    .or(`organization_id.eq.${userRow.organization_id},organization_id.is.null`)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -51,16 +52,24 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { title, body: content, audience, expiresAt } = body;
+  const { title, body: content, audience, expiresAt, isPlatformWide } = body;
 
   if (!title || !content) {
     return NextResponse.json({ error: 'Title and body are required' }, { status: 400 });
   }
 
+  // ✅ Check if user is Super Admin and wants to post platform-wide
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+
+  let organizationId = userRow.organization_id;
+  if (isSuperAdmin && isPlatformWide === true) {
+    organizationId = null;
+  }
+
   const { error } = await supabase
     .from('announcements')
     .insert({
-      organization_id: userRow.organization_id,
+      organization_id: organizationId,
       title,
       body: content,
       audience: audience ?? 'all',

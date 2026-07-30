@@ -10,6 +10,7 @@ interface Announcement {
   audience: string
   created_at: string
   expires_at: string | null
+  organization_id: string | null // ✅ NEW
 }
 
 export default function AnnouncementsManager() {
@@ -22,6 +23,7 @@ export default function AnnouncementsManager() {
   const [audience, setAudience] = useState('all')
   const [expiresAt, setExpiresAt] = useState('')
   const [saving, setSaving] = useState(false)
+  const [isPlatformWide, setIsPlatformWide] = useState(false) // ✅ NEW
 
   async function load() {
     setLoading(true)
@@ -42,11 +44,18 @@ export default function AnnouncementsManager() {
     const res = await fetch('/api/admin/announcements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body: content, audience, expiresAt: expiresAt || null }),
+      body: JSON.stringify({ 
+        title, 
+        body: content, 
+        audience, 
+        expiresAt: expiresAt || null,
+        isPlatformWide, // ✅ NEW
+      }),
     })
     const data = await res.json()
     if (data.success) {
       setTitle(''); setContent(''); setExpiresAt(''); setShowForm(false)
+      setIsPlatformWide(false) // ✅ NEW
       load()
     } else {
       setError(data.error ?? 'Failed to post announcement.')
@@ -55,6 +64,7 @@ export default function AnnouncementsManager() {
   }
 
   async function remove(id: string) {
+    if (!confirm('Delete this announcement?')) return
     const res = await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' })
     const data = await res.json()
     if (data.success) load()
@@ -91,6 +101,19 @@ export default function AnnouncementsManager() {
             <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)}
               className="border border-surface-200 rounded px-3 py-2 text-sm" placeholder="Expires (optional)" />
           </div>
+          {/* ✅ NEW: Platform-wide checkbox */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isPlatformWide"
+              checked={isPlatformWide}
+              onChange={(e) => setIsPlatformWide(e.target.checked)}
+              className="rounded border-surface-300 text-brand-500 focus:ring-brand-500"
+            />
+            <label htmlFor="isPlatformWide" className="text-sm text-ink">
+              Platform-wide announcement (visible to all schools)
+            </label>
+          </div>
           <button onClick={create} disabled={saving} className="btn-primary btn-sm btn w-fit">
             {saving ? 'Posting...' : 'Post Announcement'}
           </button>
@@ -111,10 +134,18 @@ export default function AnnouncementsManager() {
                 <div>
                   <p className="text-sm font-semibold text-ink">{a.title}</p>
                   <p className="text-xs text-ink-muted mt-1">{a.body}</p>
-                  <p className="text-[10px] text-ink-faint mt-1">
-                    {a.audience} · {new Date(a.created_at).toLocaleDateString('en-NG')}
-                    {a.expires_at && ` · Expires ${new Date(a.expires_at).toLocaleDateString('en-NG')}`}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-[10px] text-ink-faint">
+                      {a.audience} · {new Date(a.created_at).toLocaleDateString('en-NG')}
+                      {a.expires_at && ` · Expires ${new Date(a.expires_at).toLocaleDateString('en-NG')}`}
+                    </span>
+                    {/* ✅ NEW: Show platform-wide badge */}
+                    {a.organization_id === null && (
+                      <span className="text-[10px] font-medium text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">
+                        Platform-wide
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <button onClick={() => remove(a.id)} className="text-ink-faint hover:text-red-600">
                   <Trash2 size={14} />
