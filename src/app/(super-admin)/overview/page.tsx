@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
-import { Building, Users, GraduationCap, FileText, TrendingUp, AlertTriangle, DollarSign, UserPlus } from 'lucide-react'
+import { Building, Users, GraduationCap, FileText, TrendingUp, AlertTriangle, DollarSign, UserPlus, AlertCircle, Clock, Ticket } from 'lucide-react'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,23 @@ export default async function SuperAdminOverview() {
     (paidOrgs ?? []).reduce((sum, o) => sum + (PLAN_PRICES[o.subscription_plan] ?? 0), 0) +
     (paidSolo ?? []).length * 3000
 
+  // ── FETCH "NEEDS ATTENTION" DATA ──
+  const now = new Date();
+  const in7Days = new Date(now.getTime() + 7 * 86400000).toISOString();
+
+  const [{ data: expiring }, { data: criticalTickets }, { data: unassignedTickets }, { data: pendingCommissions }] = await Promise.all([
+    admin.from('organizations').select('id, name, subscription_expires_at').not('subscription_expires_at', 'is', null).lte('subscription_expires_at', in7Days).gte('subscription_expires_at', now.toISOString()),
+    admin.from('support_tickets').select('id, subject').eq('priority', 'critical').not('status', 'in', '(resolved,closed)'),
+    admin.from('support_tickets').select('id, subject').is('assigned_to', null).not('status', 'in', '(resolved,closed)'),
+    admin.from('commissions').select('id, amount').eq('status', 'pending'),
+  ]);
+
+  const attentionItems = [
+    ...(expiring ?? []).map(o => ({ severity: 'amber', label: `${o.name} expires ${new Date(o.subscription_expires_at).toLocaleDateString('en-NG')}`, href: `/schools/${o.id}` })),
+    ...(criticalTickets ?? []).map(t => ({ severity: 'red', label: `Critical ticket: ${t.subject}`, href: `/support?ticket=${t.id}` })),
+    ...(unassignedTickets ?? []).map(t => ({ severity: 'amber', label: `Unassigned: ${t.subject}`, href: `/support?ticket=${t.id}` })),
+  ];
+
   const stats = [
     { label: 'Total Schools', value: totalSchools ?? 0, icon: Building, color: 'text-brand-500', bg: 'bg-brand-50' },
     { label: 'Active Schools', value: activeSchools ?? 0, icon: Building, color: 'text-green-600', bg: 'bg-green-50' },
@@ -147,6 +165,40 @@ export default async function SuperAdminOverview() {
           </div>
         ) : (
           <p className="text-xs text-ink-faint">No subscriptions expiring in the next 7 days.</p>
+        )}
+      </div>
+
+      {/* ── NEW: NEEDS ATTENTION CARD ── */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertCircle size={16} className="text-red-600" />
+          <h2 className="font-semibold text-sm text-ink">Needs Attention</h2>
+          <span className="text-xs text-ink-faint ml-auto">
+            {attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        {attentionItems.length > 0 ? (
+          <div className="divide-y divide-surface-200">
+            {attentionItems.map((item, idx) => (
+              <Link key={idx} href={item.href} className="py-2 flex items-center gap-3 text-sm hover:bg-surface-50 transition-colors -mx-2 px-2 rounded">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.severity === 'red' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                <span className="text-ink flex-1">{item.label}</span>
+                <span className="text-xs text-ink-faint">
+                  {item.severity === 'red' ? 'Critical' : 'Urgent'}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-ink-faint">All systems clear — no pending issues.</p>
+        )}
+        {pendingCommissions && pendingCommissions.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-surface-100">
+            <p className="text-xs text-ink-muted">
+              <strong>{pendingCommissions.length}</strong> pending commission{pendingCommissions.length !== 1 ? 's' : ''} 
+              {' · Total: '}₦{pendingCommissions.reduce((s, c) => s + c.amount, 0).toLocaleString()}
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Building, Users, BookOpen, Calendar, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Building, Users, BookOpen, Calendar, ShieldAlert, Ticket, UserPlus } from 'lucide-react'
 import SchoolStatusActions from '@/components/super-admin/SchoolStatusActions'
 import ReassignAdminForm from '@/components/super-admin/ReassignAdminForm'
 import DeleteSchoolForm from '@/components/super-admin/DeleteSchoolForm'
@@ -64,6 +64,27 @@ export default async function SchoolDetailPage({ params }: Props) {
 
   if (learnersError) {
     console.error('Error fetching learners count:', learnersError)
+  }
+
+  // ── NEW: Fetch support tickets ──
+  const { data: tickets } = await admin
+    .from('support_tickets')
+    .select('id, subject, status, priority, created_at')
+    .eq('organization_id', id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  // ── NEW: Fetch referral info ──
+  const { data: referral } = await admin
+    .from('referrals')
+    .select('representative_id')
+    .eq('organization_id', id)
+    .maybeSingle();
+
+  let referredByName: string | null = null;
+  if (referral?.representative_id) {
+    const { data: rep } = await admin.from('representatives').select('full_name').eq('id', referral.representative_id).single();
+    referredByName = rep?.full_name ?? null;
   }
 
   // ✅ FIX 1: Simplified to just 'admin' (school_admin doesn't exist)
@@ -132,6 +153,31 @@ export default async function SchoolDetailPage({ params }: Props) {
           currentExpiry={org.subscription_expires_at}
           currentPlan={org.subscription_plan ?? 'free'}
         />
+      </div>
+
+      {/* ── NEW: Support Tickets Card ── */}
+      <div className="card p-5">
+        <h2 className="font-semibold text-sm text-ink mb-3 flex items-center gap-2">
+          <Ticket size={16} className="text-ink-muted" />
+          Support Tickets
+        </h2>
+        {referredByName && (
+          <p className="text-xs text-ink-muted mb-3">
+            Referred by: <strong>{referredByName}</strong>
+          </p>
+        )}
+        {tickets && tickets.length > 0 ? (
+          <div className="divide-y divide-surface-100">
+            {tickets.map(t => (
+              <div key={t.id} className="py-2 flex justify-between text-sm">
+                <span>{t.subject}</span>
+                <span className="text-xs text-ink-faint">{t.status} · {t.priority}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-ink-faint">No support tickets for this school.</p>
+        )}
       </div>
 
       <div className="card p-5">

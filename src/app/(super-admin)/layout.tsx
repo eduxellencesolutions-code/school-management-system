@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { LayoutDashboard, Building, Users, UsersRound } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
+import GlobalSearch from '@/components/super-admin/GlobalSearch'
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -30,6 +31,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
             <UsersRound size={15} /> Team
           </Link>
           <LogoutButton />
+          <GlobalSearch />
         </nav>
       </header>
       <main className="p-6">{children}</main>
