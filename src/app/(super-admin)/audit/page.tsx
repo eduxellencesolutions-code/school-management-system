@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { ShieldAlert } from 'lucide-react'
+import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,11 +11,10 @@ export default async function AuditLogPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: canView } = await supabase.rpc('has_platform_permission', {
-    p_user_id: user.id,
-    p_permission_key: 'security.audit',
-  })
-  if (!canView) redirect('/dashboard')
+  // ✅ Use the shared permission helper
+  const access = await getStaffAccess(supabase, user.id)
+  const allowed = access.isSuperAdmin || hasPermission(access, 'security.audit')
+  if (!allowed) redirect('/dashboard')
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
