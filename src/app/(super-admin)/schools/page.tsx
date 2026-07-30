@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Building, Users, BookOpen } from 'lucide-react'
-import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
+import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,8 +11,9 @@ export default async function SchoolsListPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // ✅ Use shared helper
-  const allowed = await isAdminAllowed(supabase, user.id)
+  // ✅ Use permission-based check
+  const access = await getStaffAccess(supabase, user.id)
+  const allowed = access.isSuperAdmin || hasPermission(access, 'schools.view')
   if (!allowed) redirect('/dashboard')
 
   // Service-role client — bypasses RLS to see every organization, not just one

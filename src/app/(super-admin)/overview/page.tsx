@@ -3,7 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { Building, Users, GraduationCap, FileText, TrendingUp, AlertTriangle, DollarSign, UserPlus, AlertCircle, Clock, Ticket } from 'lucide-react'
 import Link from 'next/link'
-import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
+import { getStaffAccess, getStaffLandingPath } from '@/lib/auth/getStaffAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,9 +12,10 @@ export default async function SuperAdminOverview() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // ✅ Use shared helper
-  const allowed = await isAdminAllowed(supabase, user.id)
-  if (!allowed) redirect('/dashboard')
+  // ✅ Get staff access and redirect non-super-admins to their landing page
+  const access = await getStaffAccess(supabase, user.id)
+  if (!access.isSuperAdmin && !access.isStaff) redirect('/dashboard')
+  if (!access.isSuperAdmin) redirect(getStaffLandingPath(access))
 
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

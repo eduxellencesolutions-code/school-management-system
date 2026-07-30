@@ -3,7 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users } from 'lucide-react'
-import { isAdminAllowed } from '@/lib/auth/isAdminAllowed'
+import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,8 +12,9 @@ export default async function SoloTeachersPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // ✅ Use shared helper
-  const allowed = await isAdminAllowed(supabase, user.id)
+  // ✅ Use permission-based check
+  const access = await getStaffAccess(supabase, user.id)
+  const allowed = access.isSuperAdmin || hasPermission(access, 'schools.view')
   if (!allowed) redirect('/dashboard')
 
   const admin = createServiceClient(
