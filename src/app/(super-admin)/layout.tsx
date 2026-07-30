@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 
@@ -23,6 +23,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     { href: '/commissions', label: 'Commissions', icon: DollarSign, show: hasPermission(access, 'billing.view') || hasPermission(access, 'commissions.approve') },
     { href: '/representatives', label: 'Representatives', icon: Handshake, show: hasPermission(access, 'representatives.view') },
     { href: '/audit', label: 'Audit Log', icon: ShieldAlert, show: hasPermission(access, 'security.audit') },
+    { href: '/announcements', label: 'Announcements', icon: Megaphone, show: hasPermission(access, 'announcements.manage') || access.isSuperAdmin },
     { href: '/team', label: 'Team', icon: UsersRound, show: access.isSuperAdmin },
   ].filter(l => l.show)
 
