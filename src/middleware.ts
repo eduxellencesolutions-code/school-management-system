@@ -67,8 +67,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // Whitelist of paths that actually belong to the (super-admin) route group.
-    const ADMIN_PATHS = ['/overview', '/schools', '/solo-teachers', '/commissions', '/representatives', '/support', '/team']
+    // ✅ FIX: Added '/audit', '/analytics', and '/announcements' to the whitelist
+    const ADMIN_PATHS = [
+      '/overview',
+      '/schools',
+      '/solo-teachers',
+      '/commissions',
+      '/representatives',
+      '/support',
+      '/team',
+      '/audit',
+      '/analytics',
+      '/announcements',
+    ]
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
