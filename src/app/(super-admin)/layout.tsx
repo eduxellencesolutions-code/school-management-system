@@ -23,10 +23,6 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   const moreTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const moreDropdownRef = useRef<HTMLDivElement>(null)
 
-  // This is a client-side version - you'll need to fetch user data in a useEffect
-  // or use a server component for the initial data and pass it down
-  // For simplicity, I'm assuming you have access data from the server
-
   const handleMoreEnter = () => {
     if (moreTimeoutRef.current) {
       clearTimeout(moreTimeoutRef.current)
@@ -48,9 +44,6 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       }
     }
   }, [])
-
-  // ... rest of your component logic
-  // (You'll need to move the data fetching logic here or use a server component pattern)
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -111,7 +104,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                   <Link href="/audit" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                     <ShieldAlert size={13} /> Audit Log
                   </Link>
-                  <Link href="/announcements" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
+                  {/* ✅ Updated: Changed from /announcements to /platform-announcements */}
+                  <Link href="/platform-announcements" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                     <Megaphone size={13} /> Announcements
                   </Link>
                   <Link href="/team" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
@@ -132,7 +126,6 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             </button>
             {isMobileMenuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[160px] z-50">
-                {/* Mobile nav links */}
                 <Link href="/overview" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                   <LayoutDashboard size={13} /> Overview
                 </Link>
@@ -157,7 +150,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
                 <Link href="/audit" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                   <ShieldAlert size={13} /> Audit Log
                 </Link>
-                <Link href="/announcements" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
+                {/* ✅ Updated: Changed from /announcements to /platform-announcements */}
+                <Link href="/platform-announcements" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                   <Megaphone size={13} /> Announcements
                 </Link>
                 <Link href="/team" className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">

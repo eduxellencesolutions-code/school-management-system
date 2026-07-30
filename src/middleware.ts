@@ -67,7 +67,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // ✅ FIX: Added '/audit', '/analytics', and '/announcements' to the whitelist
+    // ✅ All admin paths whitelisted - updated to /platform-announcements
     const ADMIN_PATHS = [
       '/overview',
       '/schools',
@@ -78,7 +78,7 @@ export async function middleware(request: NextRequest) {
       '/team',
       '/audit',
       '/analytics',
-      '/announcements',
+      '/platform-announcements',  // ✅ Changed from '/announcements'
     ]
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
