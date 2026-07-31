@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
 
-  // ── Fan out in-app notification to every user ──
+  // ── Fan out in-app notification ONLY to users matching the selected audience ──
   const { createClient: createServiceClient } = await import('@supabase/supabase-js')
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -66,21 +66,40 @@ export async function POST(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  // Platform-wide: fetch all users
-  const { data: targetUsers } = await admin
-    .from('users')
-    .select('id, organization_id')
+  let targetUserIds: string[] = []
 
-  if (targetUsers && targetUsers.length > 0) {
-    const notificationRows = targetUsers.map(u => ({
-      user_id: u.id,
-      organization_id: u.organization_id,
+  if (audience === 'all') {
+    const { data: allUsers } = await admin.from('users').select('id')
+    targetUserIds = (allUsers ?? []).map(u => u.id)
+  } else if (audience === 'platform_staff') {
+    const { data: staffUsers } = await admin.from('platform_staff').select('user_id').eq('status', 'active')
+    targetUserIds = (staffUsers ?? []).map(s => s.user_id)
+  } else if (audience === 'representatives') {
+    const { data: repUsers } = await admin.from('representatives').select('user_id')
+    targetUserIds = (repUsers ?? []).map(r => r.user_id)
+  } else if (audience === 'subscribers') {
+    const { data: orgUsers } = await admin.from('users').select('id').not('organization_id', 'is', null)
+    const { data: soloGroups } = await admin.from('groups').select('instructor_id')
+    const soloIds = [...new Set((soloGroups ?? []).map(g => g.instructor_id))]
+    targetUserIds = [...new Set([...(orgUsers ?? []).map(u => u.id), ...soloIds])]
+  } else if (audience === 'parents') {
+    const { data: parentUsers } = await admin.from('parent_accounts').select('auth_user_id')
+    targetUserIds = (parentUsers ?? []).map(p => p.auth_user_id)
+  }
+
+  if (targetUserIds.length > 0) {
+    const { data: userOrgMap } = await admin.from('users').select('id, organization_id').in('id', targetUserIds)
+    const orgMap = new Map((userOrgMap ?? []).map(u => [u.id, u.organization_id]))
+
+    const notificationRows = targetUserIds.map(uid => ({
+      user_id: uid,
+      organization_id: orgMap.get(uid) ?? null,
       title: title,
       body: message,
       is_read: false,
       metadata: { type: 'platform_announcement' },
     }))
-    
+
     const { error: notifError } = await admin
       .from('notifications')
       .insert(notificationRows)

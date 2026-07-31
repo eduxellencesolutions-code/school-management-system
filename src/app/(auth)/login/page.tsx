@@ -9,6 +9,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
+import MFAChallenge from '@/components/auth/MFAChallenge'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email'),
@@ -21,10 +22,28 @@ export default function LoginPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+
+  async function afterFullyAuthenticated() {
+    toast.success('Welcome back!')
+    await new Promise(resolve => setTimeout(resolve, 500))
+    router.refresh()
+
+    const meRes = await fetch('/api/workspaces')
+    const { workspaces } = await meRes.json()
+
+    if (!workspaces || workspaces.length === 0) {
+      router.push('/dashboard')
+    } else if (workspaces.length === 1) {
+      router.push(workspaces[0].href)
+    } else {
+      router.push('/workspaces')
+    }
+  }
 
   async function onSubmit(data: FormData) {
     setLoading(true)
@@ -33,7 +52,15 @@ export default function LoginPage() {
         email: data.email.trim(),
         password: data.password,
       })
+
       if (error) {
+        // ── Record failed login attempt (fire-and-forget) ──
+        fetch('/api/auth/record-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: data.email.trim(), success: false }),
+        }).catch(() => {})
+
         if (error.message.includes('Email not confirmed')) {
           toast.error('Please confirm your email address before logging in.')
         } else {
@@ -42,25 +69,52 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
-      toast.success('Welcome back!')
-      await new Promise(resolve => setTimeout(resolve, 500))
-      router.refresh()
 
-      const meRes = await fetch('/api/workspaces')
-      const { workspaces } = await meRes.json()
+      // ── Record successful login attempt ──
+      const { data: { user } } = await supabase.auth.getUser()
+      fetch('/api/auth/record-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, success: true }),
+      }).catch(() => {})
 
-      if (!workspaces || workspaces.length === 0) {
-        router.push('/dashboard')
-      } else if (workspaces.length === 1) {
-        router.push(workspaces[0].href)
-      } else {
-        router.push('/workspaces')
+      // ── Check if this account needs a 2FA step before granting full access ──
+      const { data: aal, error: aalError } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+      if (aalError) {
+        console.error('AAL check failed:', aalError.message)
+        // Fail open here (don't block login on a transient AAL check error) —
+        // the super-admin layout gate still protects sensitive routes.
+        await afterFullyAuthenticated()
+        return
       }
+
+      if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+        const { data: factorsData } = await supabase.auth.mfa.listFactors()
+        const totpFactor = factorsData?.totp.find(f => f.status === 'verified')
+        if (totpFactor) {
+          setMfaFactorId(totpFactor.id)
+          setLoading(false)
+          return
+        }
+      }
+
+      await afterFullyAuthenticated()
     } catch (err) {
       console.error('Login error:', err)
       toast.error('Something went wrong. Please try again.')
       setLoading(false)
     }
+  }
+
+  if (mfaFactorId) {
+    return (
+      <MFAChallenge
+        factorId={mfaFactorId}
+        onVerified={afterFullyAuthenticated}
+      />
+    )
   }
 
   return (
@@ -85,7 +139,6 @@ export default function LoginPage() {
           {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
         </div>
 
-        {/* ✅ Password with Eye Toggle */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-ink">Password</label>

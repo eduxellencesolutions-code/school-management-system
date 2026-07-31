@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // ── Fan out in-app notification to relevant users ──
+  // ── Fan out in-app notification ONLY to users matching the selected audience ──
   const { createClient: createServiceClient } = await import('@supabase/supabase-js');
   const admin = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -89,25 +89,62 @@ export async function POST(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // Fetch target users (organization-specific OR all users for platform-wide)
-  let targetUsersQuery = admin.from('users').select('id, organization_id');
-  
-  if (organizationId) {
-    // School-specific announcement
-    targetUsersQuery = targetUsersQuery.eq('organization_id', organizationId);
+  let targetUserIds: string[] = [];
+
+  if (organizationId === null) {
+    // ── Platform-wide announcement ──
+    if (audience === 'all') {
+      const { data: allUsers } = await admin.from('users').select('id');
+      targetUserIds = (allUsers ?? []).map(u => u.id);
+    } else if (audience === 'platform_staff') {
+      const { data: staffUsers } = await admin.from('platform_staff').select('user_id').eq('status', 'active');
+      targetUserIds = (staffUsers ?? []).map(s => s.user_id);
+    } else if (audience === 'representatives') {
+      const { data: repUsers } = await admin.from('representatives').select('user_id');
+      targetUserIds = (repUsers ?? []).map(r => r.user_id);
+    } else if (audience === 'subscribers') {
+      const { data: orgUsers } = await admin.from('users').select('id').not('organization_id', 'is', null);
+      const { data: soloGroups } = await admin.from('groups').select('instructor_id');
+      const soloIds = [...new Set((soloGroups ?? []).map(g => g.instructor_id))];
+      targetUserIds = [...new Set([...(orgUsers ?? []).map(u => u.id), ...soloIds])];
+    } else if (audience === 'parents') {
+      const { data: parentUsers } = await admin.from('parent_accounts').select('auth_user_id');
+      targetUserIds = (parentUsers ?? []).map(p => p.auth_user_id);
+    }
+  } else {
+    // ── School-specific announcement ──
+    if (audience === 'all' || audience === 'staff') {
+      const { data: orgUsers } = await admin
+        .from('users')
+        .select('id')
+        .eq('organization_id', organizationId);
+      targetUserIds = (orgUsers ?? []).map(u => u.id);
+    } else if (audience === 'parents') {
+      const { data: parentUsers } = await admin
+        .from('parent_accounts')
+        .select('auth_user_id')
+        .eq('organization_id', organizationId);
+      targetUserIds = (parentUsers ?? []).map(p => p.auth_user_id);
+    }
   }
-  // If platform-wide (organizationId === null), fetch ALL users
 
-  const { data: targetUsers } = await targetUsersQuery;
+  if (targetUserIds.length > 0) {
+    const { data: userOrgMap } = await admin
+      .from('users')
+      .select('id, organization_id')
+      .in('id', targetUserIds);
+    const orgMap = new Map((userOrgMap ?? []).map(u => [u.id, u.organization_id]));
 
-  if (targetUsers && targetUsers.length > 0) {
-    const notificationRows = targetUsers.map(u => ({
-      user_id: u.id,
-      organization_id: u.organization_id,
+    const notificationRows = targetUserIds.map(uid => ({
+      user_id: uid,
+      organization_id: orgMap.get(uid) ?? null,
       title: title,
       body: content,
       is_read: false,
-      metadata: { type: organizationId === null ? 'platform_announcement' : 'announcement' },
+      metadata: { 
+        type: organizationId === null ? 'platform_announcement' : 'announcement',
+        audience: audience,
+      },
     }));
 
     const { error: notifError } = await admin

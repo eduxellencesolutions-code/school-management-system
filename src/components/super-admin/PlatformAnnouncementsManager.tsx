@@ -91,9 +91,16 @@ export default function PlatformAnnouncementsManager() {
             className="border rounded px-3 py-2 text-sm"
           />
           <div className="flex gap-3">
-            <select value={audience} onChange={e => setAudience(e.target.value)} className="border rounded px-3 py-2 text-sm flex-1">
+            {/* ✅ Updated audience dropdown */}
+            <select 
+              value={audience} 
+              onChange={e => setAudience(e.target.value)} 
+              className="border rounded px-3 py-2 text-sm flex-1"
+            >
               <option value="all">Everyone</option>
-              <option value="staff">Staff only</option>
+              <option value="subscribers">Subscribers only (schools & solo teachers)</option>
+              <option value="representatives">Representatives only</option>
+              <option value="platform_staff">Platform staff only</option>
               <option value="parents">Parents only</option>
             </select>
             <input
