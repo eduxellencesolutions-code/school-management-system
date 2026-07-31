@@ -7,8 +7,6 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAdminHost = hostname.startsWith('admin.')
 
-  // Public / unauthenticated paths — allowed through on ANY host, including admin.*,
-  // so the shared /login page still works regardless of which domain someone arrives from.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
@@ -43,17 +41,15 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
+    console.error('[middleware] no user found', { hostname, pathname })
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // ✅ UPDATED: Admin host — only allow paths that belong to (super-admin) route group
   if (isAdminHost) {
-    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-
-    const { data: staffRow } = isSuperAdmin
-      ? { data: null }
+    const { data: isSuperAdmin, error: superAdminError } = await supabase.rpc('is_super_admin')
+    const { data: staffRow, error: staffError } = isSuperAdmin
+      ? { data: null, error: null }
       : await supabase
           .from('platform_staff')
           .select('id, status')
@@ -61,13 +57,24 @@ export async function middleware(request: NextRequest) {
           .eq('status', 'active')
           .maybeSingle()
 
+    // TEMPORARY DIAGNOSTIC — remove once resolved.
+    console.error('[middleware admin-host check]', {
+      userId: user.id,
+      userEmail: user.email,
+      pathname,
+      isSuperAdmin,
+      superAdminError: superAdminError?.message,
+      staffRow,
+      staffError: staffError?.message,
+      timestamp: new Date().toISOString(),
+    })
+
     if (!isSuperAdmin && !staffRow) {
       const redirectUrl = new URL('/dashboard', request.url)
       redirectUrl.hostname = 'results.eduxellence.org'
       return NextResponse.redirect(redirectUrl)
     }
 
-    // ✅ All admin paths whitelisted - updated with /security
     const ADMIN_PATHS = [
       '/overview',
       '/schools',
@@ -79,18 +86,14 @@ export async function middleware(request: NextRequest) {
       '/audit',
       '/analytics',
       '/platform-announcements',
-      '/security',  // ✅ Added
+      '/security',
     ]
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
-
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
-      // Any non-admin route (old teacher/rep pages, generic /dashboard, /workspaces, etc.)
-      // requested on admin.* gets redirected to the correct admin landing page instead.
       const url = request.nextUrl.clone()
       url.pathname = '/overview'
       return NextResponse.rewrite(url)
     }
-
     return response
   }
 
