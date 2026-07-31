@@ -7,8 +7,9 @@ export interface SubscriptionState {
   plan: string
   isExpired: boolean
   isGracePeriod: boolean
-  isExpiringSoon: boolean        // ✅ NEW
-  daysUntilExpiry: number | null // ✅ NEW
+  isExpiringSoon: boolean
+  daysUntilExpiry: number | null
+  expiresAt: string | null  // ✅ NEW
 }
 
 export async function getSubscriptionState(
@@ -46,7 +47,6 @@ function computeState(
     daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000))
   }
 
-  // ✅ NEW: only relevant while still genuinely 'active' — grace_period/expired already have their own banners
   let daysUntilExpiry: number | null = null
   let isExpiringSoon = false
   if (currentStatus === 'active' && expiresAt && plan && plan !== 'free') {
@@ -62,7 +62,8 @@ function computeState(
     plan: plan ?? 'free',
     isExpired: currentStatus === 'expired',
     isGracePeriod: currentStatus === 'grace_period',
-    isExpiringSoon,      // ✅ NEW
-    daysUntilExpiry,     // ✅ NEW
+    isExpiringSoon,
+    daysUntilExpiry,
+    expiresAt: expiresAt ?? null,  // ✅ NEW
   }
 }
