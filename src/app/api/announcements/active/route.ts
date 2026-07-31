@@ -44,15 +44,20 @@ export async function GET() {
     .maybeSingle()
   if (repRow) audiences.add('representatives')
 
-  const { data: announcements, error } = await supabase
+  const { data: rows, error } = await supabase
     .from('announcements')
     .select('id, title, body, audience, created_at, expires_at, organization_id')
     .or(orgId ? `organization_id.eq.${orgId},organization_id.is.null` : 'organization_id.is.null')
     .in('audience', [...audiences])
-    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
     .order('created_at', { ascending: false })
-    .limit(10)
+    .limit(20)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ announcements: announcements ?? [] })
+
+  const now = Date.now()
+  const announcements = (rows ?? [])
+    .filter(a => !a.expires_at || new Date(a.expires_at).getTime() > now)
+    .slice(0, 10)
+
+  return NextResponse.json({ announcements })
 }

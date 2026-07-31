@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import ParentDashboard from '@/components/parents/ParentDashboard'
 import ParentAnnouncements from '@/components/parents/ParentAnnouncements'
 import LogoutButton from '@/components/super-admin/LogoutButton'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default async function ParentDashboardPage() {
   const supabase = await createClient()
@@ -24,7 +25,10 @@ export default async function ParentDashboardPage() {
             <h1 className="page-title">Welcome, {parentAccount.full_name}</h1>
             <p className="page-subtitle">Here's how your children are doing this term.</p>
           </div>
-          <LogoutButton redirectTo="/access" />
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <LogoutButton redirectTo="/access" />
+          </div>
         </div>
         <ParentAnnouncements />
         <ParentDashboard />
