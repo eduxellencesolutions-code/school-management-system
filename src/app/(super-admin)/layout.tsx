@@ -1,25 +1,50 @@
-import { ShieldOff } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import SuperAdminShell from '@/components/super-admin/SuperAdminShell'
+import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 
-export default function AccessDeniedPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-50 px-4">
-      <div className="card p-8 max-w-md text-center flex flex-col items-center gap-3">
-        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
-          <ShieldOff size={22} className="text-red-600" />
-        </div>
-        <h1 className="text-lg font-semibold text-ink">Access Denied</h1>
-        <p className="text-sm text-ink-muted">
-          Your account is authenticated, but it isn't assigned a Platform
-          Administration role. If you believe this is a mistake, contact
-          your platform administrator.
-        </p>
-        <a
-          href="https://results.eduxellence.org/workspaces"
-          className="btn-primary btn mt-2"
-        >
-          Return to your workspace
-        </a>
-      </div>
-    </div>
-  )
+// Force this segment to be evaluated fresh on every request — rules out
+// any static/edge caching of the auth decision.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export default async function SuperAdminLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const access = await getStaffAccess(supabase, user.id)
+
+  // TEMPORARY DIAGNOSTIC — remove once the access-denied mismatch is resolved.
+  console.error('[super-admin layout]', {
+    userId: user.id,
+    userEmail: user.email,
+    access: { ...access, permissions: Array.from(access.permissions) },
+    timestamp: new Date().toISOString(),
+  })
+
+  if (!access.isSuperAdmin && !access.isStaff) {
+    redirect('/access-denied')
+  }
+
+  // Require step-up (aal2) if this account has a verified MFA factor.
+  // If they've never enrolled, nextLevel stays 'aal1' and this passes through.
+  const { data: aal, error: aalError } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+
+  if (aalError) {
+    console.error('AAL check failed in super-admin layout:', aalError.message)
+    redirect('/login')
+  }
+
+  if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    redirect('/login?reauth=1')
+  }
+
+  return <SuperAdminShell>{children}</SuperAdminShell>
 }
