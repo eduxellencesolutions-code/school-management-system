@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Megaphone, X } from 'lucide-react'
 
 interface Announcement {
@@ -10,20 +11,29 @@ interface Announcement {
   organization_id: string | null
 }
 
+const PUBLIC_PATHS = ['/login', '/signup', '/access', '/forgot-password', '/reset-password', '/']
+
 export default function AnnouncementTicker() {
+  const pathname = usePathname()
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [dismissedSession, setDismissedSession] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const isPublicPath = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+
   useEffect(() => {
+    if (isPublicPath) {
+      setLoading(false)
+      return
+    }
     fetch('/api/announcements/active')
       .then(r => (r.ok ? r.json() : { announcements: [] }))
       .then(data => setAnnouncements(data.announcements ?? []))
       .catch(() => setAnnouncements([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [isPublicPath])
 
-  if (loading || dismissedSession || announcements.length === 0) return null
+  if (isPublicPath || loading || dismissedSession || announcements.length === 0) return null
 
   const combined = announcements
     .map(a => `${a.title} — ${a.body}`)
