@@ -66,6 +66,7 @@ export async function POST(request: Request) {
     organizationId = null;
   }
 
+  // ✅ Insert with expires_at set to end of day
   const { error: insertError } = await supabase
     .from('announcements')
     .insert({
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       body: content,
       audience: audience ?? 'all',
       created_by: user.id,
-      expires_at: expiresAt || null,
+      expires_at: expiresAt ? `${expiresAt}T23:59:59` : null,  // ✅ FIXED
     });
 
   if (insertError) {

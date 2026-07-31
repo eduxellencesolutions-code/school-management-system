@@ -20,7 +20,8 @@ export default async function RepPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 p-6">
-      <div className="flex justify-between items-center max-w-4xl mx-auto mb-4">
+      {/* ✅ Header with Notification Bell + Logout on the right */}
+      <div className="flex justify-end items-center gap-2 max-w-4xl mx-auto mb-4">
         <NotificationBell />
         <LogoutButton />
       </div>

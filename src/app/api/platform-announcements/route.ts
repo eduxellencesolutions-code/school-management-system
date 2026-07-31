@@ -46,14 +46,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing title, message, or audience' }, { status: 400 })
   }
 
-  // Insert the announcement
+  // ✅ Insert the announcement with expires_at set to end of day
   const { error: insertError } = await supabase.from('announcements').insert({
     title,
     body: message,
     audience,
     organization_id: null,
     created_by: user.id,
-    expires_at: expiresAt || null,
+    expires_at: expiresAt ? `${expiresAt}T23:59:59` : null,  // ✅ FIXED
   })
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
