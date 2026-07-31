@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getUserWorkspaces, Workspace } from '@/lib/workspaces/getUserWorkspaces'
 import Link from 'next/link'
 import { School, Handshake, ShieldCheck, GraduationCap } from 'lucide-react'
+import WorkspaceLogoutButton from '@/components/auth/WorkspaceLogoutButton'
 
 const ICONS: Record<Workspace['type'], typeof School> = {
   school: School,
@@ -55,6 +56,9 @@ export default async function WorkspacesPage() {
           </Link>
         )
       })}
+      <div className="mt-2">
+        <WorkspaceLogoutButton />
+      </div>
     </div>
   )
 }
