@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, AlertTriangle } from 'lucide-react'
+import MFAEnrollment from '@/components/super-admin/MFAEnrollment'  // ✅ NEW
 
 export default function SecurityCenter() {
   const [logs, setLogs] = useState<any[]>([])
@@ -23,6 +24,9 @@ export default function SecurityCenter() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ✅ NEW: MFA Enrollment */}
+      <MFAEnrollment />
+
       {alerts.length > 0 && (
         <div className="card p-5 border-red-200">
           <div className="flex items-center gap-2 mb-3">
