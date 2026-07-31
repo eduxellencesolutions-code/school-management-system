@@ -65,8 +65,10 @@ export async function GET() {
     .filter(a => !a.expires_at || new Date(a.expires_at).getTime() > now)
     .slice(0, 10)
 
-  // ── Auto-generated subscription reminder, personalized per subscriber ──
+  // ── Auto-generated system messages, personalized per persona ──
   const systemEntries: typeof announcements = []
+  let urgentShown = false
+
   if (isSubscriber) {
     const subState = await getSubscriptionState(supabase, user.id)
 
@@ -85,6 +87,7 @@ export async function GET() {
         expires_at: subState.expiresAt,
         organization_id: orgId,
       })
+      urgentShown = true
     } else if (subState.isGracePeriod && subState.graceEndsAt) {
       const dt = new Date(subState.graceEndsAt)
       const formatted = dt.toLocaleString('en-NG', {
@@ -100,6 +103,7 @@ export async function GET() {
         expires_at: subState.graceEndsAt,
         organization_id: orgId,
       })
+      urgentShown = true
     } else if (subState.isExpired) {
       systemEntries.push({
         id: 'system-expired',
@@ -110,7 +114,56 @@ export async function GET() {
         expires_at: null,
         organization_id: orgId,
       })
+      urgentShown = true
     }
+
+    if (!urgentShown) {
+      if (subState.plan === 'free') {
+        systemEntries.push({
+          id: 'system-welcome-free',
+          title: '👋 Welcome to Eduxellence!',
+          body: 'Upgrade to a paid plan to unlock unlimited classes, PDF reports, broadsheets, AI-powered remarks, and more.',
+          audience: 'subscribers',
+          created_at: new Date().toISOString(),
+          expires_at: null,
+          organization_id: orgId,
+        })
+      } else if (subState.status === 'active') {
+        systemEntries.push({
+          id: 'system-thank-you-subscriber',
+          title: '💙 Thank You',
+          body: 'Thank you for subscribing to Eduxellence. We appreciate your continued patronage and trust in our platform.',
+          audience: 'subscribers',
+          created_at: new Date().toISOString(),
+          expires_at: null,
+          organization_id: orgId,
+        })
+      }
+    }
+  }
+
+  if (repRow) {
+    systemEntries.push({
+      id: 'system-thank-you-rep',
+      title: '🤝 Thank You, Partner',
+      body: 'Thank you for representing Eduxellence and growing our community. Keep sharing your referral code to earn more!',
+      audience: 'representatives',
+      created_at: new Date().toISOString(),
+      expires_at: null,
+      organization_id: null,
+    })
+  }
+
+  if (staffRow) {
+    systemEntries.push({
+      id: 'system-thank-you-staff',
+      title: '🌟 Thank You for Your Service',
+      body: 'Thank you for being part of the Eduxellence Platform Team. Your work keeps schools and teachers running smoothly.',
+      audience: 'platform_staff',
+      created_at: new Date().toISOString(),
+      expires_at: null,
+      organization_id: null,
+    })
   }
 
   return NextResponse.json({ announcements: [...systemEntries, ...announcements] })
