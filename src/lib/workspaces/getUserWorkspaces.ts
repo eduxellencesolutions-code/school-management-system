@@ -1,10 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
-export type Workspace =
-  | { type: 'school'; label: string; href: string }
-  | { type: 'representative'; label: string; href: string }
-  | { type: 'super_admin'; label: string; href: string }
-  | { type: 'staff'; label: string; href: string }
+export type Workspace = {
+  type: 'school' | 'solo_teacher' | 'representative' | 'super_admin' | 'staff'
+  label: string
+  sublabel: string
+  href: string
+}
 
 export async function getUserWorkspaces(
   supabase: SupabaseClient,
@@ -21,11 +22,17 @@ export async function getUserWorkspaces(
   // Super admin check first — independent of role/org.
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (isSuperAdmin) {
-    workspaces.push({ type: 'super_admin', label: 'Super Admin Console', href: 'https://admin.eduxellence.org/overview' })
+    workspaces.push({
+      type: 'super_admin',
+      label: 'Platform Administration',
+      sublabel: 'Super Admin',
+      href: 'https://admin.eduxellence.org/overview',
+    })
   }
 
   // Platform staff workspace — active platform_staff row is the source of truth.
-  // Skip this if already flagged super_admin, since that console supersedes it.
+  // A person can legitimately hold this alongside a school/rep role (e.g. a
+  // teacher who is also an Operations Manager on the platform side).
   if (!isSuperAdmin) {
     const { data: staffRow } = await supabase
       .from('platform_staff')
@@ -35,8 +42,13 @@ export async function getUserWorkspaces(
       .maybeSingle()
 
     if (staffRow) {
-      const roleName = (staffRow as { platform_roles?: { name?: string } }).platform_roles?.name ?? 'Staff'
-      workspaces.push({ type: 'staff', label: `${roleName} (Staff)`, href: 'https://admin.eduxellence.org/overview' })
+      const roleName = (staffRow as { platform_roles?: { name?: string } }).platform_roles?.name
+      workspaces.push({
+        type: 'staff',
+        label: 'Platform Administration',
+        sublabel: roleName ?? 'Platform Staff',
+        href: 'https://admin.eduxellence.org/overview',
+      })
     }
   }
 
@@ -45,22 +57,34 @@ export async function getUserWorkspaces(
   // Retained even after staff promotion so commission history stays viewable.
   const { data: rep } = await supabase
     .from('representatives')
-    .select('id')
+    .select('id, territory_state')
     .eq('user_id', userId)
     .maybeSingle()
   if (rep) {
-    workspaces.push({ type: 'representative', label: 'Representative Portal', href: '/rep' })
+    workspaces.push({
+      type: 'representative',
+      label: 'Representative Portal',
+      sublabel: rep.territory_state ? `${rep.territory_state} territory` : 'Representative',
+      href: '/rep',
+    })
   }
 
   // School/Teacher workspace — legitimate only if there's real org context,
   // or the user owns at least one class directly (solo teacher pattern).
+  // Split into two distinct workspace types so the selector can be explicit
+  // about which dashboard a person is entering.
   if (profile?.organization_id) {
     const { data: org } = await supabase
       .from('organizations')
       .select('name')
       .eq('id', profile.organization_id)
       .maybeSingle()
-    workspaces.push({ type: 'school', label: org?.name ?? 'School Dashboard', href: '/dashboard' })
+    workspaces.push({
+      type: 'school',
+      label: org?.name ?? 'Institution Dashboard',
+      sublabel: 'Institution Dashboard',
+      href: '/dashboard',
+    })
   } else if (profile && profile.role !== 'representative') {
     const { data: ownedGroup } = await supabase
       .from('groups')
@@ -69,7 +93,12 @@ export async function getUserWorkspaces(
       .limit(1)
       .maybeSingle()
     if (ownedGroup) {
-      workspaces.push({ type: 'school', label: 'My Classes', href: '/dashboard' })
+      workspaces.push({
+        type: 'solo_teacher',
+        label: 'My Teaching Workspace',
+        sublabel: 'Solo Teacher Dashboard',
+        href: '/dashboard',
+      })
     }
   }
 
