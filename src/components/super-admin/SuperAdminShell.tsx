@@ -20,6 +20,7 @@ const ICONS: Record<string, any> = {
   security: ShieldAlert,
   audit: ShieldAlert,
   'platform-announcements': Megaphone,
+  'platform-users': UsersRound,  // ✅ NEW
   team: UsersRound,
 }
 
