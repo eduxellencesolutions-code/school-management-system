@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SecurityCenter from '@/components/super-admin/SecurityCenter'
+import { requirePermission } from '@/lib/auth/requirePermission'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +10,7 @@ export default async function SecurityPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-  if (!isSuperAdmin) redirect('/dashboard')
+  await requirePermission(supabase, user.id, 'security.dashboard.view')
 
   return (
     <div className="flex flex-col gap-6">

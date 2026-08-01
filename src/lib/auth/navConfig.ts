@@ -19,7 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
   { key: 'representatives', href: '/representatives', label: 'Representatives', section: 'more', requiredPermission: 'representatives.view' },
-  { key: 'security', href: '/security', label: 'Security', section: 'more', superAdminOnly: true },
+  { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
   { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
   { key: 'platform-announcements', href: '/platform-announcements', label: 'Announcements', section: 'more', requiredPermission: 'announcements.manage' },
   { key: 'team', href: '/team', label: 'Team', section: 'more', superAdminOnly: true },

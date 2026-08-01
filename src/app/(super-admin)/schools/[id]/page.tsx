@@ -151,11 +151,14 @@ export default async function SchoolDetailPage({ params }: Props) {
 
       <div className="card p-5">
         <h2 className="font-semibold text-sm text-ink mb-3">Subscription & Status</h2>
+        {/* ✅ Updated: Added canManageStatus and canManagePlan props */}
         <SchoolStatusActions
           orgId={org.id}
           currentStatus={org.subscription_status ?? 'cancelled'}
           currentExpiry={org.subscription_expires_at}
           currentPlan={org.subscription_plan ?? 'free'}
+          canManageStatus={access.isSuperAdmin || hasPermission(access, 'schools.suspend')}
+          canManagePlan={access.isSuperAdmin}
         />
       </div>
 

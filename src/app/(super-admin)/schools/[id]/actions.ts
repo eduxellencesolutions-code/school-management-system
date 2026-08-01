@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 
 async function requireSuperAdmin() {
   const supabase = await createClient()
@@ -11,6 +12,18 @@ async function requireSuperAdmin() {
   if (!user) redirect('/login')
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (!isSuperAdmin) redirect('/dashboard')
+  return user
+}
+
+// Real server-side enforcement for status/expiry changes — the UI hiding
+// the button is not the security boundary, this is.
+async function requireSchoolStatusPermission() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const access = await getStaffAccess(supabase, user.id)
+  const allowed = access.isSuperAdmin || access.permissions.has('schools.suspend')
+  if (!allowed) redirect('/dashboard')
   return user
 }
 
@@ -23,7 +36,7 @@ function serviceClient() {
 }
 
 export async function updateSchoolStatus(formData: FormData) {
-  await requireSuperAdmin()
+  await requireSchoolStatusPermission()
   const orgId = formData.get('org_id') as string
   const status = formData.get('status') as string
   if (!orgId || !status) return { success: false, message: 'Missing data' }
@@ -62,7 +75,7 @@ export async function updateSchoolStatus(formData: FormData) {
 }
 
 export async function extendSubscription(formData: FormData) {
-  await requireSuperAdmin()
+  await requireSchoolStatusPermission()
   const orgId = formData.get('org_id') as string
   const newExpiry = formData.get('expires_at') as string
   if (!orgId || !newExpiry) return { success: false, message: 'Missing data' }
@@ -95,7 +108,6 @@ export async function reassignAdmin(formData: FormData) {
 
   const admin = serviceClient()
 
-  // Demote current admin(s) in this org to teacher, then promote the chosen user
   const { error: demoteError } = await admin
     .from('users')
     .update({ role: 'teacher' })
@@ -146,7 +158,6 @@ export async function permanentlyDeleteSchool(formData: FormData) {
   return { success: true }
 }
 
-// ✅ NEW: Change school plan
 export async function changeSchoolPlan(formData: FormData) {
   await requireSuperAdmin()
   const orgId = formData.get('org_id') as string
