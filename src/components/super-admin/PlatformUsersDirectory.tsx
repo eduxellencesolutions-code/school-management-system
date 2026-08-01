@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { Search, Loader2, Lock, Unlock, X, Shield, Building2, Handshake, UsersRound } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { lockAccount, unlockAccount } from '@/app/(super-admin)/security/actions'
+import { lockAccount, unlockAccount, forcePasswordReset, regenerateParentAccessCode, setParentPortalAccess } from '@/app/(super-admin)/security/actions'
 
 interface UserRow {
   id: string
@@ -24,7 +24,15 @@ const STATUS_STYLE: Record<string, string> = {
   suspended: 'bg-amber-100 text-amber-800',
 }
 
-export default function PlatformUsersDirectory({ canManageLocks }: { canManageLocks: boolean }) {
+export default function PlatformUsersDirectory({ 
+  canManageLocks, 
+  canForceReset, 
+  canManageParentAccess 
+}: { 
+  canManageLocks: boolean; 
+  canForceReset: boolean; 
+  canManageParentAccess: boolean 
+}) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -32,6 +40,8 @@ export default function PlatformUsersDirectory({ canManageLocks }: { canManageLo
   const [detail, setDetail] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [lockReason, setLockReason] = useState('')
+  const [resetReason, setResetReason] = useState('')
+  const [parentActionReason, setParentActionReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
   const runSearch = useCallback(async (q: string) => {
@@ -72,6 +82,8 @@ export default function PlatformUsersDirectory({ canManageLocks }: { canManageLo
     setSelectedId(null)
     setDetail(null)
     setLockReason('')
+    setResetReason('')
+    setParentActionReason('')
   }
 
   async function handleLock() {
@@ -101,6 +113,51 @@ export default function PlatformUsersDirectory({ canManageLocks }: { canManageLo
     toast.success('Account unlocked')
     openDrawer(selectedId)
     runSearch(query)
+  }
+
+  async function handleForceReset() {
+    if (!selectedId) return
+    if (!resetReason.trim()) { toast.error('A reason is required'); return }
+    setActionLoading(true)
+    const fd = new FormData()
+    fd.append('user_id', selectedId)
+    fd.append('reason', resetReason)
+    const result = await forcePasswordReset(fd)
+    setActionLoading(false)
+    if (!result.success) { toast.error(result.message || 'Failed'); return }
+    toast.success(result.message || 'Reset email sent')
+    setResetReason('')
+  }
+
+  async function handleRegenerateCode() {
+    if (!selectedId) return
+    if (!parentActionReason.trim()) { toast.error('A reason is required'); return }
+    setActionLoading(true)
+    const fd = new FormData()
+    fd.append('user_id', selectedId)
+    fd.append('reason', parentActionReason)
+    const result = await regenerateParentAccessCode(fd)
+    setActionLoading(false)
+    if (!result.success) { toast.error(result.message || 'Failed'); return }
+    toast.success(result.message || 'Code regenerated')
+    setParentActionReason('')
+    openDrawer(selectedId)
+  }
+
+  async function handleTogglePortalAccess(active: boolean) {
+    if (!selectedId) return
+    if (!parentActionReason.trim()) { toast.error('A reason is required'); return }
+    setActionLoading(true)
+    const fd = new FormData()
+    fd.append('user_id', selectedId)
+    fd.append('active', String(active))
+    fd.append('reason', parentActionReason)
+    const result = await setParentPortalAccess(fd)
+    setActionLoading(false)
+    if (!result.success) { toast.error(result.message || 'Failed'); return }
+    toast.success(active ? 'Portal access reactivated' : 'Portal access disabled')
+    setParentActionReason('')
+    openDrawer(selectedId)
   }
 
   return (
@@ -280,8 +337,71 @@ export default function PlatformUsersDirectory({ canManageLocks }: { canManageLo
                   </div>
                 )}
 
+                {/* ✅ Force Password Reset - only for non-parent users */}
+                {canForceReset && detail.profile.role !== 'parent' && (
+                  <div className="pt-3 border-t border-surface-100">
+                    <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Force Password Reset</p>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={resetReason}
+                        onChange={e => setResetReason(e.target.value)}
+                        placeholder="Reason for forcing a reset…"
+                        className="input input-sm"
+                      />
+                      <button
+                        onClick={handleForceReset}
+                        disabled={actionLoading}
+                        className="btn-secondary btn-sm btn"
+                      >
+                        Send Reset Email
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ✅ Parent Portal Access - only for parent users */}
+                {canManageParentAccess && detail.profile.role === 'parent' && (
+                  <div className="pt-3 border-t border-surface-100">
+                    <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Parent Portal Access</p>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={parentActionReason}
+                        onChange={e => setParentActionReason(e.target.value)}
+                        placeholder="Reason…"
+                        className="input input-sm"
+                      />
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={handleRegenerateCode}
+                          disabled={actionLoading}
+                          className="btn-secondary btn-sm btn"
+                        >
+                          Regenerate Code
+                        </button>
+                        {detail.parent?.accessCodeActive ? (
+                          <button
+                            onClick={() => handleTogglePortalAccess(false)}
+                            disabled={actionLoading}
+                            className="btn-sm btn border border-red-200 text-red-600 hover:bg-red-50"
+                          >
+                            Disable Access
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleTogglePortalAccess(true)}
+                            disabled={actionLoading}
+                            className="btn-primary btn-sm btn"
+                          >
+                            Reactivate Access
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-ink-faint pt-2 border-t border-surface-100">
-                  Password reset, session revocation, role management, and login history detail are coming in later phases.
+                  Session revocation, role management, and login history detail are coming in later phases.
                 </p>
               </>
             )}

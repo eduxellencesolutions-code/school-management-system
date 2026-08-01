@@ -15,6 +15,8 @@ export default async function PlatformUsersPage() {
   if (!allowed) redirect('/dashboard')
 
   const canManageLocks = access.isSuperAdmin || access.permissions.has('security.account_lock.manage')
+  const canForceReset = access.isSuperAdmin || access.permissions.has('security.password_reset.force')
+  const canManageParentAccess = access.isSuperAdmin || access.permissions.has('parents.access_code.manage')
 
   return (
     <div className="flex flex-col gap-6">
@@ -22,7 +24,11 @@ export default async function PlatformUsersPage() {
         <h1 className="text-xl font-bold text-ink">Platform Users</h1>
         <p className="text-sm text-ink-muted mt-1">Search and manage every user across the Eduxellence platform</p>
       </div>
-      <PlatformUsersDirectory canManageLocks={canManageLocks} />
+      <PlatformUsersDirectory 
+        canManageLocks={canManageLocks} 
+        canForceReset={canForceReset} 
+        canManageParentAccess={canManageParentAccess} 
+      />
     </div>
   )
 }
