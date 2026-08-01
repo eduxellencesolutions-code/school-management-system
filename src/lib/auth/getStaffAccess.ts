@@ -53,8 +53,7 @@ export function hasPermission(access: StaffAccess, key: string): boolean {
   return access.isSuperAdmin || access.permissions.has(key)
 }
 
+// ✅ UPDATED: Universal landing page is /welcome
 export function getStaffLandingPath(access: StaffAccess): string {
-  if (access.isSuperAdmin) return '/overview'
-  if (access.roleName && ROLE_LANDING[access.roleName]) return ROLE_LANDING[access.roleName]
-  return '/overview'
+  return '/welcome'
 }

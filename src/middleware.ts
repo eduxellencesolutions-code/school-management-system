@@ -77,9 +77,10 @@ export async function middleware(request: NextRequest) {
     const ADMIN_PATHS = NAV_ITEMS.map(i => i.href)
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
+    // ✅ UPDATED: Fallback redirect from /overview to /welcome
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
       const url = request.nextUrl.clone()
-      url.pathname = '/overview'
+      url.pathname = '/welcome'  // ✅ Changed from '/overview'
       return NextResponse.rewrite(url)
     }
 
@@ -93,7 +94,7 @@ export async function middleware(request: NextRequest) {
 
       if (matchedItem?.superAdminOnly) {
         const url = request.nextUrl.clone()
-        url.pathname = '/overview'
+        url.pathname = '/welcome'  // ✅ Changed from '/overview'
         return NextResponse.rewrite(url)
       }
 
@@ -104,7 +105,7 @@ export async function middleware(request: NextRequest) {
         })
         if (!hasPermission) {
           const url = request.nextUrl.clone()
-          url.pathname = '/overview'
+          url.pathname = '/welcome'  // ✅ Changed from '/overview'
           return NextResponse.rewrite(url)
         }
       }

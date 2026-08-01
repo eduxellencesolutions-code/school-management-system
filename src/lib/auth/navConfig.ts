@@ -12,6 +12,7 @@ export interface NavItem {
 // in each page.tsx — this file only controls what's *shown* in nav; the
 // pages themselves remain the real enforcement point.
 export const NAV_ITEMS: NavItem[] = [
+  { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },  // ✅ NEW
   { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
   { key: 'schools', href: '/schools', label: 'Schools', section: 'primary', requiredPermission: 'schools.view' },
   { key: 'solo-teachers', href: '/solo-teachers', label: 'Solo Teachers', section: 'primary', requiredPermission: 'schools.view' },
