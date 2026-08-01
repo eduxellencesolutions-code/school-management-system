@@ -9,7 +9,7 @@ import {
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
-  TicketIcon,
+  TicketIcon, LineChart,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -49,7 +49,7 @@ export default function Sidebar({ user, org }: Props) {
     free: [],
     small_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion'],
     standard_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework'],
-    premium_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework', 'fees'],
+    premium_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework', 'fees', 'finance_analytics'],
   }
 
   const features = isSoloTeacher ? [] : (PLAN_FEATURES[plan] ?? [])
@@ -69,6 +69,7 @@ export default function Sidebar({ user, org }: Props) {
     ...(has('psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
+    ...(isAdmin && has('finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 
   const governanceNav = [
