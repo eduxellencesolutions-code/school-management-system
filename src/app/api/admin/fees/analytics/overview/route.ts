@@ -8,6 +8,14 @@ interface RevenueSnapshot {
   collectionRate: number
 }
 
+interface TermStats {
+  snapshot: RevenueSnapshot
+  totalStudents: number
+  payingStudents: number
+  fullyPaidStudents: number
+  studentsWithOutstanding: number
+}
+
 function computeSnapshot(
   charges: { amount: number }[],
   adjustments: { amount: number }[],
@@ -26,12 +34,28 @@ function computeSnapshot(
   }
 }
 
-async function snapshotForTerm(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string, termId: string) {
+// Accepts one or more term ids so it can compute either a single term's
+// stats or a whole session's stats (aggregated across all its terms).
+async function snapshotForTerms(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  termIds: string[]
+): Promise<TermStats> {
+  if (termIds.length === 0) {
+    return {
+      snapshot: { expected: 0, collected: 0, outstanding: 0, collectionRate: 0 },
+      totalStudents: 0,
+      payingStudents: 0,
+      fullyPaidStudents: 0,
+      studentsWithOutstanding: 0,
+    }
+  }
+
   const { data: accounts } = await supabase
     .from('student_fee_accounts')
     .select('id, learner_id')
     .eq('organization_id', orgId)
-    .eq('term_id', termId)
+    .in('term_id', termIds)
 
   const accountIds = (accounts ?? []).map(a => a.id)
   if (accountIds.length === 0) {
@@ -52,7 +76,6 @@ async function snapshotForTerm(supabase: Awaited<ReturnType<typeof createClient>
 
   const snapshot = computeSnapshot(charges ?? [], adjustments ?? [], payments ?? [])
 
-  // Per-account balance, to derive paying / fully-paid / outstanding student counts
   const chargedByAccount = new Map<string, number>()
   const adjustedByAccount = new Map<string, number>()
   const paidByAccount = new Map<string, number>()
@@ -76,13 +99,9 @@ async function snapshotForTerm(supabase: Awaited<ReturnType<typeof createClient>
     if (outstanding > 0) studentsWithOutstanding++
   }
 
-  return {
-    snapshot,
-    totalStudents: (accounts ?? []).length,
-    payingStudents,
-    fullyPaidStudents,
-    studentsWithOutstanding,
-  }
+  const totalStudents = new Set((accounts ?? []).map(a => a.learner_id)).size
+
+  return { snapshot, totalStudents, payingStudents, fullyPaidStudents, studentsWithOutstanding }
 }
 
 export async function GET(request: NextRequest) {
@@ -112,7 +131,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Advanced Finance Analytics is a Premium feature' }, { status: 403 })
   }
 
-  const termId = request.nextUrl.searchParams.get('termId')
+  const requestedTermId = request.nextUrl.searchParams.get('termId')
 
   const { data: currentOrg } = await supabase
     .from('organizations')
@@ -120,7 +139,7 @@ export async function GET(request: NextRequest) {
     .eq('id', orgId)
     .single()
 
-  const activeTermId = termId ?? currentOrg?.current_term_id
+  const activeTermId = requestedTermId ?? currentOrg?.current_term_id
   if (!activeTermId) {
     return NextResponse.json({ error: 'No current term is set for this organization' }, { status: 400 })
   }
@@ -135,24 +154,80 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Term not found' }, { status: 404 })
   }
 
-  // Find the previous term (by start_date) for term-over-term comparison —
-  // could be in the same session or the prior one.
+  const { data: currentSession } = await supabase
+    .from('academic_sessions')
+    .select('id, name, start_date')
+    .eq('id', currentTerm.session_id)
+    .single()
+
   const { data: previousTerm } = await supabase
     .from('terms')
-    .select('id, name')
+    .select('id, name, session_id')
     .eq('organization_id', orgId)
     .lt('start_date', currentTerm.start_date)
     .order('start_date', { ascending: false })
     .limit(1)
     .maybeSingle()
 
-  const current = await snapshotForTerm(supabase, orgId, currentTerm.id)
-  const previous = previousTerm ? await snapshotForTerm(supabase, orgId, previousTerm.id) : null
+  const { data: previousSession } = currentSession
+    ? await supabase
+        .from('academic_sessions')
+        .select('id, name, start_date')
+        .eq('organization_id', orgId)
+        .lt('start_date', currentSession.start_date)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null }
+
+  const { data: sameTermPreviousSession } = previousSession
+    ? await supabase
+        .from('terms')
+        .select('id, name')
+        .eq('organization_id', orgId)
+        .eq('session_id', previousSession.id)
+        .eq('name', currentTerm.name)
+        .maybeSingle()
+    : { data: null }
+
+  const { data: currentSessionTerms } = currentSession
+    ? await supabase.from('terms').select('id').eq('organization_id', orgId).eq('session_id', currentSession.id)
+    : { data: [] }
+
+  const { data: previousSessionTerms } = previousSession
+    ? await supabase.from('terms').select('id').eq('organization_id', orgId).eq('session_id', previousSession.id)
+    : { data: [] }
+
+  const [
+    currentTermStats,
+    previousTermStats,
+    currentSessionStats,
+    previousSessionStats,
+    sameTermPreviousSessionStats,
+  ] = await Promise.all([
+    snapshotForTerms(supabase, orgId, [currentTerm.id]),
+    previousTerm ? snapshotForTerms(supabase, orgId, [previousTerm.id]) : Promise.resolve(null),
+    snapshotForTerms(supabase, orgId, (currentSessionTerms ?? []).map(t => t.id)),
+    previousSession ? snapshotForTerms(supabase, orgId, (previousSessionTerms ?? []).map(t => t.id)) : Promise.resolve(null),
+    sameTermPreviousSession ? snapshotForTerms(supabase, orgId, [sameTermPreviousSession.id]) : Promise.resolve(null),
+  ])
 
   return NextResponse.json({
     term: { id: currentTerm.id, name: currentTerm.name },
-    previousTerm: previousTerm ? { id: previousTerm.id, name: previousTerm.name } : null,
-    current,
-    previous,
+    session: currentSession ? { id: currentSession.id, name: currentSession.name } : null,
+
+    termOverTerm: {
+      current: currentTermStats,
+      previous: previousTerm ? { term: { id: previousTerm.id, name: previousTerm.name }, stats: previousTermStats } : null,
+    },
+
+    sessionOverSession: {
+      current: currentSessionStats,
+      previous: previousSession ? { session: { id: previousSession.id, name: previousSession.name }, stats: previousSessionStats } : null,
+    },
+
+    sameTermAcrossSessions: sameTermPreviousSession
+      ? { term: { id: sameTermPreviousSession.id, name: sameTermPreviousSession.name }, stats: sameTermPreviousSessionStats }
+      : null,
   })
 }
