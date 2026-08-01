@@ -1,9 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { NAV_ITEMS } from '@/lib/auth/navConfig'
 
-// Same domain-scoping logic as the server/browser clients — only share the
-// cookie across subdomains on the real production domain.
 function getCookieDomain(host: string): string | undefined {
   const hostname = host.split(':')[0]
   if (hostname === 'localhost' || hostname === '127.0.0.1') return undefined
@@ -55,14 +54,13 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    console.error('[middleware] no user found', { hostname, pathname })
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   if (isAdminHost) {
-    const { data: isSuperAdmin, error: superAdminError } = await supabase.rpc('is_super_admin')
-    const { data: staffRow, error: staffError } = isSuperAdmin
-      ? { data: null, error: null }
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+    const { data: staffRow } = isSuperAdmin
+      ? { data: null }
       : await supabase
           .from('platform_staff')
           .select('id, status')
@@ -70,43 +68,48 @@ export async function middleware(request: NextRequest) {
           .eq('status', 'active')
           .maybeSingle()
 
-    // TEMPORARY DIAGNOSTIC — remove once cross-domain session sharing is confirmed working.
-    console.error('[middleware admin-host check]', {
-      userId: user.id,
-      userEmail: user.email,
-      pathname,
-      isSuperAdmin,
-      superAdminError: superAdminError?.message,
-      staffRow,
-      staffError: staffError?.message,
-      timestamp: new Date().toISOString(),
-    })
-
     if (!isSuperAdmin && !staffRow) {
       const redirectUrl = new URL('/dashboard', request.url)
       redirectUrl.hostname = 'results.eduxellence.org'
       return NextResponse.redirect(redirectUrl)
     }
 
-    const ADMIN_PATHS = [
-      '/overview',
-      '/schools',
-      '/solo-teachers',
-      '/commissions',
-      '/representatives',
-      '/support',
-      '/team',
-      '/audit',
-      '/analytics',
-      '/platform-announcements',
-      '/security',
-    ]
+    const ADMIN_PATHS = NAV_ITEMS.map(i => i.href)
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
       const url = request.nextUrl.clone()
       url.pathname = '/overview'
       return NextResponse.rewrite(url)
     }
+
+    // Single source of truth for per-page access — same map that drives the
+    // nav in SuperAdminShell. A link visible in nav is guaranteed reachable,
+    // and no page-level check can silently disagree with it anymore.
+    if (!isSuperAdmin) {
+      const matchedItem = NAV_ITEMS.find(
+        item => pathname === item.href || pathname.startsWith(item.href + '/')
+      )
+
+      if (matchedItem?.superAdminOnly) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/overview'
+        return NextResponse.rewrite(url)
+      }
+
+      if (matchedItem?.requiredPermission) {
+        const { data: hasPermission } = await supabase.rpc('has_platform_permission', {
+          p_user_id: user.id,
+          p_permission_key: matchedItem.requiredPermission,
+        })
+        if (!hasPermission) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/overview'
+          return NextResponse.rewrite(url)
+        }
+      }
+    }
+
     return response
   }
 
