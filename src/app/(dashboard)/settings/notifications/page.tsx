@@ -39,8 +39,7 @@ interface Notification {
   id: string
   user_id: string
   title: string
-  message: string | null
-  notification_type: 'info' | 'success' | 'warning' | 'error'
+  body: string | null
   is_read: boolean
   created_at: string
   metadata: any
@@ -266,7 +265,7 @@ export default function NotificationsPage() {
     }
   }
 
-  // ✅ Only create a real notification when user saves preferences
+  // ✅ FIX: Use 'body' instead of 'message', remove 'notification_type'
   const sendTestNotification = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -277,8 +276,7 @@ export default function NotificationsPage() {
         .insert({
           user_id: user.id,
           title: 'Notification settings updated',
-          message: 'Your notification preferences have been saved successfully.',
-          notification_type: 'info',
+          body: 'Your notification preferences have been saved successfully.',
           is_read: false,
           created_at: new Date().toISOString(),
         })
@@ -565,7 +563,7 @@ export default function NotificationsPage() {
           ) : (
             <div className="divide-y divide-surface-200">
               {notifications.map((notification) => {
-                const Icon = getNotificationIcon(notification.notification_type)
+                // Use Bell as default since notification_type doesn't exist
                 return (
                   <div 
                     key={notification.id} 
@@ -577,11 +575,11 @@ export default function NotificationsPage() {
                     {!notification.is_read && (
                       <div className="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0" />
                     )}
-                    <Icon size={16} className={`${getNotificationColor(notification.notification_type)} mt-0.5 flex-shrink-0`} />
+                    <Bell size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-ink font-medium">{notification.title}</p>
-                      {notification.message && (
-                        <p className="text-xs text-ink-muted">{notification.message}</p>
+                      {notification.body && (
+                        <p className="text-xs text-ink-muted">{notification.body}</p>
                       )}
                       <p className="text-xs text-ink-faint mt-1">
                         {getTimeAgo(notification.created_at)}

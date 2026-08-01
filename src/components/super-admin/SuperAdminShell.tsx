@@ -4,13 +4,14 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 import { getVisibleNavItems, type NavAccess } from '@/lib/auth/navConfig'
 
 const ICONS: Record<string, any> = {
   overview: LayoutDashboard,
+  welcome: Home,  // ✅ NEW
   schools: Building,
   'solo-teachers': Users,
   analytics: BarChart3,
@@ -20,7 +21,7 @@ const ICONS: Record<string, any> = {
   security: ShieldAlert,
   audit: ShieldAlert,
   'platform-announcements': Megaphone,
-  'platform-users': UsersRound,  // ✅ NEW
+  'platform-users': UsersRound,
   team: UsersRound,
 }
 
