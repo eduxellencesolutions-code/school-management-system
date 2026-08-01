@@ -2,10 +2,20 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Same domain-scoping logic as the server/browser clients — only share the
+// cookie across subdomains on the real production domain.
+function getCookieDomain(host: string): string | undefined {
+  const hostname = host.split(':')[0]
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return undefined
+  if (hostname.endsWith('eduxellence.org')) return '.eduxellence.org'
+  return undefined
+}
+
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const { pathname } = request.nextUrl
   const isAdminHost = hostname.startsWith('admin.')
+  const cookieDomain = getCookieDomain(hostname)
 
   if (
     pathname.startsWith('/_next') ||
@@ -33,7 +43,10 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, {
+              ...options,
+              ...(cookieDomain ? { domain: cookieDomain } : {}),
+            })
           )
         },
       },
@@ -57,7 +70,7 @@ export async function middleware(request: NextRequest) {
           .eq('status', 'active')
           .maybeSingle()
 
-    // TEMPORARY DIAGNOSTIC — remove once resolved.
+    // TEMPORARY DIAGNOSTIC — remove once cross-domain session sharing is confirmed working.
     console.error('[middleware admin-host check]', {
       userId: user.id,
       userEmail: user.email,
