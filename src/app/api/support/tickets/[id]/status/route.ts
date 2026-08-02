@@ -6,12 +6,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-
   const { data: canManage } = await supabase.rpc('has_platform_permission', { p_user_id: user.id, p_permission_key: 'support.manage' });
   if (!canManage) return NextResponse.json({ error: 'Only support staff can update tickets' }, { status: 403 });
 
   const body = await request.json();
   const { status, priority, assignedTo } = body;
+
+  const { data: existingTicket } = await supabase
+    .from('support_tickets')
+    .select('submitted_by_user_id, subject, status')
+    .eq('id', id)
+    .single();
 
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   if (status) {
@@ -24,6 +29,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { error } = await supabase.from('support_tickets').update(updates).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Notify the customer the moment a ticket is marked resolved — this is
+  // also the point the 7-day auto-close timer starts (via resolved_at).
+  if (status === 'resolved' && existingTicket?.status !== 'resolved' && existingTicket?.submitted_by_user_id) {
+    const { error: notifError } = await supabase.from('notifications').insert({
+      user_id: existingTicket.submitted_by_user_id,
+      title: 'Your support ticket was resolved',
+      body: `"${existingTicket.subject}" has been marked as resolved. If your issue isn't fully fixed, just reply to the ticket to reopen it.`,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    });
+    if (notifError) console.error('Failed to send resolution notification:', notifError);
+  }
 
   await supabase.rpc('log_platform_action', {
     p_actor_id: user.id,

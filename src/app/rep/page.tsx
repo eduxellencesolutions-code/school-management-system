@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'  // ✅ NEW
+import { TicketIcon } from 'lucide-react'  // ✅ NEW
 import RepDashboard from '@/components/representatives/RepDashboard'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -20,8 +22,11 @@ export default async function RepPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 p-6">
-      {/* ✅ Header with Notification Bell + Logout on the right */}
+      {/* ✅ Header with Support Link + Notification Bell + Logout */}
       <div className="flex justify-end items-center gap-2 max-w-4xl mx-auto mb-4">
+        <Link href="/school-support" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+          <TicketIcon size={14} /> Support
+        </Link>
         <NotificationBell />
         <LogoutButton />
       </div>
