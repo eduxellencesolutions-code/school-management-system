@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, TrendingUp, TrendingDown, Users, Wallet, AlertCircle, CheckCircle2 } from 'lucide-react'
+import FinanceTrendsCharts from './FinanceTrendsCharts'  // ✅ NEW
 
 interface Snapshot {
   expected: number
@@ -194,6 +195,9 @@ export default function FinanceExecutiveDashboard() {
           </div>
         </div>
       )}
+
+      {/* ✅ NEW: Finance Trends Charts */}
+      <FinanceTrendsCharts />
     </div>
   )
 }
