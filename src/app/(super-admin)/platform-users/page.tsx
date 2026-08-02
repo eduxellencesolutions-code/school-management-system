@@ -17,6 +17,7 @@ export default async function PlatformUsersPage() {
   const canManageLocks = access.isSuperAdmin || access.permissions.has('security.account_lock.manage')
   const canForceReset = access.isSuperAdmin || access.permissions.has('security.password_reset.force')
   const canManageParentAccess = access.isSuperAdmin || access.permissions.has('parents.access_code.manage')
+  const canRevokeSessions = access.isSuperAdmin || access.permissions.has('security.sessions.manage')  // ✅ NEW
 
   return (
     <div className="flex flex-col gap-6">
@@ -27,7 +28,8 @@ export default async function PlatformUsersPage() {
       <PlatformUsersDirectory 
         canManageLocks={canManageLocks} 
         canForceReset={canForceReset} 
-        canManageParentAccess={canManageParentAccess} 
+        canManageParentAccess={canManageParentAccess}
+        canRevokeSessions={canRevokeSessions}  // ✅ NEW
       />
     </div>
   )

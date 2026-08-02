@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { Search, Loader2, Lock, Unlock, X, Shield, Building2, Handshake, UsersRound } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { lockAccount, unlockAccount, forcePasswordReset, regenerateParentAccessCode, setParentPortalAccess } from '@/app/(super-admin)/security/actions'
+import { lockAccount, unlockAccount, forcePasswordReset, regenerateParentAccessCode, setParentPortalAccess, revokeSessions } from '@/app/(super-admin)/security/actions'
 
 interface UserRow {
   id: string
@@ -27,11 +27,13 @@ const STATUS_STYLE: Record<string, string> = {
 export default function PlatformUsersDirectory({ 
   canManageLocks, 
   canForceReset, 
-  canManageParentAccess 
+  canManageParentAccess,
+  canRevokeSessions  // ✅ NEW
 }: { 
   canManageLocks: boolean; 
   canForceReset: boolean; 
-  canManageParentAccess: boolean 
+  canManageParentAccess: boolean;
+  canRevokeSessions: boolean;  // ✅ NEW
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<UserRow[]>([])
@@ -42,6 +44,7 @@ export default function PlatformUsersDirectory({
   const [lockReason, setLockReason] = useState('')
   const [resetReason, setResetReason] = useState('')
   const [parentActionReason, setParentActionReason] = useState('')
+  const [revokeReason, setRevokeReason] = useState('')  // ✅ NEW
   const [actionLoading, setActionLoading] = useState(false)
 
   const runSearch = useCallback(async (q: string) => {
@@ -84,6 +87,7 @@ export default function PlatformUsersDirectory({
     setLockReason('')
     setResetReason('')
     setParentActionReason('')
+    setRevokeReason('')  // ✅ NEW
   }
 
   async function handleLock() {
@@ -158,6 +162,21 @@ export default function PlatformUsersDirectory({
     toast.success(active ? 'Portal access reactivated' : 'Portal access disabled')
     setParentActionReason('')
     openDrawer(selectedId)
+  }
+
+  // ✅ NEW: Revoke Sessions handler
+  async function handleRevokeSessions() {
+    if (!selectedId) return
+    if (!revokeReason.trim()) { toast.error('A reason is required'); return }
+    setActionLoading(true)
+    const fd = new FormData()
+    fd.append('user_id', selectedId)
+    fd.append('reason', revokeReason)
+    const result = await revokeSessions(fd)
+    setActionLoading(false)
+    if (!result.success) { toast.error(result.message || 'Failed'); return }
+    toast.success('All sessions revoked')
+    setRevokeReason('')
   }
 
   return (
@@ -337,6 +356,28 @@ export default function PlatformUsersDirectory({
                   </div>
                 )}
 
+                {/* ✅ Revoke Sessions - only for non-parent users */}
+                {canRevokeSessions && detail.profile.role !== 'parent' && (
+                  <div className="pt-3 border-t border-surface-100">
+                    <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Revoke Sessions</p>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        value={revokeReason}
+                        onChange={e => setRevokeReason(e.target.value)}
+                        placeholder="Reason…"
+                        className="input input-sm"
+                      />
+                      <button
+                        onClick={handleRevokeSessions}
+                        disabled={actionLoading}
+                        className="btn-secondary btn-sm btn"
+                      >
+                        Sign Out All Devices
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* ✅ Force Password Reset - only for non-parent users */}
                 {canForceReset && detail.profile.role !== 'parent' && (
                   <div className="pt-3 border-t border-surface-100">
@@ -401,7 +442,7 @@ export default function PlatformUsersDirectory({
                 )}
 
                 <p className="text-xs text-ink-faint pt-2 border-t border-surface-100">
-                  Session revocation, role management, and login history detail are coming in later phases.
+                  Role management and login history detail are coming in later phases.
                 </p>
               </>
             )}

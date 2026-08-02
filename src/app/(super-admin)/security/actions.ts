@@ -5,7 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
-import { generateAccessCode } from '@/lib/supabase/admin'  // ✅ NEW
+import { generateAccessCode } from '@/lib/supabase/admin'
 
 // ✅ Updated: Generic permission check (replaces requireAccountLockPermission)
 async function requireStaffPermission(permissionKey: string) {
@@ -180,7 +180,7 @@ export async function forcePasswordReset(formData: FormData) {
   return { success: true, message: `Reset email sent to ${targetEmail}` }
 }
 
-// ── NEW: Parent Access Code Actions ──
+// ── Parent Access Code Actions ──
 
 export async function regenerateParentAccessCode(formData: FormData) {
   const actor = await requireStaffPermission('parents.access_code.manage')
@@ -242,6 +242,31 @@ export async function setParentPortalAccess(formData: FormData) {
     reason
   )
 
+  revalidatePath('/security')
+  return { success: true }
+}
+
+// ── NEW: Revoke All Sessions ──
+
+export async function revokeSessions(formData: FormData) {
+  const actor = await requireStaffPermission('security.sessions.manage')
+  const targetUserId = formData.get('user_id') as string
+  const reason = (formData.get('reason') as string)?.trim()
+
+  if (!targetUserId) return { success: false, message: 'Missing user id' }
+  if (!reason) return { success: false, message: 'A reason is required' }
+  if (targetUserId === actor.id) return { success: false, message: "You can't revoke your own sessions" }
+
+  const admin = serviceClient()
+
+  const { error } = await admin.auth.admin.signOut(targetUserId, 'global')
+  if (error) {
+    console.error('Error revoking sessions:', error)
+    return { success: false, message: 'Failed to revoke sessions — check server logs for the exact SDK error' }
+  }
+
+  await writeAuditLog(admin, actor.id, 'revoked_sessions', targetUserId, reason)
+  
   revalidatePath('/security')
   return { success: true }
 }
