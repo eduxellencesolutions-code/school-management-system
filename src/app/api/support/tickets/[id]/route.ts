@@ -34,7 +34,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  // Add a message (reply) to an existing ticket
   const { id } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -46,20 +45,51 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 });
 
   if (isInternalNote) {
-    const { data: canManage } = await supabase.rpc('has_platform_permission', { p_user_id: user.id, p_permission_key: 'support.manage' });
+    const { data: canManage } = await supabase.rpc('has_platform_permission', {
+      p_user_id: user.id,
+      p_permission_key: 'support.manage',
+    });
     if (!canManage) return NextResponse.json({ error: 'Only support staff can add internal notes' }, { status: 403 });
   }
 
-  const { error } = await supabase.from('support_ticket_messages').insert({
-    ticket_id: id,
-    sender_user_id: user.id,
-    is_internal_note: !!isInternalNote,
-    body: message,
-  });
+  const { error } = await supabase
+    .from('support_ticket_messages')
+    .insert({
+      ticket_id: id,
+      sender_user_id: user.id,
+      is_internal_note: !!isInternalNote,
+      body: message,
+    });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await supabase.from('support_tickets').update({ updated_at: new Date().toISOString() }).eq('id', id);
+  await supabase
+    .from('support_tickets')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  // ✅ Notify the customer when staff sends a real (non-internal) reply.
+  if (!isInternalNote) {
+    const { data: ticket } = await supabase
+      .from('support_tickets')
+      .select('submitted_by_user_id, subject')
+      .eq('id', id)
+      .single();
+
+    if (ticket && ticket.submitted_by_user_id !== user.id) {
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: ticket.submitted_by_user_id,
+          title: 'New reply on your support ticket',
+          body: `Support replied to "${ticket.subject}". Click to view.`,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+
+      if (notifError) console.error('Failed to send reply notification:', notifError);
+    }
+  }
 
   return NextResponse.json({ success: true });
 }
