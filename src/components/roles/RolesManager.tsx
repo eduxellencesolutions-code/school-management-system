@@ -28,28 +28,46 @@ interface StaffMember {
 }
 
 const PERMISSION_CATALOG: Permission[] = [
+  // ── Fees ──
   { key: 'fees.view', category: 'Fees', label: 'View fee accounts', description: null },
   { key: 'fees.record_payment', category: 'Fees', label: 'Record payments', description: null },
   { key: 'fees.manage_structures', category: 'Fees', label: 'Manage fee structures', description: null },
   { key: 'fees.void_payment', category: 'Fees', label: 'Void payments', description: null },
+  { key: 'finance.issue_invoices', category: 'Fees', label: 'Issue invoices', description: null },
+  { key: 'finance.manual_allocation', category: 'Fees', label: 'Manually allocate payments', description: null },
+  { key: 'finance.override_duplicate_invoice', category: 'Fees', label: 'Override duplicate invoice protection', description: null },
+  
+  // ── Results ──
   { key: 'results.view', category: 'Results', label: 'View results', description: null },
   { key: 'results.enter_scores', category: 'Results', label: 'Enter scores', description: null },
   { key: 'results.review_completeness', category: 'Results', label: 'Review completeness', description: null },
   { key: 'results.lock', category: 'Results', label: 'Lock results', description: null },
   { key: 'results.generate_reports', category: 'Results', label: 'Generate reports', description: null },
+  
+  // ── Promotion ──
   { key: 'promotion.view', category: 'Promotion', label: 'View promotion data', description: null },
   { key: 'promotion.confirm', category: 'Promotion', label: 'Confirm promotion', description: null },
   { key: 'promotion.configure_rules', category: 'Promotion', label: 'Configure promotion rules', description: null },
+  
+  // ── Attendance ──
   { key: 'attendance.view', category: 'Attendance', label: 'View attendance', description: null },
   { key: 'attendance.mark', category: 'Attendance', label: 'Mark attendance', description: null },
+  
+  // ── Students ──
   { key: 'students.view', category: 'Students', label: 'View students', description: null },
   { key: 'students.manage', category: 'Students', label: 'Manage students', description: null },
   { key: 'students.admit', category: 'Students', label: 'Admit students', description: null },
+  
+  // ── Staff ──
   { key: 'staff.view', category: 'Staff', label: 'View staff', description: null },
   { key: 'staff.manage', category: 'Staff', label: 'Manage staff', description: null },
   { key: 'staff.manage_roles', category: 'Staff', label: 'Manage roles & permissions', description: null },
+  
+  // ── Parents ──
   { key: 'parents.view', category: 'Parents', label: 'View parents', description: null },
   { key: 'parents.manage_access', category: 'Parents', label: 'Manage parent access', description: null },
+  
+  // ── Announcements ──
   { key: 'announcements.view', category: 'Announcements', label: 'View announcements', description: null },
   { key: 'announcements.post', category: 'Announcements', label: 'Post announcements', description: null },
 ]
