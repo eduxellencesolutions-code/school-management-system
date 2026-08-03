@@ -78,9 +78,10 @@ export default function Sidebar({ user, org }: Props) {
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
     ...(isAdmin && has('promotion') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
-    { label: 'Support', href: '/school-support', icon: TicketIcon },  // ✅ Fixed href
+    { label: 'Support', href: '/school-support', icon: TicketIcon },
     ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
     ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),
+    ...(isAdmin ? [{ label: 'Withdrawals', href: '/withdrawals', icon: Wallet }] : []),  // ✅ NEW
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
