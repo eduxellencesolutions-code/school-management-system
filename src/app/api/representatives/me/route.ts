@@ -46,14 +46,41 @@ export async function GET() {
     .eq('representative_id', rep.id)
     .order('created_at', { ascending: false });
 
-  const pendingCommission = (commissions ?? [])
-    .filter(c => c.status === 'pending' || c.status === 'payable')
-    .reduce((s, c) => s + c.amount, 0);
+  // Wallet breakdown per spec: five distinct numbers, each a separate business event.
+  const pendingAmount = (commissions ?? [])
+    .filter(c => c.status === 'pending')
+    .reduce((s, c) => s + Number(c.amount), 0);
+
+  const availableAmount = (commissions ?? [])
+    .filter(c => c.status === 'payable')
+    .reduce((s, c) => s + Number(c.amount), 0);
+
+  const { data: bankAccounts } = await supabase
+    .from('bank_accounts')
+    .select('id, bank_name, account_number, account_name, is_primary, is_verified')
+    .eq('representative_id', rep.id)
+    .order('created_at', { ascending: false });
+
+  const { data: withdrawals } = await supabase
+    .from('withdrawals')
+    .select('id, amount_requested, amount_claimed, status, date_requested, date_paid, payment_reference, rejection_reason')
+    .eq('representative_id', rep.id)
+    .order('date_requested', { ascending: false });
 
   return NextResponse.json({
     representative: rep,
     referrals: enrichedReferrals,
     commissions: commissions ?? [],
-    pendingCommission,
+    wallet: {
+      totalEarned: Number(rep.total_commission_earned),   // Pending + Payable + Paid, all-time
+      pending: pendingAmount,                               // still in 14-day hold
+      available: availableAmount,                           // payable, not yet withdrawal-locked
+      withdrawn: Number(rep.total_commission_paid),          // actually paid out
+      walletBalance: availableAmount,                        // = available; this is what's requestable right now
+    },
+    bankAccounts: bankAccounts ?? [],
+    withdrawals: withdrawals ?? [],
+    // kept for backward compatibility with anything else reading this field
+    pendingCommission: pendingAmount + availableAmount,
   });
 }

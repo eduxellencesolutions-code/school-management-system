@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, TrendingUp } from 'lucide-react'
+import WithdrawalPanel from './WithdrawalPanel'
 
 const LEVEL_THRESHOLDS: Record<string, { next: string; target: number }> = {
   growth_volunteer: { next: 'Certified Representative', target: 20 },
@@ -15,18 +16,20 @@ export default function RepDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  function load() {
     fetch('/api/representatives/me')
       .then(r => r.json())
       .then(d => { if (d.error) setError(d.error); else setData(d) })
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   if (loading) return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin" /></div>
   if (error) return <div className="card p-6 text-red-600 max-w-md mx-auto text-center">{error}</div>
   if (!data) return null
 
-  const { representative: rep, referrals, commissions, pendingCommission } = data
+  const { representative: rep, referrals, commissions, wallet, bankAccounts, withdrawals } = data
   const levelInfo = LEVEL_THRESHOLDS[rep.level]
   const progressPct = levelInfo?.target ? Math.min(100, (rep.qualified_customers_count / levelInfo.target) * 100) : 100
 
@@ -54,11 +57,8 @@ export default function RepDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card p-4 text-center"><p className="text-xl font-bold">{rep.qualified_customers_count}</p><p className="text-xs text-ink-faint">Qualified Customers</p></div>
-        <div className="card p-4 text-center"><p className="text-xl font-bold">₦{Number(rep.total_commission_earned).toLocaleString()}</p><p className="text-xs text-ink-faint">Total Earned</p></div>
-        <div className="card p-4 text-center"><p className="text-xl font-bold">₦{pendingCommission.toLocaleString()}</p><p className="text-xs text-ink-faint">Pending</p></div>
-      </div>
+      {/* ✅ Withdrawal Panel */}
+      <WithdrawalPanel wallet={wallet} bankAccounts={bankAccounts} withdrawals={withdrawals} onRefresh={load} />
 
       <div className="card">
         <div className="card-header font-semibold text-sm">My Referrals</div>
