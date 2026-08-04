@@ -22,9 +22,16 @@ export async function POST(req: NextRequest) {
   if (event.event === 'charge.success') {
     const verification = await verifyPaystackTransaction(event.data.reference)
 
-    if (verification.success && verification.status === 'successful' && verification.metadata) {
-      const result = await applySuccessfulSubscription(verification.metadata)
+    // ✅ Require reference before applying subscription
+    if (verification.success && verification.status === 'successful' && verification.metadata && verification.reference) {
+      const result = await applySuccessfulSubscription(
+        verification.metadata,
+        'paystack',
+        verification.reference
+      )
       if (!result.success) console.error('Failed to apply subscription:', result.error)
+    } else if (verification.success && verification.status === 'successful' && !verification.reference) {
+      console.error('Paystack verification succeeded but returned no reference — refusing to apply subscription')
     }
   }
 

@@ -52,6 +52,7 @@ export async function verifyFlutterwaveTransaction(transactionId: string): Promi
       amount: json.data.amount,
       currency: json.data.currency,
       metadata: json.data.meta as CheckoutMetadata,
+      reference: String(json.data.id),   // ✅ NEW — canonical, matches what the webhook itself sees
     }
   } catch (err: any) {
     console.error('Flutterwave verify error:', err)

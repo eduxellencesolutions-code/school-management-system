@@ -31,5 +31,6 @@ export interface VerifyTransactionResult {
   amount?: number
   currency?: Currency
   metadata?: CheckoutMetadata
+  reference?: string   // ✅ NEW — the provider's own canonical reference, straight from their verify API response
   error?: string
 }

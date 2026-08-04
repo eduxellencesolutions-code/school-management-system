@@ -10,8 +10,32 @@ function serviceClient() {
   )
 }
 
-export async function applySuccessfulSubscription(metadata: CheckoutMetadata): Promise<{ success: boolean; error?: string }> {
+export async function applySuccessfulSubscription(
+  metadata: CheckoutMetadata,
+  provider: 'paystack' | 'flutterwave',
+  reference: string
+): Promise<{ success: boolean; error?: string }> {
   const admin = serviceClient()
+
+  // IDEMPOTENCY GUARD: try to claim this (provider, reference) pair first.
+  // If it's already been claimed — by the webhook, by verify-status polling,
+  // or by a retried webhook delivery — this insert fails on the unique
+  // constraint and we stop here, before touching subscriptions or commissions.
+  const { error: claimError } = await admin
+    .from('processed_payments')
+    .insert({ provider, reference, account_id: metadata.accountId, plan: metadata.plan })
+
+  if (claimError) {
+    if (claimError.code === '23505') {
+      // Already processed — this is the expected, safe outcome for a
+      // duplicate webhook or a verify-status call after the webhook
+      // already ran. Not an error from the caller's point of view.
+      return { success: true }
+    }
+    console.error('Error claiming payment reference:', claimError)
+    return { success: false, error: claimError.message }
+  }
+
   const now = new Date()
   const expiresAt = new Date(now.getTime() + getCycleDurationDays(metadata.cycle) * 86400000)
 
@@ -37,7 +61,6 @@ export async function applySuccessfulSubscription(metadata: CheckoutMetadata): P
   }
 
   // ── Representative commission check ──
-  // Only fires if this account was referred and the plan is a commissionable paid plan.
   try {
     const referralQuery = metadata.accountType === 'org'
       ? admin.from('referrals').select('id').eq('organization_id', metadata.accountId).eq('status', 'pending')
@@ -46,7 +69,6 @@ export async function applySuccessfulSubscription(metadata: CheckoutMetadata): P
     const { data: referral } = await referralQuery.maybeSingle()
 
     if (referral) {
-      // CheckoutMetadata has no currency field — hardcode NGN, the platform's primary market
       const amount = getPrice(
         metadata.plan,
         'NGN' as Currency,

@@ -33,8 +33,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ status: 'error', message: 'Payment verified but no subscription details found' })
     }
 
-    // Idempotent — safe to call even if the webhook already applied this.
-    const applied = await applySuccessfulSubscription(verification.metadata)
+    // ✅ Validate reference exists before applying
+    if (!verification.reference) {
+      console.error('Payment verified but provider returned no reference — refusing to apply subscription')
+      return NextResponse.json({ status: 'error', message: 'Payment verification incomplete — please contact support' })
+    }
+
+    // ✅ Pass gateway and verification.reference to applySuccessfulSubscription
+    const applied = await applySuccessfulSubscription(
+      verification.metadata,
+      provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+      verification.reference
+    )
     if (!applied.success) {
       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
     }

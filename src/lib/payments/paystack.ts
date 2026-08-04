@@ -53,6 +53,7 @@ export async function verifyPaystackTransaction(reference: string): Promise<Veri
       amount: json.data.amount / 100,
       currency: json.data.currency,
       metadata: json.data.metadata as CheckoutMetadata,
+      reference: json.data.reference,   // ✅ NEW
     }
   } catch (err: any) {
     console.error('Paystack verify error:', err)

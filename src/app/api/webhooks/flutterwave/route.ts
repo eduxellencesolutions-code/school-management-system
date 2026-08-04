@@ -14,9 +14,16 @@ export async function POST(req: NextRequest) {
   if (event.event === 'charge.completed' && event.data.status === 'successful') {
     const verification = await verifyFlutterwaveTransaction(String(event.data.id))
 
-    if (verification.success && verification.status === 'successful' && verification.metadata) {
-      const result = await applySuccessfulSubscription(verification.metadata)
+    // ✅ Require reference before applying subscription
+    if (verification.success && verification.status === 'successful' && verification.metadata && verification.reference) {
+      const result = await applySuccessfulSubscription(
+        verification.metadata,
+        'flutterwave',
+        verification.reference
+      )
       if (!result.success) console.error('Failed to apply subscription:', result.error)
+    } else if (verification.success && verification.status === 'successful' && !verification.reference) {
+      console.error('Flutterwave verification succeeded but returned no reference — refusing to apply subscription')
     }
   }
 
