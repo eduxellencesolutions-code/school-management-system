@@ -37,7 +37,7 @@ export default function GlobalSearch() {
   }
 
   return (
-    <div className="relative w-80" ref={ref}>
+    <div className="relative w-full" ref={ref}>  {/* ✅ Changed from w-80 to w-full */}
       <div className="relative">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
         <input

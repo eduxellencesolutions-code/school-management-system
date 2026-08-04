@@ -12,13 +12,14 @@ export interface NavItem {
 // in each page.tsx — this file only controls what's *shown* in nav; the
 // pages themselves remain the real enforcement point.
 export const NAV_ITEMS: NavItem[] = [
-  { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },  // ✅ NEW
+  { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },
   { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
   { key: 'schools', href: '/schools', label: 'Schools', section: 'primary', requiredPermission: 'schools.view' },
   { key: 'solo-teachers', href: '/solo-teachers', label: 'Solo Teachers', section: 'primary', requiredPermission: 'schools.view' },
   { key: 'analytics', href: '/analytics', label: 'Analytics', section: 'primary', requiredPermission: 'analytics.view' },
   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
+  { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },  // ✅ NEW
   { key: 'representatives', href: '/representatives', label: 'Representatives', section: 'more', requiredPermission: 'representatives.view' },
   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },

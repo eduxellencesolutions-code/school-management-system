@@ -4,19 +4,20 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 import { getVisibleNavItems, type NavAccess } from '@/lib/auth/navConfig'
 
 const ICONS: Record<string, any> = {
   overview: LayoutDashboard,
-  welcome: Home,  // ✅ NEW
+  welcome: Home,
   schools: Building,
   'solo-teachers': Users,
   analytics: BarChart3,
   support: Ticket,
   commissions: DollarSign,
+  withdrawals: Wallet,
   representatives: Handshake,
   security: ShieldAlert,
   audit: ShieldAlert,
@@ -155,7 +156,8 @@ export default function SuperAdminShell({
             )}
           </div>
 
-          <div className="hidden lg:block">
+          {/* ✅ Desktop Logout - shrink-0 prevents it from being squeezed out */}
+          <div className="hidden lg:block shrink-0">
             <LogoutButton />
           </div>
         </div>
