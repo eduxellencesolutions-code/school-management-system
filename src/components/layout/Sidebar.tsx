@@ -9,7 +9,7 @@ import {
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
-  TicketIcon, LineChart, Receipt,
+  TicketIcon, LineChart, Receipt, FilePlus2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -17,13 +17,17 @@ import { useRouter } from 'next/navigation'
 interface Props {
   user: User
   org?: Organization | null
-  // ✅ Real, backend-driven feature list for this org's plan (from plan_features
-  // table via getPlanFeatures()). Replaces the old hardcoded PLAN_FEATURES
-  // object, which was never updated when Standard schools got fee access.
+  // Real, backend-driven feature list for this org's plan (plan_features table).
   features: string[]
+  // Real permission set for this user, mirroring has_permission() exactly.
+  // isSchoolAdmin === true means "every permission" (matches the admin bypass
+  // built into has_permission() itself), separate from the raw role check
+  // below which is only used for a few legacy admin-only sections.
+  isSchoolAdmin: boolean
+  permissions: string[]
 }
 
-export default function Sidebar({ user, org, features }: Props) {
+export default function Sidebar({ user, org, features, isSchoolAdmin, permissions }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -36,7 +40,7 @@ export default function Sidebar({ user, org, features }: Props) {
 
   const plan = org?.subscription_plan ?? 'free'
   const isSoloTeacher = !org
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' // legacy role check, kept for sections not yet on the permission system
 
   const planLabel: Record<string, string> = {
     free: 'Free',
@@ -47,8 +51,9 @@ export default function Sidebar({ user, org, features }: Props) {
     premium_school: 'Premium',
   }
 
-  // ✅ Solo teachers never see plan-gated features, matching backend gating rules.
   const has = (key: string) => !isSoloTeacher && features.includes(key)
+  // Real permission check, mirrors has_permission(): admin bypasses everything.
+  const canDo = (permissionKey: string) => isSchoolAdmin || permissions.includes(permissionKey)
 
   const coreNav = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -64,8 +69,11 @@ export default function Sidebar({ user, org, features }: Props) {
     ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
-    // ✅ NEW: Fee Structures builder — admin-only, gated on same 'fees' feature
-    ...(isAdmin && has('fees') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
+    // ✅ Permission-driven, not admin-only: any role granted 'fees.manage_structures'
+    // (e.g. a Finance Officer role) sees this even without being a full admin.
+    ...(has('fees') && canDo('fees.manage_structures') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
+    // ✅ NEW: Issue Invoices, gated on 'finance.issue_invoices'
+    ...(has('fees') && canDo('finance.issue_invoices') ? [{ label: 'Issue Invoices', href: '/fees/issue-invoices', icon: FilePlus2 }] : []),
     ...(isAdmin && has('finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 
@@ -78,7 +86,7 @@ export default function Sidebar({ user, org, features }: Props) {
     { label: 'Support', href: '/school-support', icon: TicketIcon },
     ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
     ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),
-    ...(isAdmin ? [{ label: 'Withdrawals', href: '/withdrawals', icon: Wallet }] : []),  // ✅ NEW
+    ...(isAdmin ? [{ label: 'Withdrawals', href: '/withdrawals', icon: Wallet }] : []),
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
