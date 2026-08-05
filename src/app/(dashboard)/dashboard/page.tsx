@@ -5,7 +5,8 @@ import { BookOpen, Users, ClipboardList, FileText, ArrowRight, TrendingUp, BarCh
 import { getTeacherDashboardData } from '@/lib/teacher-utils'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import FeatureCards from '@/components/dashboard/FeatureCards'
-import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'  // ✅ NEW
+import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
+import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -20,14 +21,9 @@ export default async function DashboardPage() {
   const userRole = user?.role || 'teacher'
   const currentPlanKey = user?.subscription_plan ?? 'free'
 
-  const PLAN_FEATURES: Record<string, string[]> = {
-    free: [],
-    small_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion'],
-    standard_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion', 'homework'],
-    premium_school: ['attendance', 'affective_psychomotor', 'parent_portal', 'promotion', 'homework', 'fees'],
-  }
+  // ✅ Use helper for plan features
   const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
-  const planFeatures = (!orgId) ? [] : (PLAN_FEATURES[orgPlanKey] ?? [])
+  const planFeatures = (!orgId) ? [] : await getPlanFeatures(supabase, orgPlanKey)
 
   // ── Determine user type ──
   const isSoloTeacher = !orgId
@@ -403,7 +399,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ✅ NEW: Announcement Banner */}
+      {/* ✅ Announcement Banner */}
       <AnnouncementBanner />
       
       <div className="flex items-center justify-between">
@@ -468,7 +464,6 @@ export default async function DashboardPage() {
           </div>
           <div className="divide-y divide-surface-200">
             {hasSubjectsOnly ? (
-              // ✅ Show subjects for subject-only teachers
               assignedSubjects.map((s: any) => (
                 <div key={s.id} className="px-5 py-3 flex items-center justify-between hover:bg-surface-50 transition-colors">
                   <div className="flex items-center gap-3">
@@ -486,7 +481,6 @@ export default async function DashboardPage() {
                 </div>
               ))
             ) : recentGroups && recentGroups.length > 0 ? (
-              // ✅ Show classes for class teachers and others
               recentGroups.map((g) => {
                 const count = (g.learner_count as unknown as { count: number }[])?.[0]?.count ?? 0
                 const hasReport = completedGroupIds.has(g.id)
@@ -532,7 +526,6 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-2">
               {[
                 ...((isSoloTeacher || isInstitutionAdmin) ? [{ label: 'Add a class', href: '/classes/new', icon: '📚' }] : []),
-                // ✅ Conditional swap: Enrol students vs View students
                 (isSoloTeacher || isInstitutionAdmin)
                   ? { label: 'Enrol students', href: '/students/new', icon: '👤' }
                   : { label: 'View students', href: '/students', icon: '👤' },
@@ -550,7 +543,6 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* ✅ Updated: Real PlanUpgradeCard for solo teachers */}
           {isSoloTeacher && currentPlanKey !== 'solo_teacher_pro' && (
             <div className="card p-5 bg-brand-50 border-brand-200">
               <div className="flex items-center gap-2 mb-2">

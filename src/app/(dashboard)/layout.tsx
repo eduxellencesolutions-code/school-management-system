@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
+import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
 import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
 import ExpiredBanner from '@/components/billing/ExpiredBanner'
 import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
@@ -11,7 +12,7 @@ import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()
-  
+
   // Only redirect if truly not logged in
   if (!authUser) redirect('/login')
 
@@ -56,6 +57,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // ✅ Get subscription state for grace period and expired banners
   const subState = await getSubscriptionState(supabase, authUser.id)
 
+  // ✅ Real plan-feature lookup (backend-driven, replaces stale hardcoded array)
+  const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan)
+
   // Only promote the rep program to people who aren't already a rep
   const { data: existingRep } = await supabase
     .from('representatives')
@@ -65,15 +69,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface-50">
-      <Sidebar 
-        user={user ?? { 
-          id: authUser.id, 
-          name: authUser.email ?? 'User', 
-          email: authUser.email ?? '', 
-          role: 'teacher', 
-          organization_id: null 
-        }} 
-        org={org} 
+      <Sidebar
+        user={user ?? {
+          id: authUser.id,
+          name: authUser.email ?? 'User',
+          email: authUser.email ?? '',
+          role: 'teacher',
+          organization_id: null
+        }}
+        org={org}
+        features={planFeatures}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -85,7 +90,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {subState.isGracePeriod && subState.daysRemaining !== null && (
                 <GracePeriodBanner daysRemaining={subState.daysRemaining} />
               )}
-              
+
               {/* Expired banner - shown when subscription has expired */}
               {subState.isExpired && (
                 <ExpiredBanner />
@@ -100,7 +105,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <NotificationBell />
             </div>
           </div>
-          
+
           {children}
         </div>
       </main>

@@ -9,7 +9,7 @@ import {
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
-  TicketIcon, LineChart,
+  TicketIcon, LineChart, Receipt,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -17,9 +17,13 @@ import { useRouter } from 'next/navigation'
 interface Props {
   user: User
   org?: Organization | null
+  // ✅ Real, backend-driven feature list for this org's plan (from plan_features
+  // table via getPlanFeatures()). Replaces the old hardcoded PLAN_FEATURES
+  // object, which was never updated when Standard schools got fee access.
+  features: string[]
 }
 
-export default function Sidebar({ user, org }: Props) {
+export default function Sidebar({ user, org, features }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -43,17 +47,8 @@ export default function Sidebar({ user, org }: Props) {
     premium_school: 'Premium',
   }
 
-  // Feature availability per plan — mirrors the backend plan_features seed.
-  // Solo teachers never see any of these, matching backend gating rules.
-  const PLAN_FEATURES: Record<string, string[]> = {
-    free: [],
-    small_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion'],
-    standard_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework'],
-    premium_school: ['attendance', 'psychomotor', 'parent_portal', 'promotion', 'homework', 'fees', 'finance_analytics'],
-  }
-
-  const features = isSoloTeacher ? [] : (PLAN_FEATURES[plan] ?? [])
-  const has = (key: string) => features.includes(key)
+  // ✅ Solo teachers never see plan-gated features, matching backend gating rules.
+  const has = (key: string) => !isSoloTeacher && features.includes(key)
 
   const coreNav = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -66,9 +61,11 @@ export default function Sidebar({ user, org }: Props) {
 
   const studentLifeNav = [
     ...(has('attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
-    ...(has('psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
+    ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
+    // ✅ NEW: Fee Structures builder — admin-only, gated on same 'fees' feature
+    ...(isAdmin && has('fees') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
     ...(isAdmin && has('finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 
