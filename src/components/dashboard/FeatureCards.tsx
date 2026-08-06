@@ -6,12 +6,17 @@ import {
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Users, Megaphone, Settings, ArrowRight, Sparkles,
 } from 'lucide-react'
+import { INSTITUTION_PLAN_LABELS, InstitutionPlanKey } from '@/lib/plans/institutionTiers'
 
 interface Props {
   isAdmin: boolean
   isSoloTeacher: boolean
   planFeatures: string[]
   currentPlanKey: string
+  // Real, table-derived minimum required plan per feature key. No more
+  // hardcoded "requiredPlan: 'Small School'" strings that can drift out of
+  // sync with the actual plan_features table.
+  requiredPlanMap: Record<string, InstitutionPlanKey | null>
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -21,7 +26,7 @@ const PLAN_LABELS: Record<string, string> = {
   premium_school: 'Premium',
 }
 
-export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, currentPlanKey }: Props) {
+export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, currentPlanKey, requiredPlanMap }: Props) {
   const router = useRouter()
   const [lockedFeature, setLockedFeature] = useState<{ label: string; requiredPlan: string } | null>(null)
 
@@ -29,18 +34,19 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
 
   if (isSoloTeacher) return null
 
-  // Every card the school COULD have — shown to everyone regardless of current plan.
-  // Role-gated cards (admin-only) are still filtered by role, since those aren't a plan upsell.
+  // Card keys below are real plan_features.feature_key values -- verified
+  // against the actual table, not guessed. Previously several of these
+  // ('attendance', 'promotion', see below) did not match any row in the
+  // table at all, meaning has(key) was always false for every plan.
   const allCards = [
     {
-      key: 'attendance',
+      key: 'basic_attendance',
       label: 'Attendance',
       description: 'Mark daily attendance for your class',
       href: '/attendance',
       icon: CalendarCheck,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
-      requiredPlan: 'Small School',
       adminOnly: false,
     },
     {
@@ -51,7 +57,6 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Smile,
       color: 'text-pink-600',
       bg: 'bg-pink-50',
-      requiredPlan: 'Small School',
       adminOnly: false,
     },
     {
@@ -62,7 +67,6 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: ClipboardCheck,
       color: 'text-indigo-600',
       bg: 'bg-indigo-50',
-      requiredPlan: 'Standard School',
       adminOnly: false,
     },
     {
@@ -73,7 +77,6 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Wallet,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
-      requiredPlan: 'Premium',
       adminOnly: false,
     },
     {
@@ -84,18 +87,16 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Lock,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
-      requiredPlan: null, // available on every paid plan, admin-only
-      adminOnly: true,
+      adminOnly: true, // role gate, not a plan gate -- no table entry, always unlocked for admins
     },
     {
-      key: 'promotion',
+      key: 'promotion_wizard',
       label: 'Promotion Center',
       description: 'Review and confirm student promotions',
       href: '/promotion',
       icon: TrendingUp,
       color: 'text-purple-600',
       bg: 'bg-purple-50',
-      requiredPlan: 'Small School',
       adminOnly: true,
     },
     {
@@ -106,8 +107,7 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Users,
       color: 'text-brand-600',
       bg: 'bg-brand-50',
-      requiredPlan: null,
-      adminOnly: true,
+      adminOnly: true, // role gate, no table entry
     },
     {
       key: 'announcements',
@@ -117,18 +117,16 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Megaphone,
       color: 'text-orange-600',
       bg: 'bg-orange-50',
-      requiredPlan: null,
-      adminOnly: true,
+      adminOnly: true, // role gate, no table entry
     },
     {
-      key: 'promotion_rules',
+      key: 'promotion_wizard', // same underlying capability as Promotion Center, correctly using the real key directly now
       label: 'Promotion Rules',
       description: 'Set criteria for promotion recommendations',
       href: '/promotion/rules',
       icon: Settings,
       color: 'text-slate-600',
       bg: 'bg-slate-50',
-      requiredPlan: 'Small School',
       adminOnly: true,
     },
   ]
@@ -137,21 +135,23 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
 
   if (visibleCards.length === 0) return null
 
-  // ✅ FIX 1: isUnlocked helper (fixes Promotion Rules)
-  const ALWAYS_UNLOCKED_FOR_ADMIN = ['lock_results', 'parent_management', 'announcements']
+  const ROLE_GATED_NOT_PLAN_GATED = ['lock_results', 'parent_management', 'announcements']
 
   function isUnlocked(card: typeof allCards[number]): boolean {
-    if (ALWAYS_UNLOCKED_FOR_ADMIN.includes(card.key)) return true
-    if (card.key === 'promotion_rules') return has('promotion')
+    if (ROLE_GATED_NOT_PLAN_GATED.includes(card.key)) return true
     return has(card.key)
   }
 
-  // ✅ FIX 2: use the shared helper in handleClick
+  function requiredPlanLabel(card: typeof allCards[number]): string {
+    const tier = requiredPlanMap[card.key]
+    return tier ? INSTITUTION_PLAN_LABELS[tier] : 'a higher plan'
+  }
+
   function handleClick(card: typeof allCards[number]) {
     if (isUnlocked(card)) {
       router.push(card.href)
     } else {
-      setLockedFeature({ label: card.label, requiredPlan: card.requiredPlan ?? 'a higher plan' })
+      setLockedFeature({ label: card.label, requiredPlan: requiredPlanLabel(card) })
     }
   }
 
@@ -163,13 +163,12 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 p-4">
           {visibleCards.map((card) => {
-            // ✅ FIX 3: use the shared helper in render
             const unlocked = isUnlocked(card)
             const Icon = card.icon
 
             return (
               <button
-                key={card.key}
+                key={card.href}
                 onClick={() => handleClick(card)}
                 className={`flex items-start gap-3 p-3 rounded border text-left transition-colors group ${
                   unlocked
@@ -187,7 +186,7 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
                     </p>
                     {!unlocked && (
                       <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                        {card.requiredPlan}
+                        {requiredPlanLabel(card)}
                       </span>
                     )}
                   </div>
@@ -210,15 +209,14 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
             <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center mb-3">
               <Sparkles size={18} className="text-amber-500" />
             </div>
-            <h3 className="text-base font-bold text-ink mb-1">{lockedFeature.label} is a {lockedFeature.requiredPlan} feature</h3>
+            <h3 className="text-base font-bold text-ink mb-1">This feature is available on the {lockedFeature.requiredPlan} plan</h3>
             <p className="text-sm text-ink-muted mb-4">
-              You're currently on the <strong>{PLAN_LABELS[currentPlanKey] ?? currentPlanKey}</strong> plan. Upgrade to {lockedFeature.requiredPlan} to unlock {lockedFeature.label.toLowerCase()} for your school.
+              You're currently on the <strong>{PLAN_LABELS[currentPlanKey] ?? currentPlanKey}</strong> plan. Upgrade your subscription to unlock {lockedFeature.label.toLowerCase()}.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setLockedFeature(null)} className="btn-secondary btn-sm btn flex-1">
                 Maybe later
               </button>
-              {/* ✅ FIX 4: correct "View Plans" link */}
               <button onClick={() => router.push('/settings#billing')} className="btn-primary btn-sm btn flex-1">
                 View Plans
               </button>

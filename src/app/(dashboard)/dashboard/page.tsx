@@ -7,6 +7,11 @@ import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import FeatureCards from '@/components/dashboard/FeatureCards'
 import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
 import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
+import { getRequiredPlanMap } from '@/lib/plans/getRequiredPlanMap'
+
+// Real feature_key values used by FeatureCards, kept here so the required-plan
+// lookup only fetches what it needs. Must match the keys used in FeatureCards.tsx.
+const FEATURE_CARD_KEYS = ['basic_attendance', 'affective_psychomotor', 'homework', 'fees', 'promotion_wizard']
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -21,9 +26,14 @@ export default async function DashboardPage() {
   const userRole = user?.role || 'teacher'
   const currentPlanKey = user?.subscription_plan ?? 'free'
 
-  // ✅ Use helper for plan features
+  // Use helper for plan features
   const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
   const planFeatures = (!orgId) ? [] : await getPlanFeatures(supabase, orgPlanKey)
+
+  // Real, table-derived "minimum plan required" per feature, for correct
+  // upgrade messaging (Institution tiers only -- never compared against
+  // Solo Teacher plans, which are a separate product line).
+  const requiredPlanMap = (!orgId) ? {} : await getRequiredPlanMap(supabase, FEATURE_CARD_KEYS)
 
   // ── Determine user type ──
   const isSoloTeacher = !orgId
@@ -45,7 +55,6 @@ export default async function DashboardPage() {
 
   // ── SOLO TEACHER ──
   if (isSoloTeacher) {
-    // Solo teacher - use existing logic with instructor_id
     const groupsBaseQuery = () => {
       const q = supabase.from('groups').select('*', { count: 'exact', head: true }).eq('is_active', true)
       return q.eq('instructor_id', authUser.id)
@@ -92,7 +101,6 @@ export default async function DashboardPage() {
       .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
     completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
 
-    // Subject breakdown for solo teacher
     const { data: groupIds } = await supabase
       .from('groups')
       .select('id')
@@ -108,7 +116,6 @@ export default async function DashboardPage() {
       subjectStats = subjects || []
     }
 
-    // Recent scores
     const { data: scores } = await supabase
       .from('scores')
       .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
@@ -117,7 +124,6 @@ export default async function DashboardPage() {
       .limit(10)
     recentScores = scores || []
 
-    // First class for score grid
     const { data: first } = await supabase
       .from('groups').select('id, name')
       .eq('instructor_id', authUser.id).eq('is_active', true).limit(1).maybeSingle()
@@ -139,7 +145,6 @@ export default async function DashboardPage() {
 
   // ── INSTITUTION ADMIN ──
   else if (isInstitutionAdmin) {
-    // Admin sees everything in the organization
     const [
       { count: gCount },
       { count: lCount },
@@ -173,14 +178,12 @@ export default async function DashboardPage() {
       .in('group_id', recentGroupIds.length > 0 ? recentGroupIds : ['none'])
     completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
 
-    // Subject breakdown for admin
     const { data: subjects } = await supabase
       .from('subjects')
       .select('id, name, code, group:groups(name), score_count:scores(count)')
       .eq('organization_id', orgId).eq('is_active', true).order('name').limit(10)
     subjectStats = subjects || []
 
-    // Recent scores
     const { data: scores } = await supabase
       .from('scores')
       .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
@@ -189,7 +192,6 @@ export default async function DashboardPage() {
       .limit(10)
     recentScores = scores || []
 
-    // First class for score grid
     const { data: first } = await supabase
       .from('groups').select('id, name')
       .eq('organization_id', orgId).eq('is_active', true).limit(1).maybeSingle()
@@ -211,22 +213,19 @@ export default async function DashboardPage() {
 
   // ── INSTITUTION TEACHER ──
   else if (isInstitutionTeacher) {
-    // Teacher in an institution - use teacher_assignments
     const teacherData = await getTeacherDashboardData(authUser.id)
-    
+
     assignedClasses = teacherData.classes || []
     assignedSubjects = teacherData.subjects || []
-    
-    // ✅ Determine if teacher has only subjects (no classes)
+
     const hasClassesAsTeacher = assignedClasses.length > 0
     const hasSubjectsOnly = assignedClasses.length === 0 && assignedSubjects.length > 0
-    
+
     groupCount = assignedClasses.length
     learnerCount = 0
     scoreCount = 0
     reportCount = 0
-    
-    // Get learners count from assigned classes
+
     if (assignedClasses.length > 0) {
       const classIds = assignedClasses.map(c => c.id)
       const { count: lCount } = await supabase
@@ -237,14 +236,12 @@ export default async function DashboardPage() {
       learnerCount = lCount || 0
     }
 
-    // Get scores count
     const { count: sCount } = await supabase
       .from('scores')
       .select('*', { count: 'exact', head: true })
       .eq('entered_by', authUser.id)
     scoreCount = sCount || 0
 
-    // Get reports count
     const { count: rCount } = await supabase
       .from('reports')
       .select('*', { count: 'exact', head: true })
@@ -252,10 +249,8 @@ export default async function DashboardPage() {
       .eq('status', 'ready')
     reportCount = rCount || 0
 
-    // Recent groups (classes) - only if they have classes
     recentGroups = assignedClasses.slice(0, 5)
 
-    // Get report status for recent groups
     if (recentGroups.length > 0) {
       const recentGroupIds = recentGroups.map(g => g.id)
       const { data: completed } = await supabase
@@ -265,7 +260,6 @@ export default async function DashboardPage() {
       completedGroupIds = new Set((completed ?? []).map(r => r.group_id))
     }
 
-    // Subject breakdown for institution teacher
     if (assignedSubjects.length > 0) {
       const subjectIds = assignedSubjects.map(s => s.id)
       const { data: subjects } = await supabase
@@ -276,7 +270,6 @@ export default async function DashboardPage() {
       subjectStats = subjects || []
     }
 
-    // Recent scores
     const { data: scores } = await supabase
       .from('scores')
       .select('id, score, created_at, learner:learners(first_name, last_name, admission_number), subject:subjects(name), component:assessment_components(name)')
@@ -285,10 +278,9 @@ export default async function DashboardPage() {
       .limit(10)
     recentScores = scores || []
 
-    // First class for score grid
     if (assignedClasses.length > 0) {
       firstClass = assignedClasses[0]
-      
+
       const { data: learners } = await supabase
         .from('learners')
         .select('id, first_name, last_name, admission_number, scores:scores(subject_id, score)')
@@ -302,17 +294,16 @@ export default async function DashboardPage() {
     }
   }
 
-  // ✅ Contextual stats for subjects-only teachers
   const hasSubjectsOnly = isInstitutionTeacher && assignedClasses.length === 0 && assignedSubjects.length > 0
 
   const stats = [
-    { 
-      label: hasSubjectsOnly ? 'Subjects' : 'Classes', 
-      value: hasSubjectsOnly ? assignedSubjects.length : (groupCount ?? 0), 
-      icon: BookOpen, 
-      href: hasSubjectsOnly ? '/settings/subjects' : '/classes', 
-      color: 'text-brand-500', 
-      bg: 'bg-brand-50' 
+    {
+      label: hasSubjectsOnly ? 'Subjects' : 'Classes',
+      value: hasSubjectsOnly ? assignedSubjects.length : (groupCount ?? 0),
+      icon: BookOpen,
+      href: hasSubjectsOnly ? '/settings/subjects' : '/classes',
+      color: 'text-brand-500',
+      bg: 'bg-brand-50'
     },
     { label: 'Students', value: learnerCount ?? 0, icon: Users, href: '/students', color: 'text-green-600', bg: 'bg-green-50' },
     { label: 'Scores entered', value: scoreCount ?? 0, icon: ClipboardList, href: '/scores', color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -326,7 +317,6 @@ export default async function DashboardPage() {
     return 'Good evening'
   })()
 
-  // Determine role display
   let roleDisplay = ''
   if (isSoloTeacher) roleDisplay = 'Solo Teacher'
   else if (isInstitutionAdmin) roleDisplay = 'School Admin'
@@ -344,10 +334,6 @@ export default async function DashboardPage() {
     roleDisplay = isClassTeacher ? 'Class Teacher' : 'Subject Teacher'
   }
 
-  // ── Fetch full teaching assignments + custom role assignments for the banner ──
-  // This runs for ANY institution user (admin, teacher, or custom-role staff), since
-  // any of them can simultaneously hold a class-teacher/subject-teacher assignment
-  // AND a custom role (Bursar, Academic Director, etc.) — the two systems are independent.
   let teachingAssignments: Array<{ role: string; className: string | null; subjectName: string | null }> = []
   let customRoles: string[] = []
 
@@ -399,14 +385,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ✅ Announcement Banner */}
       <AnnouncementBanner />
-      
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
           <p className="page-subtitle">
-            {roleDisplay} • {hasSubjectsOnly 
+            {roleDisplay} • {hasSubjectsOnly
               ? `You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}`
               : `Here's what's happening with your classes today.`
             }
@@ -435,7 +420,13 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <FeatureCards isAdmin={!!isInstitutionAdmin} isSoloTeacher={isSoloTeacher} planFeatures={planFeatures} currentPlanKey={orgPlanKey} />
+      <FeatureCards
+        isAdmin={!!isInstitutionAdmin}
+        isSoloTeacher={isSoloTeacher}
+        planFeatures={planFeatures}
+        currentPlanKey={orgPlanKey}
+        requiredPlanMap={requiredPlanMap}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, href, color, bg }) => (

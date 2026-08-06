@@ -17,12 +17,7 @@ import { useRouter } from 'next/navigation'
 interface Props {
   user: User
   org?: Organization | null
-  // Real, backend-driven feature list for this org's plan (plan_features table).
   features: string[]
-  // Real permission set for this user, mirroring has_permission() exactly.
-  // isSchoolAdmin === true means "every permission" (matches the admin bypass
-  // built into has_permission() itself), separate from the raw role check
-  // below which is only used for a few legacy admin-only sections.
   isSchoolAdmin: boolean
   permissions: string[]
 }
@@ -40,7 +35,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
 
   const plan = org?.subscription_plan ?? 'free'
   const isSoloTeacher = !org
-  const isAdmin = user?.role === 'admin' // legacy role check, kept for sections not yet on the permission system
+  const isAdmin = user?.role === 'admin'
 
   const planLabel: Record<string, string> = {
     free: 'Free',
@@ -51,8 +46,13 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     premium_school: 'Premium',
   }
 
+  // Real feature_key values, verified directly against the plan_features
+  // table. Previously 'attendance', 'promotion', and 'finance_analytics'
+  // were used here -- none of those strings exist in the real table, so
+  // has() was silently always false for them, hiding these nav items from
+  // every school on every plan. Fixed: basic_attendance, promotion_wizard,
+  // advanced_finance_analytics.
   const has = (key: string) => !isSoloTeacher && features.includes(key)
-  // Real permission check, mirrors has_permission(): admin bypasses everything.
   const canDo = (permissionKey: string) => isSchoolAdmin || permissions.includes(permissionKey)
 
   const coreNav = [
@@ -65,23 +65,20 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
   ]
 
   const studentLifeNav = [
-    ...(has('attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
+    ...(has('basic_attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
     ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
-    // ✅ Permission-driven, not admin-only: any role granted 'fees.manage_structures'
-    // (e.g. a Finance Officer role) sees this even without being a full admin.
     ...(has('fees') && canDo('fees.manage_structures') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
-    // ✅ NEW: Issue Invoices, gated on 'finance.issue_invoices'
     ...(has('fees') && canDo('finance.issue_invoices') ? [{ label: 'Issue Invoices', href: '/fees/issue-invoices', icon: FilePlus2 }] : []),
-    ...(isAdmin && has('finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
+    ...(isAdmin && has('advanced_finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 
   const governanceNav = [
     ...(isAdmin ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
     ...(isAdmin ? [{ label: 'Parent Management', href: '/parents', icon: Users }] : []),
-    ...(isAdmin && has('promotion') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
-    ...(isAdmin && has('promotion') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
+    ...(isAdmin && has('promotion_wizard') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
+    ...(isAdmin && has('promotion_wizard') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
     { label: 'Support', href: '/school-support', icon: TicketIcon },
     ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
