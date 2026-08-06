@@ -9,7 +9,7 @@ import {
   FileText, Settings, LogOut, ChevronRight,
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
-  TicketIcon, LineChart, Receipt, FilePlus2,
+  TicketIcon, LineChart, Receipt, FilePlus2, CreditCard,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -46,12 +46,6 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     premium_school: 'Premium',
   }
 
-  // Real feature_key values, verified directly against the plan_features
-  // table. Previously 'attendance', 'promotion', and 'finance_analytics'
-  // were used here -- none of those strings exist in the real table, so
-  // has() was silently always false for them, hiding these nav items from
-  // every school on every plan. Fixed: basic_attendance, promotion_wizard,
-  // advanced_finance_analytics.
   const has = (key: string) => !isSoloTeacher && features.includes(key)
   const canDo = (permissionKey: string) => isSchoolAdmin || permissions.includes(permissionKey)
 
@@ -71,6 +65,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
     ...(has('fees') && canDo('fees.manage_structures') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
     ...(has('fees') && canDo('finance.issue_invoices') ? [{ label: 'Issue Invoices', href: '/fees/issue-invoices', icon: FilePlus2 }] : []),
+    ...(has('fees') && canDo('fees.record_payment') ? [{ label: 'Record Payments', href: '/fees/payments', icon: CreditCard }] : []),  // ✅ NEW
     ...(isAdmin && has('advanced_finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 
