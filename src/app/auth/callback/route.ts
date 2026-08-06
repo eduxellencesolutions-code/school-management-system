@@ -1,7 +1,20 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+
+// Permanent fix: this route used to build its own inline Supabase client,
+// which meant it was the ONE place in the codebase that didn't apply the
+// shared getCookieDomain() logic from lib/supabase/server.ts. That caused
+// every session created through this route (all parent magic-link logins,
+// password resets) to be written as a host-only cookie
+// (Domain=results.eduxellence.org) instead of the shared
+// Domain=.eduxellence.org cookie every other login path uses -- so a parent
+// session and a staff session with the same cookie name could silently
+// collide in the same browser.
+//
+// Fix: use the same createClient() everyone else uses, so there is exactly
+// ONE place in the whole app that ever decides cookie domain. This class of
+// bug can't recur without touching that single shared file.
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -9,21 +22,7 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type')
 
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  const supabase = await createClient()
 
   if (token_hash && type === 'recovery') {
     const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
