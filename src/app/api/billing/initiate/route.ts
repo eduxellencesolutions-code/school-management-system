@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     provider: 'flutterwave' | 'paystack'
   }
 
-  // ✅ FIX: Added solo_teacher_pro to valid plans
   const validPlans = ['small_school', 'standard_school', 'premium_school', 'solo_teacher_pro']
   if (!validPlans.includes(plan)) {
     console.error('Invalid plan received:', plan)
@@ -43,7 +42,18 @@ export async function POST(req: NextRequest) {
   const amount = getPrice(plan, currency, cycle)
   const reference = `edux-${accountType}-${accountId}-${Date.now()}`
 
-  const metadata: CheckoutMetadata = { accountType, accountId, plan, cycle }
+  // NEW: platform_key lets the central payments router identify this as
+  // a Results transaction. expected_amount/currency let the router catch
+  // a tampered/mismatched amount before it ever reaches this app.
+  const metadata: CheckoutMetadata = {
+    accountType,
+    accountId,
+    plan,
+    cycle,
+    platform_key: 'results',
+    expected_amount: amount,
+    expected_currency: currency,
+  }
 
   const commonInput = {
     email: profile?.email ?? user.email!,

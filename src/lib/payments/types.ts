@@ -7,6 +7,9 @@ export interface CheckoutMetadata {
   accountId: string   // organization_id or user_id
   plan: PaidPlan
   cycle: BillingCycle
+  platform_key: string   // ✅ ADDED - identifies platform to central router
+  expected_amount: number   // ✅ ADDED - amount central expects
+  expected_currency: Currency   // ✅ ADDED - currency central expects
 }
 
 export interface InitiateCheckoutInput {
@@ -31,6 +34,6 @@ export interface VerifyTransactionResult {
   amount?: number
   currency?: Currency
   metadata?: CheckoutMetadata
-  reference?: string   // ✅ NEW — the provider's own canonical reference, straight from their verify API response
+  reference?: string
   error?: string
 }
