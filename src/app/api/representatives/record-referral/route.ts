@@ -31,9 +31,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false });
   }
 
+  // ✅ FIX: Resolve the referred user's organization_id at insert time
+  const { data: referredUser } = await admin
+    .from('users')
+    .select('organization_id')
+    .eq('id', userId)
+    .maybeSingle();
+
   await admin.from('referrals').insert({
     representative_id: rep.id,
     referred_user_id: userId,
+    organization_id: referredUser?.organization_id ?? null,
     referral_code: referralCode,
     status: 'pending',
   });
