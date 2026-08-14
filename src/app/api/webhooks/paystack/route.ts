@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
       const result = await applySuccessfulSubscription(
         verification.metadata,
         'paystack',
-        verification.reference
+        verification.reference,
+        verification.amount   // ✅ NEW — actual verified amount
       )
       if (!result.success) console.error('Failed to apply subscription:', result.error)
     } else if (verification.success && verification.status === 'successful' && !verification.reference) {

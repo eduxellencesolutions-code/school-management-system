@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing accountId/plan in metadata' }, { status: 400 })
   }
 
-  const result = await applySuccessfulSubscription(metadata, provider, reference)
+  // ✅ FIX: Pass payload.amount to applySuccessfulSubscription
+  const result = await applySuccessfulSubscription(metadata, provider, reference, payload.amount)
 
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 500 })

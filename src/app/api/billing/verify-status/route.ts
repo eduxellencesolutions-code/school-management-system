@@ -40,10 +40,12 @@ export async function GET(req: NextRequest) {
     }
 
     // ✅ Pass gateway and verification.reference to applySuccessfulSubscription
+    // No fallback here — apply-subscription.ts owns the fallback logic centrally
     const applied = await applySuccessfulSubscription(
       verification.metadata,
       provider === 'flutterwave' ? 'flutterwave' : 'paystack',
-      verification.reference
+      verification.reference,
+      verification.amount
     )
     if (!applied.success) {
       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
