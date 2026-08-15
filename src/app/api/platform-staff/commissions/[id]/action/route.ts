@@ -35,6 +35,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true });
   }
 
+  // ✅ FIX: Route reject through void_commission() instead of bare update
+  if (action === 'reject') {
+    const { error } = await supabase.rpc('void_commission', {
+      p_commission_id: id,
+      p_reason: reason ?? 'Rejected by staff',
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 422 });
+
+    await supabase.rpc('log_platform_action', {
+      p_actor_id: user.id,
+      p_action: 'commission_reject',
+      p_target_type: 'commission',
+      p_target_id: id,
+      p_reason: reason ?? null,
+      p_metadata: { paymentReference: paymentReference ?? null },
+    });
+    return NextResponse.json({ success: true });
+  }
+
   let updates: Record<string, any> = {};
   if (action === 'approve') {
     // The 14-day hold is a hard rule for normal approval. If it hasn't
@@ -51,9 +70,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
     updates = { status: 'payable' };
-  } else if (action === 'reject') {
-    updates = { status: 'voided', voided_reason: reason ?? 'Rejected by staff' };
   } else if (action === 'mark_paid') {
+    // ✅ FIX: Add status guard — only payable commissions can be marked paid
+    if (commission.status !== 'payable') {
+      return NextResponse.json({
+        error: 'invalid_status',
+        message: `Cannot mark paid — commission is in status ${commission.status}, expected payable`,
+      }, { status: 422 });
+    }
     updates = { status: 'paid', paid_at: new Date().toISOString() };
   } else {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
