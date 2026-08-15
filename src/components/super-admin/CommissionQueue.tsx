@@ -12,7 +12,15 @@ function formatCountdown(holdUntil: string): string {
   return `Available in ${hours} hour${hours === 1 ? '' : 's'}`
 }
 
-export default function CommissionQueue({ canEarlyRelease }: { canEarlyRelease: boolean }) {
+export default function CommissionQueue({
+  canEarlyRelease,
+  canVoid,
+  canApprove,
+}: {
+  canEarlyRelease: boolean
+  canVoid: boolean
+  canApprove: boolean
+}) {
   const [commissions, setCommissions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [tooltipId, setTooltipId] = useState<string | null>(null)
@@ -85,27 +93,27 @@ export default function CommissionQueue({ canEarlyRelease }: { canEarlyRelease: 
                 )}
               </div>
               <div className="flex gap-2 items-center relative">
-                {c.status === 'pending' && (
-                  isHeld ? (
-                    <div className="relative">
-                      <button
-                        disabled
-                        onMouseEnter={() => setTooltipId(c.id)}
-                        onMouseLeave={() => setTooltipId(null)}
-                        onClick={() => setTooltipId(tooltipId === c.id ? null : c.id)}
-                        className="btn-sm btn bg-surface-100 text-ink-faint cursor-not-allowed"
-                      >
-                        Approve
-                      </button>
-                      {tooltipId === c.id && (
-                        <div className="absolute right-0 top-full mt-1 w-72 bg-ink text-white text-xs rounded p-3 z-10 shadow-lg">
-                          This commission is currently under the mandatory 14-day holding period and cannot be released until {new Date(c.hold_until).toLocaleDateString('en-NG')}. If an exceptional early release is required, contact a Super Administrator or Finance Administrator.
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <button onClick={() => act(c.id, 'approve')} className="btn-sm btn bg-green-50 text-green-600">Approve</button>
-                  )
+                {c.status === 'pending' && !isHeld && canApprove && (
+                  <button onClick={() => act(c.id, 'approve')} className="btn-sm btn bg-green-50 text-green-600">Approve</button>
+                )}
+
+                {c.status === 'pending' && isHeld && (
+                  <div className="relative">
+                    <button
+                      disabled
+                      onMouseEnter={() => setTooltipId(c.id)}
+                      onMouseLeave={() => setTooltipId(null)}
+                      onClick={() => setTooltipId(tooltipId === c.id ? null : c.id)}
+                      className="btn-sm btn bg-surface-100 text-ink-faint cursor-not-allowed"
+                    >
+                      Approve
+                    </button>
+                    {tooltipId === c.id && (
+                      <div className="absolute right-0 top-full mt-1 w-72 bg-ink text-white text-xs rounded p-3 z-10 shadow-lg">
+                        This commission is currently under the mandatory 14-day holding period and cannot be released until {new Date(c.hold_until).toLocaleDateString('en-NG')}. If an exceptional early release is required, contact a Super Administrator or Finance Administrator.
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {isHeld && canEarlyRelease && (
@@ -117,10 +125,11 @@ export default function CommissionQueue({ canEarlyRelease }: { canEarlyRelease: 
                   </button>
                 )}
 
-                {(c.status === 'pending' || c.status === 'payable') && (
+                {(c.status === 'pending' || c.status === 'payable') && canVoid && (
                   <button onClick={() => act(c.id, 'reject')} className="btn-sm btn bg-red-50 text-red-600">Reject</button>
                 )}
-                {c.status === 'payable' && (
+
+                {c.status === 'payable' && canApprove && (
                   <button onClick={() => act(c.id, 'mark_paid')} className="btn-primary btn-sm btn">Mark Paid</button>
                 )}
               </div>

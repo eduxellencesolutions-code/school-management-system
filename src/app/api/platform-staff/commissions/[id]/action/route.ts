@@ -36,21 +36,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   // ✅ FIX: Route reject through void_commission() instead of bare update
+  // void_commission() already logs commission_voided internally — no duplicate log call needed
   if (action === 'reject') {
     const { error } = await supabase.rpc('void_commission', {
       p_commission_id: id,
       p_reason: reason ?? 'Rejected by staff',
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 422 });
-
-    await supabase.rpc('log_platform_action', {
-      p_actor_id: user.id,
-      p_action: 'commission_reject',
-      p_target_type: 'commission',
-      p_target_id: id,
-      p_reason: reason ?? null,
-      p_metadata: { paymentReference: paymentReference ?? null },
-    });
     return NextResponse.json({ success: true });
   }
 
