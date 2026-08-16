@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PromotionCenter from '@/components/promotion/PromotionCenter'
+import NeedHelp from '@/components/support/NeedHelp'
 
 export default async function PromotionPage() {
   const supabase = await createClient()
@@ -61,7 +62,10 @@ export default async function PromotionPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="page-title">Promotion Center</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="page-title">Promotion Center</h1>
+          <NeedHelp text="Review and confirm student promotions." />
+        </div>
         <p className="page-subtitle">
           {termLabel ? `Reviewing promotion for ${termLabel}` : 'Review and confirm student promotions.'}
         </p>

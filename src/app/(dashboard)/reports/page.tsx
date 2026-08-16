@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Archive, Trash2 } from 'lucide-react'
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import ApproveButton from '@/components/reports/ApproveButton'
+import NeedHelp from '@/components/support/NeedHelp'
 
 export const runtime = 'nodejs'
 
@@ -265,7 +266,10 @@ export default async function ReportsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Reports</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="page-title">Reports</h1>
+            <NeedHelp text="Review results, generate broadsheets, and generate report cards." />
+          </div>
           <p className="page-subtitle">View and manage all generated reports</p>
         </div>
         <div className="flex items-center gap-2">

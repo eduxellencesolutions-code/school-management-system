@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import FeeStructureBuilder from '@/components/fees/FeeStructureBuilder'
+import NeedHelp from '@/components/support/NeedHelp'
 
 export default async function FeeStructuresPage() {
   const supabase = await createClient()
@@ -59,7 +60,10 @@ export default async function FeeStructuresPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="page-title">Fee Structures</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="page-title">Fee Structures</h1>
+          <NeedHelp text="Set up fee structures and start recording payments." />
+        </div>
         <p className="page-subtitle">
           Define what&apos;s charged per class per term. Once a structure has been issued to students, it&apos;s locked.
         </p>

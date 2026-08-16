@@ -14,6 +14,13 @@ export async function GET() {
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const startOfLastMonth = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString();
 
+  // Onboarding analytics — calls the RPC via the authenticated client (not
+  // the service-role admin client) so its internal is_super_admin()/
+  // has_platform_permission() check resolves auth.uid() correctly.
+  const { data: onboarding } = await supabase.rpc('get_platform_onboarding_analytics');
+  const { data: founding500 } = await supabase.rpc('get_platform_founding500_analytics');
+  const { data: referrals } = await supabase.rpc('get_platform_referral_analytics');
+
   // ✅ FIX: Separate the usage query to avoid destructuring issues
   const [
     { data: orgsByPlan },
@@ -86,5 +93,8 @@ export async function GET() {
       homeworkSubmissions: homeworkCount ?? 0,
       feePayments: feePaymentsCount ?? 0,
     },
+    onboarding: onboarding ?? null,
+    founding500: founding500 ?? null,
+    referrals: referrals ?? null,
   });
 }

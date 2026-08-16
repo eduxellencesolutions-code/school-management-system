@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import FoundingBadge from '@/components/dashboard/FoundingBadge';
 
 // ── Institution response shape ──
 type InstitutionStepStatus = 'completed' | 'not_started' | 'locked';
@@ -135,6 +136,12 @@ const STEP_ORDER = [
   'attendance', 'homework', 'fees',
 ];
 
+// First-10-Minutes fast path — subset of STEP_ORDER, reusing the exact same
+// completion data. Not a second progress system — same source of truth.
+const FAST_PATH_INSTITUTION_KEYS = [
+  'profile', 'academic_term', 'classes', 'subjects', 'students', 'grading', 'results_entered',
+];
+
 // ── Solo teacher step config — exactly the 6 steps from the spec,
 // no academic_term, reusing the same underlying pages as the
 // institution flow (these pages already branch org vs solo internally) ──
@@ -186,6 +193,7 @@ export default function SetupGuidePage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [founding, setFounding] = useState<{ founding_slot_number: number; promo_expires_at: string } | null>(null);
 
   const supabase = createClient();
 
@@ -198,6 +206,19 @@ export default function SetupGuidePage() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    async function loadFounding() {
+      if (!data || data.account_type !== 'institution') return;
+      const { data: enrollment } = await supabase
+        .from('founding500_enrollments')
+        .select('founding_slot_number, promo_expires_at')
+        .eq('status', 'active')
+        .maybeSingle();
+      setFounding(enrollment);
+    }
+    loadFounding();
+  }, [data]);
 
   async function handleStepClick(stepKey: string) {
     supabase.rpc('mark_onboarding_step_viewed', { p_step_key: stepKey });
@@ -236,6 +257,13 @@ export default function SetupGuidePage() {
         Current plan: <span className="font-medium text-gray-700">{data.current_plan}</span>
       </div>
 
+      {founding && (
+        <FoundingBadge
+          slotNumber={founding.founding_slot_number}
+          promoExpiresAt={founding.promo_expires_at}
+        />
+      )}
+
       <div className="mb-8">
         <div className="flex justify-between items-baseline mb-2">
           <span className="text-sm font-medium text-gray-700">
@@ -265,6 +293,10 @@ export default function SetupGuidePage() {
         </div>
       )}
 
+      {data.account_type === 'institution' && (
+        <FastPathInstitution data={data} onStepClick={handleStepClick} />
+      )}
+
       {data.account_type === 'institution' ? (
         <InstitutionChecklist data={data} onStepClick={handleStepClick} />
       ) : (
@@ -276,6 +308,75 @@ export default function SetupGuidePage() {
           Hide this guide
         </button>
       )}
+    </div>
+  );
+}
+
+function FastPathInstitution({
+  data,
+  onStepClick,
+}: {
+  data: InstitutionDashboardData;
+  onStepClick: (key: string) => void;
+}) {
+  const stepsByKey = Object.fromEntries(data.steps.map((s) => [s.key, s]));
+  const fastSteps = FAST_PATH_INSTITUTION_KEYS
+    .map((key) => ({ backend: stepsByKey[key], config: STEP_CONFIG[key] }))
+    .filter((s) => s.backend && s.config);
+
+  const trackedDone = fastSteps.filter((s) => s.backend.status === 'completed').length;
+
+  return (
+    <div className="mb-8 rounded-lg border border-indigo-200 bg-indigo-50 p-5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-bold text-indigo-900">⚡ First 10 Minutes</span>
+        <span className="text-xs text-indigo-600">{trackedDone} of {fastSteps.length} done</span>
+      </div>
+      <p className="text-xs text-indigo-700 mb-4">Let's get your account ready for real work.</p>
+
+      <div className="space-y-2">
+        {fastSteps.map(({ backend, config }) => {
+          const isDone = backend.status === 'completed';
+          const isLocked = backend.status === 'locked';
+
+          return (
+            <div key={backend.key} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-indigo-100">
+              <div className="flex items-center gap-2">
+                <span className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${
+                  isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent'
+                }`}>✓</span>
+                <span className="text-sm text-gray-800">{config.title}</span>
+              </div>
+              {isLocked ? (
+                <Link href="/settings#billing" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+                  View Plans →
+                </Link>
+              ) : (
+                !isDone && (
+                  <Link
+                    href={config.actions[0].route}
+                    onClick={() => onStepClick(backend.key)}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Set Up Now →
+                  </Link>
+                )
+              )}
+            </div>
+          );
+        })}
+
+        {/* Action-only step — no completion tracking exists for this yet, see note above */}
+        <div className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-indigo-100">
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 rounded-full border border-gray-300" />
+            <span className="text-sm text-gray-800">Generate / Preview a Report</span>
+          </div>
+          <Link href="/reports/generate" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+            Try It →
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -358,38 +459,44 @@ function SoloChecklist({
   onStepClick: (key: string) => void;
 }) {
   return (
-    <div className="space-y-3">
-      {SOLO_STEP_CONFIG.map((step) => {
-        const isDone = data.steps[step.key];
+    <>
+      <div className="mb-3">
+        <span className="text-sm font-bold text-indigo-900">⚡ First 10 Minutes</span>
+        <p className="text-xs text-indigo-700">Let's get your account ready for real work.</p>
+      </div>
+      <div className="space-y-3">
+        {SOLO_STEP_CONFIG.map((step) => {
+          const isDone = data.steps[step.key];
 
-        return (
-          <div key={step.key} className="flex items-center justify-between p-4 border rounded-lg bg-white border-gray-200">
-            <div className="flex items-start gap-3">
-              <span
-                className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
-                  isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent'
-                }`}
-              >
-                ✓
-              </span>
-              <div>
-                <p className="font-medium text-gray-900">{step.title}</p>
-                <p className="text-sm text-gray-500">{step.description}</p>
+          return (
+            <div key={step.key} className="flex items-center justify-between p-4 border rounded-lg bg-white border-gray-200">
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
+                    isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent'
+                  }`}
+                >
+                  ✓
+                </span>
+                <div>
+                  <p className="font-medium text-gray-900">{step.title}</p>
+                  <p className="text-sm text-gray-500">{step.description}</p>
+                </div>
               </div>
-            </div>
 
-            {!isDone && (
-              <Link
-                href={step.action.route}
-                onClick={() => onStepClick(step.key)}
-                className="flex-shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap ml-4"
-              >
-                {step.action.label} →
-              </Link>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              {!isDone && (
+                <Link
+                  href={step.action.route}
+                  onClick={() => onStepClick(step.key)}
+                  className="flex-shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap ml-4"
+                >
+                  {step.action.label} →
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
