@@ -39,6 +39,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ status: 'error', message: 'Payment verification incomplete — please contact support' })
     }
 
+    // ✅ Validate amount exists before applying — same pattern as the
+    // reference check above. amount should always be present once
+    // status === 'successful', but we don't silently fall back to 0.
+    if (verification.amount === undefined) {
+      console.error('Payment verified but provider returned no amount — refusing to apply subscription')
+      return NextResponse.json({ status: 'error', message: 'Payment verification incomplete — please contact support' })
+    }
+
     // ✅ Pass gateway and verification.reference to applySuccessfulSubscription
     // No fallback here — apply-subscription.ts owns the fallback logic centrally
     const applied = await applySuccessfulSubscription(
