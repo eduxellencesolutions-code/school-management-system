@@ -10,7 +10,7 @@ export default async function AdminPage() {
 
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()
 
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!['admin', 'principal', 'school_admin'].includes(profile?.role ?? '')) redirect('/dashboard')
 
   const orgId = profile.organization_id
 

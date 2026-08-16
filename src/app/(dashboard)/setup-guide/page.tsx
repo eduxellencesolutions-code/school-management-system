@@ -1,0 +1,264 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client'; // adjust if your import path differs
+
+type StepStatus = 'completed' | 'not_started' | 'locked';
+
+type BackendStep = {
+  key: string;
+  status: StepStatus;
+  is_locked: boolean;
+  feature_key: string | null;
+  required_plan: string | null;
+};
+
+type DashboardData = {
+  current_plan: string;
+  steps: BackendStep[];
+  completed_steps: number;
+  total_steps: number;
+  percent: number;
+  guide_started_at: string | null;
+  last_step_viewed: string | null;
+  dismissed: boolean;
+  dismissed_at: string | null;
+};
+
+// Verified against the real route list (src/app) on 2026-08-15.
+// Every route here exists in the codebase — none are guessed.
+const STEP_CONFIG: Record<
+  string,
+  { title: string; description: string; actions: { label: string; route: string }[] }
+> = {
+  profile: {
+    title: 'School Profile',
+    description: 'Logo, motto, address, and contact information.',
+    actions: [{ label: 'Set Up Now', route: '/settings/institution' }],
+  },
+  academic_term: {
+    title: 'Academic Session & Term',
+    description: 'Set your active session and term.',
+    actions: [{ label: 'Set Up Now', route: '/settings/academic' }],
+  },
+  classes: {
+    title: 'Classes',
+    description: 'Create your classes and arms/sections.',
+    actions: [{ label: 'Create Class', route: '/classes/new' }],
+  },
+  subjects: {
+    title: 'Subjects',
+    description: 'Create subjects and assign them to classes.',
+    actions: [{ label: 'Add Subject', route: '/settings/subjects/new' }],
+  },
+  students: {
+    title: 'Students',
+    description: 'Add students individually or bulk-import via Excel/CSV.',
+    actions: [{ label: 'Add / Import Students', route: '/students' }],
+  },
+  grading: {
+    title: 'Grading',
+    description: 'Configure your grading system — scale, boundaries, and remarks.',
+    actions: [{ label: 'Configure Grading System', route: '/admin' }],
+  },
+  staff: {
+    title: 'Staff & Permissions',
+    description: 'Add teachers and staff, then assign the right roles.',
+    actions: [
+      { label: 'Add Staff', route: '/settings/teachers/new' },
+      { label: 'Manage Roles', route: '/roles' },
+    ],
+  },
+  results_entered: {
+    title: 'Enter Results',
+    description: 'Enter scores for your students.',
+    actions: [{ label: 'Enter Scores', route: '/scores' }],
+  },
+  results_locked_or_published: {
+    title: 'Publish / Lock Results',
+    description: 'Finalize results so they can be viewed or printed.',
+    actions: [{ label: 'Lock or Publish', route: '/reports/lock' }],
+  },
+  parent_access: {
+    title: 'Parent Portal',
+    description: 'Link parents to their children so they can view results.',
+    actions: [{ label: 'Set Up Parent Access', route: '/parents' }],
+  },
+  attendance: {
+    title: 'Attendance',
+    description: 'Start marking daily attendance.',
+    actions: [{ label: 'Open Attendance', route: '/attendance' }],
+  },
+  homework: {
+    title: 'Homework',
+    description: 'Create and assign homework to your classes.',
+    actions: [{ label: 'Set Up Homework', route: '/homework' }],
+  },
+  fees: {
+    title: 'Fees',
+    description: 'Set up fee structures and start recording payments.',
+    actions: [{ label: 'Set Up Fee Structures', route: '/fees/structures' }],
+  },
+};
+
+// Order the checklist should render in — the backend array order isn't guaranteed
+const STEP_ORDER = [
+  'profile', 'academic_term', 'classes', 'subjects', 'students', 'grading',
+  'staff', 'results_entered', 'results_locked_or_published', 'parent_access',
+  'attendance', 'homework', 'fees',
+];
+
+export default function SetupGuidePage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function load() {
+      const { data, error } = await supabase.rpc('get_onboarding_dashboard');
+      if (error) setError(error.message);
+      else setData(data as DashboardData);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  async function handleStepClick(stepKey: string) {
+    supabase.rpc('mark_onboarding_step_viewed', { p_step_key: stepKey });
+  }
+
+  async function handleDismiss() {
+    const { data: updated } = await supabase.rpc('dismiss_onboarding_guide');
+    if (data) {
+      setData({ ...data, dismissed: true, dismissed_at: updated?.dismissed_at ?? new Date().toISOString() });
+    }
+  }
+
+  if (loading) return <div className="p-8 text-gray-500">Loading your setup guide…</div>;
+  if (error || !data) {
+    return (
+      <div className="p-8 text-red-600">
+        Couldn't load your setup progress. {error ?? 'Please try again.'}
+      </div>
+    );
+  }
+
+  const stepsByKey = Object.fromEntries(data.steps.map((s) => [s.key, s]));
+  const orderedSteps = STEP_ORDER.map((key) => ({ backend: stepsByKey[key], config: STEP_CONFIG[key] }))
+    .filter((s) => s.backend && s.config);
+  const allComplete = data.completed_steps === data.total_steps;
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Welcome to Eduxellence Results 👋</h1>
+        <p className="text-gray-600 mt-1">
+          Let's get your school ready. Follow these steps and you'll be ready to start managing results.
+        </p>
+      </div>
+
+      <div className="mb-4 text-xs text-gray-500">
+        Current plan: <span className="font-medium text-gray-700">{data.current_plan}</span>
+      </div>
+
+      <div className="mb-8">
+        <div className="flex justify-between items-baseline mb-2">
+          <span className="text-sm font-medium text-gray-700">
+            School Setup — {data.percent}% Complete
+          </span>
+          <span className="text-sm text-gray-500">
+            {data.completed_steps} of {data.total_steps} steps
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div
+            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+            style={{ width: `${data.percent}%` }}
+          />
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Estimated setup time: 15–30 minutes</p>
+      </div>
+
+      {allComplete && (
+        <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <p className="font-medium text-green-800">🎉 Your School Is Ready!</p>
+          <p className="text-sm text-green-700 mt-1">
+            Congratulations! Your Eduxellence Results account is fully configured.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {orderedSteps.map(({ backend, config }) => {
+          const isDone = backend.status === 'completed';
+          const isLocked = backend.status === 'locked';
+
+          return (
+            <div
+              key={backend.key}
+              className={`flex items-center justify-between p-4 border rounded-lg ${
+                isLocked ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
+                    isDone
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : isLocked
+                      ? 'bg-gray-200 border-gray-300 text-gray-400'
+                      : 'border-gray-300 text-transparent'
+                  }`}
+                >
+                  {isLocked ? '🔒' : '✓'}
+                </span>
+                <div>
+                  <p className={`font-medium ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>
+                    {config.title}
+                  </p>
+                  <p className={`text-sm ${isLocked ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {isLocked
+                      ? `Available on ${backend.required_plan}`
+                      : config.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 flex gap-3 ml-4">
+                {isLocked ? (
+                  <Link
+                    href="/settings/account"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                  >
+                    View Plans →
+                  </Link>
+                ) : (
+                  !isDone &&
+                  config.actions.map((action) => (
+                    <Link
+                      key={action.route}
+                      href={action.route}
+                      onClick={() => handleStepClick(backend.key)}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                    >
+                      {action.label} →
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {!data.dismissed && (
+        <button onClick={handleDismiss} className="mt-6 text-sm text-gray-400 hover:text-gray-600">
+          Hide this guide
+        </button>
+      )}
+    </div>
+  );
+}

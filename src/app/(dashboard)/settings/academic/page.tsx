@@ -34,7 +34,6 @@ export default async function AcademicPeriodsPage() {
     ? (await supabase.from('organizations').select('current_term_id').eq('id', orgId).single()).data?.current_term_id
     : (await supabase.from('users').select('current_term_id').eq('id', user.id).single()).data?.current_term_id
 
-  // FIX: Explicit type declaration to avoid TypeScript narrowing issues
   const termsBySession: Record<string, { id: string; name: string; session_id: string }[]> = {}
   for (const t of terms ?? []) {
     if (!termsBySession[t.session_id]) termsBySession[t.session_id] = []
@@ -116,10 +115,25 @@ export default async function AcademicPeriodsPage() {
                   </form>
                 </div>
               ))}
-              <form action={createTerm} className="flex gap-2 mt-1 pt-2 border-t border-surface-100">
+              <form action={createTerm} className="flex flex-col gap-2 mt-1 pt-2 border-t border-surface-100">
                 <input type="hidden" name="session_id" value={session.id} />
-                <input name="name" required placeholder="e.g. First Term" className="input input-sm flex-1" />
-                <button type="submit" className="btn-secondary btn-sm btn">Add term</button>
+                <div className="flex gap-2">
+                  <input name="name" required placeholder="e.g. First Term" className="input input-sm flex-1" />
+                </div>
+                <div className="flex gap-2 items-end">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-xs text-ink-faint">Start date</label>
+                    <input type="date" name="start_date" required className="input input-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-xs text-ink-faint">End date</label>
+                    <input type="date" name="end_date" required className="input input-sm" />
+                  </div>
+                  <button type="submit" className="btn-secondary btn-sm btn">Add term</button>
+                </div>
+                <p className="text-xs text-ink-faint">
+                  The end date determines when time-limited access (e.g. Founding 500 Premium) expires for this term.
+                </p>
               </form>
             </div>
           </div>

@@ -31,7 +31,6 @@ async function getActingPlan(userId: string, orgId: string | null): Promise<{ pl
   return { plan: data?.subscription_plan ?? 'free', ref: { type: 'solo', userId } }
 }
 
-// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
 export async function createSession(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
@@ -43,7 +42,6 @@ export async function createSession(formData: FormData): Promise<void> {
       return
     }
 
-    // ✅ GATE: Check if user can create a new academic session
     const { plan, ref } = await getActingPlan(user.id, orgId)
     const gate = await canCreateAcademicSession(plan, ref)
     if (!gate.allowed) {
@@ -70,8 +68,6 @@ export async function createSession(formData: FormData): Promise<void> {
   }
 }
 
-// ✅ Terms are NOT capped by plan limits - no gate needed
-// ✅ FIXED: Changed return type to Promise<void> for form action compatibility
 export async function createTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
@@ -79,7 +75,9 @@ export async function createTerm(formData: FormData): Promise<void> {
 
     const sessionId = formData.get('session_id') as string
     const name = (formData.get('name') as string)?.trim()
-    
+    const startDate = (formData.get('start_date') as string) || null
+    const endDate = (formData.get('end_date') as string) || null
+
     if (!sessionId) {
       console.error('Session ID is required')
       return
@@ -88,14 +86,18 @@ export async function createTerm(formData: FormData): Promise<void> {
       console.error('Term name is required')
       return
     }
-
-    console.log('Creating term for:', { userId: user.id, orgId, sessionId })
+    if (!endDate) {
+      console.error('Term end date is required')
+      return
+    }
 
     const { error } = await supabase.from('terms').insert({
       organization_id: orgId,
       instructor_id: orgId ? null : user.id,
       session_id: sessionId,
       name,
+      start_date: startDate,
+      end_date: endDate,
       is_active: true,
     })
 
@@ -121,7 +123,6 @@ export async function deleteSession(formData: FormData): Promise<void> {
       return
     }
 
-    // Delete all terms in this session first
     await supabase.from('terms').delete().eq('session_id', id)
     const { error } = await supabase.from('academic_sessions').delete().eq('id', id)
     

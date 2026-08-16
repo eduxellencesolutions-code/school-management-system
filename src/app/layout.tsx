@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import AnnouncementTicker from '@/components/announcements/AnnouncementTicker'
+import TawkWidget from '@/components/support/TawkWidget'
 import '@/styles/globals.css'
 
 // ✅ Google Fonts using Next.js built-in optimization
@@ -51,6 +52,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {/* ✅ Global Announcement Ticker - safe to mount everywhere */}
         <AnnouncementTicker />
+        {/* ✅ Tawk.to live chat - safe to mount everywhere, same pattern as AnnouncementTicker above */}
+        <TawkWidget />
         {children}
         <Toaster
           position="top-right"

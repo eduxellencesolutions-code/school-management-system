@@ -54,6 +54,10 @@ export default async function SettingsPage() {
   // Proactive window: show a heads-up while still 'active' but expiring soon
   const isExpiringSoon = currentStatus === 'active' && daysUntilExpiry !== null && daysUntilExpiry <= 3 && daysUntilExpiry >= 0
 
+  // ✅ NEW: Fetch feature availability via RPC
+  const { data: hasAIRemarks } = await supabase.rpc('user_has_feature', { p_feature_key: 'basic_ai_remarks' })
+  const { data: hasTeacherMgmt } = await supabase.rpc('user_has_feature', { p_feature_key: 'teacher_management' })
+
   return (
     <div className="flex flex-col gap-8 max-w-4xl">
       <div>
@@ -298,9 +302,9 @@ export default async function SettingsPage() {
                 { label: 'Excel export', enabled: config.features.excelImportExport },
                 { label: 'PDF reports', enabled: config.features.pdfReportCards },
                 { label: 'School branding', enabled: config.features.schoolBranding === 'full' },
-                { label: 'AI remarks', enabled: config.features.aiGeneratedRemarks },
+                { label: 'AI remarks', enabled: hasAIRemarks ?? false },
                 { label: 'Broadsheet generation', enabled: config.features.broadsheetGeneration },
-                { label: 'Multiple teachers', enabled: config.features.teacherManagement },
+                { label: 'Multiple teachers', enabled: hasTeacherMgmt ?? false },
                 { label: 'Parent portal', enabled: config.features.parentPortal },
                 { label: 'Student portal', enabled: config.features.studentPortal },
                 { label: 'Online result checker', enabled: config.features.onlineResultChecker },
