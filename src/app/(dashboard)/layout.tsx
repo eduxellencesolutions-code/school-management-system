@@ -23,14 +23,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .single()
 
   if (!user?.organization_id) {
-    const { data: ownedGroup } = await supabase
-      .from('groups')
-      .select('id')
-      .eq('instructor_id', authUser.id)
-      .limit(1)
-      .maybeSingle()
-
-    if (!ownedGroup) {
+    // A solo teacher is identified by role, not by already owning a class —
+    // a brand-new signup has zero classes and must still reach /dashboard,
+    // which already handles the zero-groups case in its own solo-teacher
+    // branch. Only redirect away for roles with no personal workspace.
+    if (user?.role !== 'teacher') {
       const { data: rep } = await supabase
         .from('representatives')
         .select('id')

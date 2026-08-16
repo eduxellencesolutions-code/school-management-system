@@ -167,7 +167,7 @@ function SignupForm() {
           ? `Welcome! Your school "${data.org_name}" has been set up.`
           : 'Account created! Welcome to Eduxellence.'
       )
-      router.push('/dashboard')
+      router.push('/getting-started')
 
     } catch (err: unknown) {
       console.error('Signup error:', err)

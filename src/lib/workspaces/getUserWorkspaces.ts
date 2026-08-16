@@ -86,13 +86,9 @@ export async function getUserWorkspaces(
       href: '/dashboard',
     })
   } else if (profile && profile.role !== 'representative') {
-    const { data: ownedGroup } = await supabase
-      .from('groups')
-      .select('id')
-      .eq('instructor_id', userId)
-      .limit(1)
-      .maybeSingle()
-    if (ownedGroup) {
+    // Role alone identifies this workspace — zero classes doesn't disqualify
+    // a brand-new solo teacher from owning it.
+    if (profile.role === 'teacher') {
       workspaces.push({
         type: 'solo_teacher',
         label: 'My Teaching Workspace',

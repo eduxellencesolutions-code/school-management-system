@@ -6,6 +6,7 @@ import { getTeacherDashboardData } from '@/lib/teacher-utils'
 import PlanUpgradeCard from '@/components/billing/PlanUpgradeCard'
 import FeatureCards from '@/components/dashboard/FeatureCards'
 import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
+import OnboardingBanner from '@/components/dashboard/OnboardingBanner'
 import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
 import { getRequiredPlanMap } from '@/lib/plans/getRequiredPlanMap'
 
@@ -39,6 +40,14 @@ export default async function DashboardPage() {
   const isSoloTeacher = !orgId
   const isInstitutionAdmin = orgId && (userRole === 'admin' || userRole === 'school_admin')
   const isInstitutionTeacher = orgId && userRole === 'teacher'
+
+  // Only fetch onboarding progress for the two account types that can
+  // actually act on the checklist — skip the RPC entirely for plain teachers
+  let onboarding: { percent: number; completed_steps: number; total_steps: number; dismissed: boolean; account_type: 'institution' | 'solo_teacher' } | null = null
+  if (isSoloTeacher || isInstitutionAdmin) {
+    const { data } = await supabase.rpc('get_onboarding_dashboard')
+    onboarding = data
+  }
 
   let groupCount = 0
   let learnerCount = 0
@@ -386,6 +395,15 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <AnnouncementBanner />
+
+      {onboarding && !onboarding.dismissed && onboarding.percent < 100 && (
+        <OnboardingBanner
+          percent={onboarding.percent}
+          completedSteps={onboarding.completed_steps}
+          totalSteps={onboarding.total_steps}
+          accountType={onboarding.account_type}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <div>
