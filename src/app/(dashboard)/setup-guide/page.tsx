@@ -2,21 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client'; // adjust if your import path differs
+import { createClient } from '@/lib/supabase/client';
 
-type StepStatus = 'completed' | 'not_started' | 'locked';
+// ── Institution response shape ──
+type InstitutionStepStatus = 'completed' | 'not_started' | 'locked';
 
-type BackendStep = {
+type InstitutionBackendStep = {
   key: string;
-  status: StepStatus;
+  status: InstitutionStepStatus;
   is_locked: boolean;
   feature_key: string | null;
   required_plan: string | null;
 };
 
-type DashboardData = {
+type InstitutionDashboardData = {
+  account_type: 'institution';
   current_plan: string;
-  steps: BackendStep[];
+  steps: InstitutionBackendStep[];
   completed_steps: number;
   total_steps: number;
   percent: number;
@@ -26,8 +28,33 @@ type DashboardData = {
   dismissed_at: string | null;
 };
 
-// Verified against the real route list (src/app) on 2026-08-15.
-// Every route here exists in the codebase — none are guessed.
+// ── Solo teacher response shape — deliberately separate type, not
+// forced into the institution array shape ──
+type SoloSteps = {
+  profile: boolean;
+  classes: boolean;
+  subjects: boolean;
+  students: boolean;
+  results_entered: boolean;
+  reports_generated: boolean;
+};
+
+type SoloDashboardData = {
+  account_type: 'solo_teacher';
+  current_plan: string;
+  steps: SoloSteps;
+  completed_steps: number;
+  total_steps: number;
+  percent: number;
+  guide_started_at: string | null;
+  last_step_viewed: string | null;
+  dismissed: boolean;
+  dismissed_at: string | null;
+};
+
+type DashboardData = InstitutionDashboardData | SoloDashboardData;
+
+// ── Institution step config — unchanged from before ──
 const STEP_CONFIG: Record<
   string,
   { title: string; description: string; actions: { label: string; route: string }[] }
@@ -102,11 +129,57 @@ const STEP_CONFIG: Record<
   },
 };
 
-// Order the checklist should render in — the backend array order isn't guaranteed
 const STEP_ORDER = [
   'profile', 'academic_term', 'classes', 'subjects', 'students', 'grading',
   'staff', 'results_entered', 'results_locked_or_published', 'parent_access',
   'attendance', 'homework', 'fees',
+];
+
+// ── Solo teacher step config — exactly the 6 steps from the spec,
+// no academic_term, reusing the same underlying pages as the
+// institution flow (these pages already branch org vs solo internally) ──
+const SOLO_STEP_CONFIG: {
+  key: keyof SoloSteps;
+  title: string;
+  description: string;
+  action: { label: string; route: string };
+}[] = [
+  {
+    key: 'profile',
+    title: 'Teacher Profile',
+    description: 'Add your signature, phone number, and photo.',
+    action: { label: 'Set Up Now', route: '/settings/profile' },
+  },
+  {
+    key: 'classes',
+    title: 'Classes',
+    description: 'Create your first class.',
+    action: { label: 'Create Class', route: '/classes/new' },
+  },
+  {
+    key: 'subjects',
+    title: 'Subjects',
+    description: 'Create subjects for your class.',
+    action: { label: 'Add Subject', route: '/settings/subjects/new' },
+  },
+  {
+    key: 'students',
+    title: 'Students',
+    description: 'Add students individually or bulk-import via Excel/CSV.',
+    action: { label: 'Add / Import Students', route: '/students' },
+  },
+  {
+    key: 'results_entered',
+    title: 'Results',
+    description: 'Enter scores for your students.',
+    action: { label: 'Enter Scores', route: '/scores' },
+  },
+  {
+    key: 'reports_generated',
+    title: 'Reports',
+    description: 'Generate report cards for your students.',
+    action: { label: 'Generate Report', route: '/reports/generate' },
+  },
 ];
 
 export default function SetupGuidePage() {
@@ -146,9 +219,6 @@ export default function SetupGuidePage() {
     );
   }
 
-  const stepsByKey = Object.fromEntries(data.steps.map((s) => [s.key, s]));
-  const orderedSteps = STEP_ORDER.map((key) => ({ backend: stepsByKey[key], config: STEP_CONFIG[key] }))
-    .filter((s) => s.backend && s.config);
   const allComplete = data.completed_steps === data.total_steps;
 
   return (
@@ -156,7 +226,9 @@ export default function SetupGuidePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Welcome to Eduxellence Results 👋</h1>
         <p className="text-gray-600 mt-1">
-          Let's get your school ready. Follow these steps and you'll be ready to start managing results.
+          {data.account_type === 'solo_teacher'
+            ? "Let's get your classroom ready. Follow these steps to get started."
+            : "Let's get your school ready. Follow these steps and you'll be ready to start managing results."}
         </p>
       </div>
 
@@ -167,7 +239,7 @@ export default function SetupGuidePage() {
       <div className="mb-8">
         <div className="flex justify-between items-baseline mb-2">
           <span className="text-sm font-medium text-gray-700">
-            School Setup — {data.percent}% Complete
+            {data.account_type === 'solo_teacher' ? 'Classroom Setup' : 'School Setup'} — {data.percent}% Complete
           </span>
           <span className="text-sm text-gray-500">
             {data.completed_steps} of {data.total_steps} steps
@@ -184,81 +256,140 @@ export default function SetupGuidePage() {
 
       {allComplete && (
         <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="font-medium text-green-800">🎉 Your School Is Ready!</p>
+          <p className="font-medium text-green-800">
+            {data.account_type === 'solo_teacher' ? '🎉 Your Classroom Is Ready!' : '🎉 Your School Is Ready!'}
+          </p>
           <p className="text-sm text-green-700 mt-1">
             Congratulations! Your Eduxellence Results account is fully configured.
           </p>
         </div>
       )}
 
-      <div className="space-y-3">
-        {orderedSteps.map(({ backend, config }) => {
-          const isDone = backend.status === 'completed';
-          const isLocked = backend.status === 'locked';
-
-          return (
-            <div
-              key={backend.key}
-              className={`flex items-center justify-between p-4 border rounded-lg ${
-                isLocked ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
-                    isDone
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : isLocked
-                      ? 'bg-gray-200 border-gray-300 text-gray-400'
-                      : 'border-gray-300 text-transparent'
-                  }`}
-                >
-                  {isLocked ? '🔒' : '✓'}
-                </span>
-                <div>
-                  <p className={`font-medium ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>
-                    {config.title}
-                  </p>
-                  <p className={`text-sm ${isLocked ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {isLocked
-                      ? `Available on ${backend.required_plan}`
-                      : config.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex-shrink-0 flex gap-3 ml-4">
-                {isLocked ? (
-                  <Link
-                    href="/settings/account"
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
-                  >
-                    View Plans →
-                  </Link>
-                ) : (
-                  !isDone &&
-                  config.actions.map((action) => (
-                    <Link
-                      key={action.route}
-                      href={action.route}
-                      onClick={() => handleStepClick(backend.key)}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
-                    >
-                      {action.label} →
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {data.account_type === 'institution' ? (
+        <InstitutionChecklist data={data} onStepClick={handleStepClick} />
+      ) : (
+        <SoloChecklist data={data} onStepClick={handleStepClick} />
+      )}
 
       {!data.dismissed && (
         <button onClick={handleDismiss} className="mt-6 text-sm text-gray-400 hover:text-gray-600">
           Hide this guide
         </button>
       )}
+    </div>
+  );
+}
+
+function InstitutionChecklist({
+  data,
+  onStepClick,
+}: {
+  data: InstitutionDashboardData;
+  onStepClick: (key: string) => void;
+}) {
+  const stepsByKey = Object.fromEntries(data.steps.map((s) => [s.key, s]));
+  const orderedSteps = STEP_ORDER.map((key) => ({ backend: stepsByKey[key], config: STEP_CONFIG[key] }))
+    .filter((s) => s.backend && s.config);
+
+  return (
+    <div className="space-y-3">
+      {orderedSteps.map(({ backend, config }) => {
+        const isDone = backend.status === 'completed';
+        const isLocked = backend.status === 'locked';
+
+        return (
+          <div
+            key={backend.key}
+            className={`flex items-center justify-between p-4 border rounded-lg ${
+              isLocked ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
+                  isDone
+                    ? 'bg-green-500 border-green-500 text-white'
+                    : isLocked
+                    ? 'bg-gray-200 border-gray-300 text-gray-400'
+                    : 'border-gray-300 text-transparent'
+                }`}
+              >
+                {isLocked ? '🔒' : '✓'}
+              </span>
+              <div>
+                <p className={`font-medium ${isLocked ? 'text-gray-400' : 'text-gray-900'}`}>{config.title}</p>
+                <p className={`text-sm ${isLocked ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {isLocked ? `Available on ${backend.required_plan}` : config.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-shrink-0 flex gap-3 ml-4">
+              {isLocked ? (
+                <Link href="/settings#billing" className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap">
+                  View Plans →
+                </Link>
+              ) : (
+                !isDone &&
+                config.actions.map((action) => (
+                  <Link
+                    key={action.route}
+                    href={action.route}
+                    onClick={() => onStepClick(backend.key)}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+                  >
+                    {action.label} →
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SoloChecklist({
+  data,
+  onStepClick,
+}: {
+  data: SoloDashboardData;
+  onStepClick: (key: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {SOLO_STEP_CONFIG.map((step) => {
+        const isDone = data.steps[step.key];
+
+        return (
+          <div key={step.key} className="flex items-center justify-between p-4 border rounded-lg bg-white border-gray-200">
+            <div className="flex items-start gap-3">
+              <span
+                className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border flex items-center justify-center text-xs ${
+                  isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-transparent'
+                }`}
+              >
+                ✓
+              </span>
+              <div>
+                <p className="font-medium text-gray-900">{step.title}</p>
+                <p className="text-sm text-gray-500">{step.description}</p>
+              </div>
+            </div>
+
+            {!isDone && (
+              <Link
+                href={step.action.route}
+                onClick={() => onStepClick(step.key)}
+                className="flex-shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap ml-4"
+              >
+                {step.action.label} →
+              </Link>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
