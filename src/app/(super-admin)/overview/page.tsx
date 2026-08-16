@@ -68,7 +68,11 @@ export default async function SuperAdminOverview() {
       .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
   ])
 
-  const totalTeachers = (allUsers ?? []).filter(u => u.role === 'teacher' || u.role === 'admin' || u.role === 'school_admin').length
+  // ✅ FIX: Exclude admin (platform super admin) from teacher count
+  // school_admin is included as they are school-level administrators, not platform-level
+  const totalTeachers = (allUsers ?? []).filter(u => 
+    u.role === 'teacher' || u.role === 'school_admin'
+  ).length
 
   const { data: paidOrgs } = await admin
     .from('organizations')
