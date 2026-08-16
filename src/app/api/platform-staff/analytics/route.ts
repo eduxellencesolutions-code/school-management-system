@@ -8,7 +8,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
-  if (!isSuperAdmin) return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+  const { data: hasAnalyticsPermission } = await supabase.rpc('has_platform_permission', {
+    p_user_id: user.id,
+    p_permission_key: 'analytics.view',
+  });
+  if (!isSuperAdmin && !hasAnalyticsPermission) {
+    return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+  }
 
   const admin = createAdminClient();
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
@@ -20,6 +26,7 @@ export async function GET() {
   const { data: onboarding } = await supabase.rpc('get_platform_onboarding_analytics');
   const { data: founding500 } = await supabase.rpc('get_platform_founding500_analytics');
   const { data: referrals } = await supabase.rpc('get_platform_referral_analytics');
+  const { data: subscriptionAnalytics } = await supabase.rpc('get_platform_subscription_analytics');
 
   // ✅ FIX: Separate the usage query to avoid destructuring issues
   const [
@@ -96,5 +103,6 @@ export async function GET() {
     onboarding: onboarding ?? null,
     founding500: founding500 ?? null,
     referrals: referrals ?? null,
+    subscriptionAnalytics: subscriptionAnalytics ?? null,
   });
 }

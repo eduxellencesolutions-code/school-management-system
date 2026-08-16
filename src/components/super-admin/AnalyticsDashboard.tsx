@@ -19,7 +19,7 @@ const STEP_LABELS: Record<string, string> = {
 export default function AnalyticsDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'overview' | 'onboarding' | 'founding500' | 'referrals'>('overview')
+  const [tab, setTab] = useState<'overview' | 'onboarding' | 'founding500' | 'referrals' | 'subscriptions'>('overview')
 
   useEffect(() => {
     fetch('/api/platform-staff/analytics').then(r => r.json()).then(d => { setData(d); setLoading(false) })
@@ -28,12 +28,12 @@ export default function AnalyticsDashboard() {
   if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>
   if (!data) return null
 
-  const { revenue, growth, conversion, usage, onboarding, founding500, referrals } = data
+  const { revenue, growth, conversion, usage, onboarding, founding500, referrals, subscriptionAnalytics } = data
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-1 border-b border-surface-200">
-        {(['overview', 'onboarding', 'founding500', 'referrals'] as const).map((t) => (
+        {(['overview', 'onboarding', 'founding500', 'referrals', 'subscriptions'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -105,6 +105,10 @@ export default function AnalyticsDashboard() {
 
       {tab === 'referrals' && referrals && (
         <ReferralsTab data={referrals} />
+      )}
+
+      {tab === 'subscriptions' && subscriptionAnalytics && (
+        <SubscriptionsTab data={subscriptionAnalytics} />
       )}
     </div>
   )
@@ -369,6 +373,111 @@ function ReferralsTab({ data }: { data: any }) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function SubscriptionsTab({ data }: { data: any }) {
+  const { totals, plan_distribution, expiring_subscriptions, feature_adoption, recent_plan_changes } = data
+
+  const featureAdoptionData = [
+    { feature: 'Results', count: feature_adoption.results },
+    { feature: 'Attendance', count: feature_adoption.attendance },
+    { feature: 'Homework', count: feature_adoption.homework },
+    { feature: 'Fees', count: feature_adoption.fees },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-5 gap-3">
+        <div className="card p-4">
+          <p className="text-xs text-ink-muted mb-1">Total Users</p>
+          <p className="text-lg font-bold">{totals.users.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-ink-muted mb-1">Schools</p>
+          <p className="text-lg font-bold">{totals.schools.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-ink-muted mb-1">Solo Teachers</p>
+          <p className="text-lg font-bold">{totals.solo_teachers.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-ink-muted mb-1">Active Paid Schools</p>
+          <p className="text-lg font-bold">{totals.active_paid_orgs.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-ink-muted mb-1">Active Paid Solo</p>
+          <p className="text-lg font-bold">{totals.active_paid_solo.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="card p-5">
+          <p className="text-sm font-semibold text-ink mb-3">Plan Distribution</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={plan_distribution}>
+                <XAxis dataKey="plan" tick={{ fontSize: 10 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <p className="text-sm font-semibold text-ink mb-3">Feature Adoption (Schools)</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={featureAdoptionData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="feature" width={80} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <p className="text-sm font-semibold text-ink mb-3">Subscriptions Expiring Within 7 Days</p>
+        {expiring_subscriptions.length === 0 ? (
+          <p className="text-xs text-ink-faint">No subscriptions expiring in the next 7 days.</p>
+        ) : (
+          <div className="divide-y divide-surface-200">
+            {expiring_subscriptions.map((org: any, i: number) => (
+              <div key={i} className="py-2 flex items-center justify-between text-sm">
+                <span className="text-ink font-medium">{org.name}</span>
+                <span className="text-xs text-amber-700">
+                  Expires {new Date(org.subscription_expires_at).toLocaleDateString('en-NG')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card p-5">
+        <p className="text-sm font-semibold text-ink mb-3">Recent Plan Changes</p>
+        {recent_plan_changes.length === 0 ? (
+          <p className="text-xs text-ink-faint">No plan changes recorded yet — tracking started tonight.</p>
+        ) : (
+          <div className="divide-y divide-surface-200">
+            {recent_plan_changes.map((c: any, i: number) => (
+              <div key={i} className="py-2 flex items-center justify-between text-sm">
+                <span className={`text-xs font-medium capitalize ${c.change_type === 'upgrade' ? 'text-green-600' : c.change_type === 'downgrade' ? 'text-red-600' : 'text-ink-muted'}`}>
+                  {c.change_type}
+                </span>
+                <span className="text-ink">{c.to_plan}</span>
+                <span className="text-xs text-ink-faint">{new Date(c.changed_at).toLocaleDateString('en-NG')}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

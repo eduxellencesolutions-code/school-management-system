@@ -149,3 +149,14 @@
     @apply text-xs font-medium;
   }
 }
+
+/* Print styles */
+@media print {
+  nav, .print\:hidden {
+    display: none !important;
+  }
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
