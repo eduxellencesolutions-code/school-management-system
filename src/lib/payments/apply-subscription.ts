@@ -14,7 +14,7 @@ export async function applySuccessfulSubscription(
   metadata: CheckoutMetadata,
   provider: 'paystack' | 'flutterwave',
   reference: string,
-  verifiedAmount: number | undefined   // widened — provider may not always return it
+  amountPaid: number
 ): Promise<{ success: boolean; error?: string }> {
   const admin = serviceClient()
 
@@ -70,20 +70,11 @@ export async function applySuccessfulSubscription(
     const { data: referral } = await referralQuery.maybeSingle()
 
     if (referral) {
-      // Prefer the amount the provider actually confirmed. Only fall back to
-      // what checkout expected to charge if the provider genuinely didn't
-      // return one — this is not the old getPrice() list-price lookup, it's
-      // the specific amount THIS transaction was initiated for.
-      const commissionBaseAmount = verifiedAmount ?? metadata.expected_amount
-      if (verifiedAmount === undefined) {
-        console.warn(`Provider did not return a verified amount for reference=${reference}; falling back to expected_amount`)
-      }
-
-      if (commissionBaseAmount > 0) {
+      if (amountPaid > 0) {
         await admin.rpc('record_commission', {
           p_referral_id: referral.id,
           p_plan: metadata.plan,
-          p_amount: commissionBaseAmount,
+          p_amount: amountPaid,
         })
       }
     }

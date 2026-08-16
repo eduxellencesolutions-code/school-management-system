@@ -35,11 +35,12 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = JSON.parse(rawBody)
-  const { event_type, reference, provider, metadata } = payload as {
+  const { event_type, reference, provider, metadata, amount } = payload as {
     event_type: string
     reference: string
     provider: 'paystack' | 'flutterwave'
     metadata: CheckoutMetadata
+    amount: number
   }
 
   if (!reference || !provider) {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ✅ FIX: Pass payload.amount to applySuccessfulSubscription
-  const result = await applySuccessfulSubscription(metadata, provider, reference, payload.amount)
+  const result = await applySuccessfulSubscription(metadata, provider, reference, amount)
 
   if (!result.success) {
     return NextResponse.json({ error: result.error }, { status: 500 })
