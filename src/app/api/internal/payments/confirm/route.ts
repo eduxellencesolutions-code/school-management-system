@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { createClient } from '@supabase/supabase-js'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
 import { CheckoutMetadata } from '@/lib/payments/types'
 
@@ -57,6 +58,31 @@ export async function POST(req: NextRequest) {
 
   if (!metadata?.accountId || !metadata?.plan) {
     return NextResponse.json({ error: 'Missing accountId/plan in metadata' }, { status: 400 })
+  }
+
+  // Founding 500 is a distinct enrollment flow, not a subscription — route
+  // it to enroll_founding_500() entirely, never through applySuccessfulSubscription.
+  if (metadata?.plan === 'founding_500') {
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { data: enrollmentId, error: rpcError } = await admin.rpc('enroll_founding_500', {
+      p_org_id: metadata.accountId,
+      p_referral_code: metadata.referral_code,
+      p_payment_reference: reference,
+      p_provider: provider,
+      p_amount_paid: amount,
+    })
+
+    if (rpcError) {
+      console.error('Founding 500 enrollment failed:', rpcError)
+      return NextResponse.json({ error: rpcError.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, enrollment_id: enrollmentId })
   }
 
   // ✅ FIX: Pass payload.amount to applySuccessfulSubscription

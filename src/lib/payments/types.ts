@@ -5,11 +5,12 @@ export type AccountType = 'org' | 'solo'
 export interface CheckoutMetadata {
   accountType: AccountType
   accountId: string   // organization_id or user_id
-  plan: PaidPlan
-  cycle: BillingCycle
+  plan: PaidPlan | 'founding_500'   // Added 'founding_500' as allowed value
+  cycle?: BillingCycle   // Made optional — Founding 500 has no billing cycle
   platform_key: string   // ✅ ADDED - identifies platform to central router
   expected_amount: number   // ✅ ADDED - amount central expects
   expected_currency: Currency   // ✅ ADDED - currency central expects
+  referral_code?: string   // Founding 500 only
 }
 
 export interface InitiateCheckoutInput {

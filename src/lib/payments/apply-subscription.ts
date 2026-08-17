@@ -37,6 +37,10 @@ export async function applySuccessfulSubscription(
     return { success: false, error: claimError.message }
   }
 
+  if (!metadata.cycle) {
+    return { success: false, error: 'Missing billing cycle in metadata for subscription plan' }
+  }
+
   const now = new Date()
   const expiresAt = new Date(now.getTime() + getCycleDurationDays(metadata.cycle) * 86400000)
 
