@@ -46,7 +46,16 @@ export async function applySuccessfulSubscription(
   // constraint and we stop here, before touching subscriptions or commissions.
   const { error: claimError } = await admin
     .from('processed_payments')
-    .insert({ provider, reference, account_id: metadata.accountId, plan: metadata.plan })
+    .insert({
+      provider,
+      reference,
+      account_id: metadata.accountId,
+      plan: metadata.plan,
+      amount: amountPaid,
+      currency: metadata.expected_currency,
+      billing_cycle: metadata.cycle ?? null,
+      gateway: provider,
+    })
 
   if (claimError) {
     if (claimError.code === '23505') {
@@ -71,6 +80,7 @@ export async function applySuccessfulSubscription(
     subscription_status: 'active',
     subscription_start: now.toISOString(),
     subscription_expires_at: expiresAt.toISOString(),
+    billing_cycle: metadata.cycle,
     suspended_at: null,
     cancelled_at: null,
   }
