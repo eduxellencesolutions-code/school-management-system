@@ -5,6 +5,7 @@ import { formatDate } from '@/lib/utils'
 import StudentEditForm from '@/components/students/StudentEditForm'
 import StudentScoreHistory from '@/components/students/StudentScoreHistory'
 import DeleteStudentButton from '@/components/students/DeleteStudentButton'
+import ParentGuardianCard from '@/components/students/ParentGuardianCard'
 
 interface Props { 
   params: Promise<{ id: string }> 
@@ -55,6 +56,23 @@ export default async function StudentDetailPage({ params }: Props) {
     subject: score.subject?.[0] || null,      // Extract first subject or null
     component: score.component?.[0] || null,  // Extract first component or null
   })) ?? []
+
+  // Fetch any parent(s) already linked to this learner's portal account
+  const { data: parentLinksData } = await supabase
+    .from('parent_learner_links')
+    .select('parent_id, parent:parent_accounts(id, full_name, email, phone, access_code_active)')
+    .eq('learner_id', id)
+
+  const linkedParents = (parentLinksData ?? [])
+    .map((row: any) => row.parent)
+    .filter(Boolean)
+    .map((p: any) => ({
+      parentId: p.id,
+      fullName: p.full_name,
+      phone: p.phone,
+      email: p.email,
+      portalActive: !!p.access_code_active,
+    }))
 
   const group = learner.group as { id: string; name: string; code?: string } | null
 
@@ -132,6 +150,15 @@ export default async function StudentDetailPage({ params }: Props) {
           <div className="stat-label">Enrolled</div>
         </div>
       </div>
+
+      {/* Parent / Guardian */}
+      <ParentGuardianCard
+        learnerId={learner.id}
+        guardianName={learner.guardian_name}
+        guardianPhone={learner.guardian_phone}
+        guardianEmail={learner.email}
+        linkedParents={linkedParents}
+      />
 
       {/* Edit form */}
       <StudentEditForm learner={learner} groups={[group].filter(Boolean) as { id: string; name: string }[]} />
