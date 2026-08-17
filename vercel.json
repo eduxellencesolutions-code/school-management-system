@@ -5,7 +5,7 @@
       "schedule": "0 1 * * *"
     },
     {
-      "path": "/api/cron/subscription-check",
+      "path": "/api/cron/check-expirations/subscription-check",
       "schedule": "0 1 * * *"
     },
     {
