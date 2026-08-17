@@ -18,6 +18,28 @@ export async function applySuccessfulSubscription(
 ): Promise<{ success: boolean; error?: string }> {
   const admin = serviceClient()
 
+  // Founding 500 is a distinct enrollment flow — route it entirely to
+  // enroll_founding_500() and skip everything below (subscription update,
+  // getCycleDurationDays, the normal commission path). This one check
+  // protects ALL callers of this function, not just one route.
+  if (metadata.plan === 'founding_500') {
+    if (!metadata.referral_code) {
+      return { success: false, error: 'Missing referral_code for Founding 500 enrollment' }
+    }
+    const { error: rpcError } = await admin.rpc('enroll_founding_500', {
+      p_org_id: metadata.accountId,
+      p_referral_code: metadata.referral_code,
+      p_payment_reference: reference,
+      p_provider: provider,
+      p_amount_paid: amountPaid,
+    })
+    if (rpcError) {
+      console.error('Founding 500 enrollment failed:', rpcError)
+      return { success: false, error: rpcError.message }
+    }
+    return { success: true }
+  }
+
   // IDEMPOTENCY GUARD: try to claim this (provider, reference) pair first.
   // If it's already been claimed — by the webhook, by verify-status polling,
   // or by a retried webhook delivery — this insert fails on the unique
