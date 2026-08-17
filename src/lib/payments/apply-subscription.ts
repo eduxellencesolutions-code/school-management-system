@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { CheckoutMetadata } from './types'
+import { CheckoutMetadata, AnyCheckoutMetadata } from './types'
 import { getCycleDurationDays, getPrice, PaidPlan, Currency, BillingCycle } from './pricing'
 
 function serviceClient() {
@@ -11,7 +11,7 @@ function serviceClient() {
 }
 
 export async function applySuccessfulSubscription(
-  metadata: CheckoutMetadata,
+  metadata: AnyCheckoutMetadata,
   provider: 'paystack' | 'flutterwave',
   reference: string,
   amountPaid: number
@@ -22,12 +22,13 @@ export async function applySuccessfulSubscription(
   // enroll_founding_500() and skip everything below (subscription update,
   // getCycleDurationDays, the normal commission path). This one check
   // protects ALL callers of this function, not just one route.
-  if (metadata.plan === 'founding_500') {
-    if (!metadata.referral_code) {
+  if (metadata.type === 'founding_500') {
+    // TypeScript guard: ensure we're dealing with FoundingCheckoutMetadata
+    if (!('referral_code' in metadata) || !metadata.referral_code) {
       return { success: false, error: 'Missing referral_code for Founding 500 enrollment' }
     }
     const { error: rpcError } = await admin.rpc('enroll_founding_500', {
-      p_org_id: metadata.accountId,
+      p_org_id: metadata.organizationId,
       p_referral_code: metadata.referral_code,
       p_payment_reference: reference,
       p_provider: provider,
@@ -40,6 +41,7 @@ export async function applySuccessfulSubscription(
     return { success: true }
   }
 
+  // From here, TypeScript knows metadata is CheckoutMetadata (type === 'subscription')
   // IDEMPOTENCY GUARD: try to claim this (provider, reference) pair first.
   // If it's already been claimed — by the webhook, by verify-status polling,
   // or by a retried webhook delivery — this insert fails on the unique

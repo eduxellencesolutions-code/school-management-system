@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   // a Results transaction. expected_amount/currency let the router catch
   // a tampered/mismatched amount before it ever reaches this app.
   const metadata: CheckoutMetadata = {
+    type: 'subscription',
     accountType,
     accountId,
     plan,

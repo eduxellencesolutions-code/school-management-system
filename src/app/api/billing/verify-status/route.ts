@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
 import { verifyPaystackTransaction } from '@/lib/payments/paystack'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
 
 export async function GET(req: NextRequest) {
   const provider = req.nextUrl.searchParams.get('provider')
@@ -49,17 +50,28 @@ export async function GET(req: NextRequest) {
 
     // ✅ Pass gateway and verification.reference to applySuccessfulSubscription
     // No fallback here — apply-subscription.ts owns the fallback logic centrally
-    const applied = await applySuccessfulSubscription(
-      verification.metadata,
-      provider === 'flutterwave' ? 'flutterwave' : 'paystack',
-      verification.reference,
-      verification.amount
-    )
+    const applied = verification.metadata.type === 'founding_500'
+      ? await applyFounding500Payment(
+          verification.metadata,
+          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+          verification.reference,
+          verification.amount,
+          verification.currency ?? 'NGN'
+        )
+      : await applySuccessfulSubscription(
+          verification.metadata,
+          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+          verification.reference,
+          verification.amount
+        )
     if (!applied.success) {
       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
     }
 
-    return NextResponse.json({ status: 'successful', plan: verification.metadata.plan })
+    return NextResponse.json({
+      status: 'successful',
+      plan: verification.metadata.type === 'founding_500' ? 'founding_500' : verification.metadata.plan,
+    })
   } catch (err: any) {
     console.error('Verify status error:', err)
     return NextResponse.json({ status: 'error', message: 'Something went wrong verifying your payment' }, { status: 500 })

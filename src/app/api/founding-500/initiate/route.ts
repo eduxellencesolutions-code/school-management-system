@@ -92,14 +92,14 @@ export async function POST(req: NextRequest) {
   const amount = campaign.qualifying_price // 2000, NGN, both providers
   const reference = `edux-f500-${orgId}-${Date.now()}`
 
+  // Use FoundingCheckoutMetadata shape
   const metadata = {
-    accountType: 'org' as const,
-    accountId: orgId,
-    plan: 'founding_500' as const,
-    referral_code,
+    type: 'founding_500' as const,
+    organizationId: orgId,
     platform_key: 'results',
     expected_amount: amount,
     expected_currency: 'NGN' as const,
+    referral_code,
   }
 
   const commonInput = {

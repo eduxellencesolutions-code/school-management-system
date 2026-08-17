@@ -1,9 +1,17 @@
-import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, CheckoutMetadata } from './types'
+import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, AnyCheckoutMetadata } from './types'
 
 const FLW_BASE = 'https://api.flutterwave.com/v3'
 
 export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
   try {
+    // Build description based on metadata type
+    let description: string
+    if (input.metadata.type === 'founding_500') {
+      description = 'Founding 500 Enrollment'
+    } else {
+      description = `${input.metadata.plan} (${input.metadata.cycle})`
+    }
+
     const response = await fetch(`${FLW_BASE}/payments`, {
       method: 'POST',
       headers: {
@@ -16,7 +24,7 @@ export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput):
         currency: input.currency,
         redirect_url: input.redirectUrl,
         customer: { email: input.email, name: input.name },
-        customizations: { title: 'Eduxellence', description: `${input.metadata.plan} (${input.metadata.cycle})` },
+        customizations: { title: 'Eduxellence', description },
         meta: input.metadata,
       }),
     })
@@ -51,7 +59,7 @@ export async function verifyFlutterwaveTransaction(transactionId: string): Promi
       status: 'successful',
       amount: json.data.amount,
       currency: json.data.currency,
-      metadata: json.data.meta as CheckoutMetadata,
+      metadata: json.data.meta as AnyCheckoutMetadata,
       reference: String(json.data.id),   // ✅ NEW — canonical, matches what the webhook itself sees
     }
   } catch (err: any) {

@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
-import { CheckoutMetadata } from '@/lib/payments/types'
+import { AnyCheckoutMetadata } from '@/lib/payments/types'
 
 const SHARED_SECRET = process.env.RESULTS_CENTRAL_SHARED_SECRET!
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     event_type: string
     reference: string
     provider: 'paystack' | 'flutterwave'
-    metadata: CheckoutMetadata
+    metadata: AnyCheckoutMetadata
     amount: number
   }
 
@@ -56,21 +56,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, note: `${event_type} logged for manual review` }, { status: 200 })
   }
 
-  if (!metadata?.accountId || !metadata?.plan) {
-    return NextResponse.json({ error: 'Missing accountId/plan in metadata' }, { status: 400 })
-  }
-
   // Founding 500 is a distinct enrollment flow, not a subscription — route
   // it to enroll_founding_500() entirely, never through applySuccessfulSubscription.
-  if (metadata?.plan === 'founding_500') {
+  if (metadata?.type === 'founding_500') {
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // Check for referral_code (it should exist on FoundingCheckoutMetadata)
+    if (!('referral_code' in metadata) || !metadata.referral_code) {
+      return NextResponse.json({ error: 'Missing referral_code for Founding 500 enrollment' }, { status: 400 })
+    }
+
     const { data: enrollmentId, error: rpcError } = await admin.rpc('enroll_founding_500', {
-      p_org_id: metadata.accountId,
+      p_org_id: metadata.organizationId,
       p_referral_code: metadata.referral_code,
       p_payment_reference: reference,
       p_provider: provider,
@@ -83,6 +84,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, enrollment_id: enrollmentId })
+  }
+
+  // Regular subscription flow - TypeScript now knows this is CheckoutMetadata
+  // because type !== 'founding_500'
+  if (!('accountId' in metadata) || !('plan' in metadata) || !('cycle' in metadata)) {
+    return NextResponse.json({ error: 'Missing required subscription metadata fields' }, { status: 400 })
   }
 
   // ✅ FIX: Pass payload.amount to applySuccessfulSubscription
