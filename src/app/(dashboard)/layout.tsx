@@ -9,6 +9,7 @@ import ExpiredBanner from '@/components/billing/ExpiredBanner'
 import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
+import FoundingBanner from '@/components/founding-500/FoundingBanner'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -84,6 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="flex items-center justify-between mb-4">
             <div className="flex-1">
               {!existingRep && <RepresentativeBanner />}
+              <FoundingBanner />
               {subState.isGracePeriod && subState.daysRemaining !== null && (
                 <GracePeriodBanner daysRemaining={subState.daysRemaining} />
               )}
