@@ -11,8 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createClient } from '@supabase/supabase-js'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
 import { AnyCheckoutMetadata } from '@/lib/payments/types'
 
 const SHARED_SECRET = process.env.RESULTS_CENTRAL_SHARED_SECRET!
@@ -57,33 +57,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Founding 500 is a distinct enrollment flow, not a subscription — route
-  // it to enroll_founding_500() entirely, never through applySuccessfulSubscription.
+  // it to applyFounding500Payment entirely.
   if (metadata?.type === 'founding_500') {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
+    const result = await applyFounding500Payment(
+      metadata, provider, reference, amount, 'NGN'
     )
-
-    // Check for referral_code (it should exist on FoundingCheckoutMetadata)
-    if (!('referral_code' in metadata) || !metadata.referral_code) {
-      return NextResponse.json({ error: 'Missing referral_code for Founding 500 enrollment' }, { status: 400 })
+    if (!result.success) {
+      return NextResponse.json({ error: result.error }, { status: 500 })
     }
-
-    const { data: enrollmentId, error: rpcError } = await admin.rpc('enroll_founding_500', {
-      p_org_id: metadata.organizationId,
-      p_referral_code: metadata.referral_code,
-      p_payment_reference: reference,
-      p_provider: provider,
-      p_amount_paid: amount,
-    })
-
-    if (rpcError) {
-      console.error('Founding 500 enrollment failed:', rpcError)
-      return NextResponse.json({ error: rpcError.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, enrollment_id: enrollmentId })
+    return NextResponse.json({ ok: true })
   }
 
   // Regular subscription flow - TypeScript now knows this is CheckoutMetadata

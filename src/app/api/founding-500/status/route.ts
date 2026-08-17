@@ -24,8 +24,9 @@ export async function GET() {
 
   const { data: referral } = await admin
     .from('referrals')
-    .select('referral_code')
+    .select('referral_code, status, representative_id')
     .eq('organization_id', orgId)
+    .neq('status', 'rejected')
     .maybeSingle()
 
   if (!referral) {

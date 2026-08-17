@@ -194,6 +194,7 @@ export default function SetupGuidePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [founding, setFounding] = useState<{ founding_slot_number: number; promo_expires_at: string } | null>(null);
+  const [foundingEligible, setFoundingEligible] = useState<{ eligible: boolean } | null>(null);
 
   const supabase = createClient();
 
@@ -216,6 +217,15 @@ export default function SetupGuidePage() {
         .eq('status', 'active')
         .maybeSingle();
       setFounding(enrollment);
+
+      // Only check eligibility if not already enrolled — avoids a
+      // redundant fetch, and status route already treats "enrolled"
+      // as eligible:false anyway.
+      if (!enrollment) {
+        const res = await fetch('/api/founding-500/status');
+        const statusData = await res.json();
+        setFoundingEligible(statusData.eligible ? statusData : null);
+      }
     }
     loadFounding();
   }, [data]);
@@ -262,6 +272,21 @@ export default function SetupGuidePage() {
           slotNumber={founding.founding_slot_number}
           promoExpiresAt={founding.promo_expires_at}
         />
+      )}
+
+      {!founding && foundingEligible && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-amber-900">🏆 Founding 500 — Activation Pending</p>
+            <p className="text-sm text-amber-700 mt-0.5">Activate for ₦2,000 to unlock full Premium access this term.</p>
+          </div>
+          <Link
+            href="/founding-500/enroll"
+            className="flex-shrink-0 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2 whitespace-nowrap ml-4"
+          >
+            Activate Founding 500
+          </Link>
+        </div>
       )}
 
       <div className="mb-8">
