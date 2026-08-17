@@ -1,6 +1,7 @@
 export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
 import { initiatePaystackCheckout } from '@/lib/payments/paystack'
 
@@ -21,6 +22,12 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
   const { data: profile } = await supabase
     .from('users').select('organization_id, name, email').eq('id', user.id).single()
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
   // Pre-checks — fail fast BEFORE charging, so a real ₦2,000 payment is
   // never taken for a slot/referral that's already invalid. These mirror
   // the RPC's own checks but run before money moves, not after.
-  const { data: campaign } = await supabase
+  const { data: campaign } = await admin
     .from('campaign_slot_counters')
     .select('slots_max, slots_claimed, is_active, qualifying_price')
     .eq('campaign_key', 'founding_500')
@@ -48,7 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Founding 500 is fully claimed' }, { status: 400 })
   }
 
-  const { data: existingEnrollment } = await supabase
+  const { data: existingEnrollment } = await admin
     .from('founding500_enrollments')
     .select('id')
     .eq('campaign_key', 'founding_500')
@@ -59,7 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This school already has a Founding 500 enrollment' }, { status: 400 })
   }
 
-  const { data: referral } = await supabase
+  const { data: referral } = await admin
     .from('referrals')
     .select('id')
     .eq('organization_id', orgId)
