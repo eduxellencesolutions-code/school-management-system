@@ -39,12 +39,16 @@ export async function POST(req: NextRequest) {
   // Pre-checks — fail fast BEFORE charging, so a real ₦2,000 payment is
   // never taken for a slot/referral that's already invalid. These mirror
   // the RPC's own checks but run before money moves, not after.
-  const { data: campaign } = await admin
+  const { data: campaign, error: campaignError } = await admin
     .from('campaign_slot_counters')
     .select('slots_max, slots_claimed, is_active, qualifying_price')
     .eq('campaign_key', 'founding_500')
     .maybeSingle()
 
+  if (campaignError) {
+    console.error('campaign_slot_counters query failed:', campaignError)
+    return NextResponse.json({ error: `Campaign lookup failed: ${campaignError.message}` }, { status: 500 })
+  }
   if (!campaign) {
     return NextResponse.json({ error: 'Founding 500 campaign not found' }, { status: 400 })
   }
@@ -55,24 +59,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Founding 500 is fully claimed' }, { status: 400 })
   }
 
-  const { data: existingEnrollment } = await admin
+  const { data: existingEnrollment, error: enrollmentError } = await admin
     .from('founding500_enrollments')
     .select('id')
     .eq('campaign_key', 'founding_500')
     .eq('organization_id', orgId)
     .maybeSingle()
 
+  if (enrollmentError) {
+    console.error('founding500_enrollments query failed:', enrollmentError)
+    return NextResponse.json({ error: `Enrollment lookup failed: ${enrollmentError.message}` }, { status: 500 })
+  }
   if (existingEnrollment) {
     return NextResponse.json({ error: 'This school already has a Founding 500 enrollment' }, { status: 400 })
   }
 
-  const { data: referral } = await admin
+  const { data: referral, error: referralError } = await admin
     .from('referrals')
     .select('id')
     .eq('organization_id', orgId)
     .eq('referral_code', referral_code)
     .maybeSingle()
 
+  if (referralError) {
+    console.error('referrals query failed:', referralError)
+    return NextResponse.json({ error: `Referral lookup failed: ${referralError.message}` }, { status: 500 })
+  }
   if (!referral) {
     return NextResponse.json({ error: 'No matching referral found for this school and referral code' }, { status: 400 })
   }
