@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+
 export default function BillingVerifyPage() {
   const params = useSearchParams()
   const router = useRouter()
