@@ -17,10 +17,10 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const repIds = (reps ?? []).map(r => r.id);
-
-  const [{ data: allReferrals }, { data: allCommissions }] = await Promise.all([
+  const [{ data: allReferrals }, { data: allCommissions }, { data: allBankAccounts }] = await Promise.all([
     repIds.length > 0 ? supabase.from('referrals').select('representative_id, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('commissions').select('representative_id, amount, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
+    repIds.length > 0 ? supabase.from('bank_accounts').select('id, representative_id, bank_name, account_number, account_name, is_verified').in('representative_id', repIds) : Promise.resolve({ data: [] }),
   ]);
 
   const enriched = (reps ?? []).map(rep => {
@@ -29,13 +29,14 @@ export async function GET() {
     const paidReferrals = referrals.filter(r => r.status === 'qualified').length;
     const conversionRate = referrals.length > 0 ? Math.round((paidReferrals / referrals.length) * 100) : 0;
     const pendingCommission = commissions.filter(c => c.status === 'pending' || c.status === 'payable').reduce((s, c) => s + c.amount, 0);
-
+    const bankAccounts = (allBankAccounts ?? []).filter(b => b.representative_id === rep.id);
     return {
       ...rep,
       totalReferrals: referrals.length,
       qualifiedReferrals: paidReferrals,
       conversionRate,
       pendingCommission,
+      bankAccounts,
     };
   });
 

@@ -25,6 +25,7 @@ export default function RepresentativesTable() {
             <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Conversion</th>
             <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Pending ₦</th>
             <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Paid ₦</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Bank Account</th>
           </tr>
         </thead>
         <tbody>
@@ -37,6 +38,29 @@ export default function RepresentativesTable() {
               <td className="px-4 py-3 text-center font-mono">{r.conversionRate}%</td>
               <td className="px-4 py-3 text-right font-mono">₦{r.pendingCommission.toLocaleString()}</td>
               <td className="px-4 py-3 text-right font-mono">₦{Number(r.total_commission_paid).toLocaleString()}</td>
+              <td className="px-4 py-3">
+                {(r.bankAccounts ?? []).map((b: any) => (
+                  <div key={b.id} className="flex items-center justify-between gap-2 text-xs mb-1 last:mb-0">
+                    <span className="text-ink-muted">{b.bank_name} · {b.account_number} · {b.account_name}</span>
+                    {b.is_verified ? (
+                      <span className="text-green-600 font-medium whitespace-nowrap">Verified</span>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          const res = await fetch(`/api/platform-staff/bank-accounts/${b.id}/verify`, { method: 'POST' })
+                          const json = await res.json()
+                          if (json.error) alert(json.error)
+                          else window.location.reload()
+                        }}
+                        className="btn-sm btn bg-green-50 text-green-600 whitespace-nowrap"
+                      >
+                        Verify
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {(!r.bankAccounts || r.bankAccounts.length === 0) && <span className="text-xs text-ink-faint">No bank account</span>}
+              </td>
             </tr>
           ))}
         </tbody>
