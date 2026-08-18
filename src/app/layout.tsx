@@ -18,22 +18,70 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
+// ✅ Comprehensive SEO Metadata configuration
 export const metadata: Metadata = {
+  metadataBase: new URL('https://results.eduxellence.org'),
   title: {
-    default: 'Eduxellence Results',
+    default: 'Eduxellence Results | Smart Academic Assessment & Result Portal',
     template: '%s | Eduxellence Results',
   },
-  description: 'Smart academic assessment and result management platform for schools and educators.',
-  keywords: ['school results', 'academic records', 'result management', 'education technology'],
-  authors: [{ name: 'Eduxellence' }],
+  description: 'Streamlined academic assessment, student grading, report card generation, and result management platform for primary, secondary, and tertiary institutions.',
+  keywords: [
+    'school result checker',
+    'academic records portal',
+    'report card generator',
+    'result management system',
+    'student grading software',
+    'eduxellence results',
+    'school management system'
+  ],
+  authors: [{ name: 'Eduxellence Solutions', url: 'https://results.eduxellence.org' }],
+  creator: 'Eduxellence Solutions',
+  publisher: 'Eduxellence Solutions',
+  alternates: {
+    canonical: 'https://results.eduxellence.org',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://results.eduxellence.org',
+    title: 'Eduxellence Results | Smart Academic Assessment & Result Portal',
+    description: 'Streamlined academic assessment, student grading, report card generation, and result management platform for modern schools.',
+    siteName: 'Eduxellence Results',
+    images: [
+      {
+        url: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
+        width: 512,
+        height: 512,
+        alt: 'Eduxellence Results Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Eduxellence Results | Smart Academic Assessment Portal',
+    description: 'Automated student result processing, report card generation, and grade tracking.',
+    images: ['https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico'],
+  },
   manifest: '/manifest.json',
   icons: {
     icon: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
     apple: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
+    shortcut: 'https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico',
   },
 }
 
-// ✅ MOVED THEME COLOR AND VIEWPORT TO SEPARATE EXPORT
 export const viewport: Viewport = {
   themeColor: '#1C6EF2',
   width: 'device-width',
@@ -44,15 +92,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <head>
-        <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
-        <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
-        <link rel="shortcut icon" href="https://raw.githubusercontent.com/jesylvesterboy-source/my-website/main/Eduxellence.ico" />
-      </head>
       <body>
-        {/* ✅ Global Announcement Ticker - safe to mount everywhere */}
+        {/* ✅ Global Announcement Ticker */}
         <AnnouncementTicker />
-        {/* ✅ Tawk.to live chat - safe to mount everywhere, same pattern as AnnouncementTicker above */}
+        {/* ✅ Tawk.to live chat */}
         <TawkWidget />
         {children}
         <Toaster
