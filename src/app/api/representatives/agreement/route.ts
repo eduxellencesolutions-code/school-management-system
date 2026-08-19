@@ -18,10 +18,7 @@ export async function GET() {
     .single()
 
   if (!latest) {
-    return NextResponse.json({ 
-      error: 'No representative agreement has been published yet', 
-      debug: { supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL } 
-    }, { status: 500 })
+    return NextResponse.json({ error: 'No representative agreement has been published yet' }, { status: 500 })
   }
 
   const { data: acceptance } = await supabase
