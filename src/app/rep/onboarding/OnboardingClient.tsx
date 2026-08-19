@@ -14,11 +14,16 @@ export default function OnboardingClient() {
   const [error, setError] = useState<string | null>(null)
 
   async function loadAll() {
+    setError(null)
     const [s, p, a] = await Promise.all([
       fetch('/api/representatives/onboarding-status').then(r => r.json()),
       fetch('/api/representatives/passport').then(r => r.json()),
       fetch('/api/representatives/agreement').then(r => r.json()),
     ])
+    if (s.error || p.error || a.error) {
+      setError(s.error ?? p.error ?? a.error ?? 'Something went wrong loading your onboarding status')
+      return
+    }
     setStatus(s); setPassport(p); setAgreement(a)
   }
   useEffect(() => { loadAll() }, [])

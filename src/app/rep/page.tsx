@@ -14,11 +14,31 @@ export default async function RepPage() {
 
   const { data: rep } = await supabase
     .from('representatives')
-    .select('id')
+    .select('id, photo_status')
     .eq('user_id', user.id)
     .maybeSingle()
 
   if (!rep) redirect('/dashboard')
+
+  // Mandatory onboarding gate — agreement acceptance and an approved
+  // passport are both required before dashboard access, for every rep,
+  // not just newly registered ones.
+  const { data: latestVersion } = await supabase
+    .from('representative_agreement_versions')
+    .select('id').order('version', { ascending: false }).limit(1).maybeSingle()
+
+  const agreementAccepted = latestVersion
+    ? !!(await supabase
+        .from('representative_agreement_acceptances')
+        .select('id')
+        .eq('representative_id', rep.id)
+        .eq('agreement_version_id', latestVersion.id)
+        .maybeSingle()).data
+    : false
+
+  if (!agreementAccepted || rep.photo_status !== 'approved') {
+    redirect('/rep/onboarding')
+  }
 
   return (
     <div className="min-h-screen bg-surface-50 p-6">

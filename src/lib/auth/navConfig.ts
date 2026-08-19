@@ -19,8 +19,9 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'analytics', href: '/analytics', label: 'Analytics', section: 'primary', requiredPermission: 'analytics.view' },
   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
-  { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },  // ✅ NEW
+  { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },
   { key: 'representatives', href: '/representatives', label: 'Representatives', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'resources', href: '/resources', label: 'Rep Resources', section: 'more', requiredPermission: 'representatives.view' },
   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
   { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
