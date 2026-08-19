@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Calendar, Star } from 'lucide-react'
 import { createSession, createTerm, deleteSession, deleteTerm, setCurrentTerm } from './actions'
+import CloseTermButton from '@/components/settings/CloseTermButton'
+import CloseSessionButton from '@/components/settings/CloseSessionButton'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -97,10 +99,13 @@ export default async function AcademicPeriodsPage() {
               <h3 className="font-semibold text-sm text-ink flex items-center gap-2">
                 <Calendar size={14} className="text-ink-muted" /> {session.name}
               </h3>
-              <form action={deleteSession}>
-                <input type="hidden" name="id" value={session.id} />
-                <button type="submit" className="text-xs text-red-600 hover:underline">Remove session</button>
-              </form>
+              <div className="flex items-center gap-3">
+                <CloseSessionButton sessionId={session.id} />
+                <form action={deleteSession}>
+                  <input type="hidden" name="id" value={session.id} />
+                  <button type="submit" className="text-xs text-red-600 hover:underline">Archive session</button>
+                </form>
+              </div>
             </div>
             <div className="px-5 py-3 flex flex-col gap-2">
               {(termsBySession[session.id] ?? []).map(term => (
@@ -109,10 +114,13 @@ export default async function AcademicPeriodsPage() {
                     {term.name}
                     {term.id === currentTermId && <span className="badge badge-green text-[10px]">Current</span>}
                   </span>
-                  <form action={deleteTerm}>
-                    <input type="hidden" name="id" value={term.id} />
-                    <button type="submit" className="text-xs text-red-600 hover:underline">Remove</button>
-                  </form>
+                  <div className="flex items-center gap-3">
+                    <CloseTermButton termId={term.id} />
+                    <form action={deleteTerm}>
+                      <input type="hidden" name="id" value={term.id} />
+                      <button type="submit" className="text-xs text-red-600 hover:underline">Archive</button>
+                    </form>
+                  </div>
                 </div>
               ))}
               <form action={createTerm} className="flex flex-col gap-2 mt-1 pt-2 border-t border-surface-100">

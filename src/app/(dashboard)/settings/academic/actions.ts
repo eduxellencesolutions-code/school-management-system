@@ -181,6 +181,35 @@ export async function deleteTerm(formData: FormData): Promise<void> {
   }
 }
 
+export async function closeTerm(formData: FormData): Promise<{ closed: boolean; blockers: any[]; warnings: any[] } | void> {
+  const { } = await getContext()
+  const supabase = await createClient()
+  const termId = formData.get('term_id') as string
+  const force = formData.get('force') === 'true'
+
+  const { data, error } = await supabase.rpc('close_term', { p_term_id: termId, p_force: force })
+  if (error) {
+    console.error('Error closing term:', error)
+    return
+  }
+  revalidatePath('/settings/academic')
+  return data
+}
+
+export async function closeSession(formData: FormData): Promise<{ closed: boolean; blockers: any[] } | void> {
+  await getContext()
+  const supabase = await createClient()
+  const sessionId = formData.get('session_id') as string
+
+  const { data, error } = await supabase.rpc('close_session', { p_session_id: sessionId })
+  if (error) {
+    console.error('Error closing session:', error)
+    return
+  }
+  revalidatePath('/settings/academic')
+  return data
+}
+
 export async function setCurrentTerm(formData: FormData): Promise<void> {
   try {
     const { user, orgId } = await getContext()
