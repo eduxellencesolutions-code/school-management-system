@@ -26,7 +26,7 @@ export async function getUserWorkspaces(
       type: 'super_admin',
       label: 'Platform Administration',
       sublabel: 'Super Admin',
-      href: 'https://admin.eduxellence.org/overview',
+      href: 'https://admin.eduxellence.org/welcome',
     })
   }
 
@@ -47,7 +47,7 @@ export async function getUserWorkspaces(
         type: 'staff',
         label: 'Platform Administration',
         sublabel: roleName ?? 'Platform Staff',
-        href: 'https://admin.eduxellence.org/overview',
+        href: 'https://admin.eduxellence.org/welcome',
       })
     }
   }

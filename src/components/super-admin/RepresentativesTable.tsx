@@ -2,6 +2,7 @@
 // src/components/super-admin/RepresentativesTable.tsx
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import PassportReview from '@/components/super-admin/PassportReview'
 
 export default function RepresentativesTable() {
   const [reps, setReps] = useState<any[]>([])
@@ -26,6 +27,7 @@ export default function RepresentativesTable() {
             <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Pending ₦</th>
             <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Paid ₦</th>
             <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Bank Account</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Passport</th>
           </tr>
         </thead>
         <tbody>
@@ -60,6 +62,9 @@ export default function RepresentativesTable() {
                   </div>
                 ))}
                 {(!r.bankAccounts || r.bankAccounts.length === 0) && <span className="text-xs text-ink-faint">No bank account</span>}
+              </td>
+              <td className="px-4 py-3">
+                <PassportReview rep={r} onDone={() => window.location.reload()} />
               </td>
             </tr>
           ))}

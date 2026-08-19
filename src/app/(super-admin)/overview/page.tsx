@@ -26,8 +26,19 @@ export default async function SuperAdminOverview() {
   // ✅ Fetch super admin IDs once to exclude them from solo teacher counts
   const { data: superAdminRows } = await admin.from('super_admins').select('id')
   const superAdminIds = (superAdminRows ?? []).map(s => s.id)
-  const superAdminIdList = superAdminIds.length > 0 
-    ? superAdminIds.join(',') 
+
+  // ✅ Representatives and platform staff also get a public.users row with
+  // organization_id = null on signup, so they must be excluded from solo
+  // teacher counts the same way super admins already are.
+  const { data: repUserRows } = await admin.from('representatives').select('user_id').not('user_id', 'is', null)
+  const { data: staffUserRows } = await admin.from('platform_staff').select('user_id').not('user_id', 'is', null)
+  const nonSoloUserIds = [
+    ...superAdminIds,
+    ...(repUserRows ?? []).map(r => r.user_id),
+    ...(staffUserRows ?? []).map(s => s.user_id),
+  ]
+  const nonSoloUserIdList = nonSoloUserIds.length > 0
+    ? nonSoloUserIds.join(',')
     : '00000000-0000-0000-0000-000000000000'
 
   const [
@@ -40,14 +51,16 @@ export default async function SuperAdminOverview() {
     { data: orgsExpiring },
     { data: newOrgsThisMonth },
     { data: newSoloThisMonth },
+    { count: totalRepresentatives },
+    { count: totalPlatformStaff },
   ] = await Promise.all([
     admin.from('organizations').select('*', { count: 'exact', head: true }),
     admin.from('organizations').select('*', { count: 'exact', head: true }).eq('subscription_status', 'active'),
-    // ✅ Exclude super admins from solo teacher count
+    // ✅ Exclude super admins, representatives, and platform staff from solo teacher count
     admin.from('users')
       .select('*', { count: 'exact', head: true })
       .is('organization_id', null)
-      .not('id', 'in', `(${superAdminIdList})`),
+      .not('id', 'in', `(${nonSoloUserIdList})`),
     admin.from('users').select('id, organization_id, role'),
     admin.from('learners').select('*', { count: 'exact', head: true }),
     admin.from('reports').select('*', { count: 'exact', head: true }),
@@ -60,12 +73,14 @@ export default async function SuperAdminOverview() {
     admin.from('organizations')
       .select('id')
       .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-    // ✅ Exclude super admins from new solo teachers this month
+    // ✅ Exclude super admins, representatives, and platform staff from new solo teachers this month
     admin.from('users')
       .select('id')
       .is('organization_id', null)
-      .not('id', 'in', `(${superAdminIdList})`)
+      .not('id', 'in', `(${nonSoloUserIdList})`)
       .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    admin.from('representatives').select('*', { count: 'exact', head: true }),
+    admin.from('platform_staff').select('*', { count: 'exact', head: true }).eq('status', 'active'),
   ])
 
   // ✅ FIX: Exclude admin (platform super admin) from teacher count
@@ -85,12 +100,12 @@ export default async function SuperAdminOverview() {
     premium_school: 75000,
   }
 
-  // ✅ Exclude super admins from paid solo teacher count
+  // ✅ Exclude super admins, representatives, and platform staff from paid solo teacher count
   const { data: paidSolo } = await admin
     .from('users')
     .select('subscription_plan, subscription_status')
     .is('organization_id', null)
-    .not('id', 'in', `(${superAdminIdList})`)
+    .not('id', 'in', `(${nonSoloUserIdList})`)
     .eq('subscription_status', 'active')
     .eq('subscription_plan', 'solo_teacher_pro')
 
@@ -122,6 +137,8 @@ export default async function SuperAdminOverview() {
     { label: 'Total Students', value: totalStudents ?? 0, icon: GraduationCap, color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Total Teachers', value: totalTeachers, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Reports Generated', value: totalReports ?? 0, icon: FileText, color: 'text-pink-600', bg: 'bg-pink-50' },
+    { label: 'Representatives', value: totalRepresentatives ?? 0, icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Platform Staff', value: totalPlatformStaff ?? 0, icon: Ticket, color: 'text-cyan-600', bg: 'bg-cyan-50' },
     { label: 'New Schools (this month)', value: newOrgsThisMonth?.length ?? 0, icon: TrendingUp, color: 'text-teal-600', bg: 'bg-teal-50' },
     { label: 'New Solo Teachers (this month)', value: newSoloThisMonth?.length ?? 0, icon: TrendingUp, color: 'text-teal-600', bg: 'bg-teal-50' },
   ]
