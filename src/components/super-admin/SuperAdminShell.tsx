@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 import { getVisibleNavItems, type NavAccess } from '@/lib/auth/navConfig'
@@ -24,6 +24,7 @@ const ICONS: Record<string, any> = {
   'platform-announcements': Megaphone,
   'platform-users': UsersRound,
   team: UsersRound,
+  resources: FolderOpen,
 }
 
 export default function SuperAdminShell({
@@ -86,7 +87,7 @@ export default function SuperAdminShell({
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1">
             {primaryItems.map(item => {
-              const Icon = ICONS[item.key]
+              const Icon = ICONS[item.key] ?? LayoutDashboard
               return (
                 <Link
                   key={item.key}
@@ -111,7 +112,7 @@ export default function SuperAdminShell({
                 {isMoreOpen && (
                   <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[140px] z-50">
                     {moreItems.map(item => {
-                      const Icon = ICONS[item.key]
+                      const Icon = ICONS[item.key] ?? LayoutDashboard
                       return (
                         <Link
                           key={item.key}
@@ -139,7 +140,7 @@ export default function SuperAdminShell({
             {isMobileMenuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[160px] z-50">
                 {visibleItems.map(item => {
-                  const Icon = ICONS[item.key]
+                  const Icon = ICONS[item.key] ?? LayoutDashboard
                   return (
                     <Link
                       key={item.key}
