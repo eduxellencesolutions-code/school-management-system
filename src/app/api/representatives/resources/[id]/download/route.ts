@@ -25,7 +25,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const { data: signed, error: signError } = await supabase.storage
     .from('representative-resources')
-    .createSignedUrl(resource.storage_path!, 300)
+    .createSignedUrl(resource.storage_path!, 300, { download: true })
   if (signError || !signed) return NextResponse.json({ error: 'Could not generate download link' }, { status: 500 })
 
   return NextResponse.json({ url: signed.signedUrl })

@@ -66,27 +66,48 @@ export async function POST(request: Request) {
     }
   }
 
+  // A withdrawn/transferred/graduated/suspended/archived student must
+  // not accumulate new attendance records — this is the exact contamination
+  // risk called out for attendance specifically. Filter the incoming
+  // learner IDs down to currently active ones before writing anything.
+  const learnerIds = [...new Set(records.map((r: { learnerId: string }) => r.learnerId))];
+  const { data: activeLearners, error: activeLearnersError } = await supabase
+    .from('learners')
+    .select('id')
+    .in('id', learnerIds)
+    .eq('is_active', true);
+  if (activeLearnersError) {
+    return NextResponse.json({ error: activeLearnersError.message }, { status: 500 });
+  }
+  const activeLearnerIds = new Set((activeLearners ?? []).map((l) => l.id));
+  const skippedLearnerIds = learnerIds.filter((id) => !activeLearnerIds.has(id));
+
   // organization_id is stamped from resolved user context, never trusted from client input
-  const rows = records.map((r: { learnerId: string; status: string }) => ({
-    organization_id: userRowOrg.organization_id,
-    group_id: groupId,
-    learner_id: r.learnerId,
-    term_id: termId,
-    session_id: sessionId,
-    date,
-    status: r.status,
-    recorded_by: user.id,
-  }));
+  const rows = records
+    .filter((r: { learnerId: string; status: string }) => activeLearnerIds.has(r.learnerId))
+    .map((r: { learnerId: string; status: string }) => ({
+      organization_id: userRowOrg.organization_id,
+      group_id: groupId,
+      learner_id: r.learnerId,
+      term_id: termId,
+      session_id: sessionId,
+      date,
+      status: r.status,
+      recorded_by: user.id,
+    }));
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: 'No active students among the submitted records' }, { status: 400 });
+  }
 
   const { error: insertError } = await supabase
     .from('attendance_records')
     .upsert(rows, { onConflict: 'learner_id,date' });
-
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, count: rows.length });
+  return NextResponse.json({ success: true, count: rows.length, skipped: skippedLearnerIds });
 }
 
 // GET /api/attendance?groupId=...&date=...

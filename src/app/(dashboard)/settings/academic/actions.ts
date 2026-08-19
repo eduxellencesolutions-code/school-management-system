@@ -115,7 +115,7 @@ export async function createTerm(formData: FormData): Promise<void> {
 
 export async function deleteSession(formData: FormData): Promise<void> {
   try {
-    await getContext()
+    const { user } = await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
     if (!id) {
@@ -123,13 +123,27 @@ export async function deleteSession(formData: FormData): Promise<void> {
       return
     }
 
-    await supabase.from('terms').delete().eq('session_id', id)
-    const { error } = await supabase.from('academic_sessions').delete().eq('id', id)
-    
+    // Soft-archive every term under this session, then the session itself.
+    // Nothing is deleted — this replaces the previous hard-delete cascade,
+    // which destroyed every term (and everything under it) permanently.
+    await supabase
+      .from('terms')
+      .update({ status: 'archived', is_active: false, closed_at: new Date().toISOString(), closed_by: user.id })
+      .eq('session_id', id)
+
+    const { error } = await supabase
+      .from('academic_sessions')
+      .update({ status: 'archived', is_active: false, closed_at: new Date().toISOString(), closed_by: user.id })
+      .eq('id', id)
+
     if (error) {
-      console.error('Error deleting session:', error)
+      console.error('Error archiving session:', error)
       return
     }
+
+    await supabase.from('audit_logs').insert({
+      user_id: user.id, action: 'session_archived', table_name: 'academic_sessions', record_id: id, new_data: { status: 'archived' },
+    })
 
     revalidatePath('/settings/academic')
   } catch (error: any) {
@@ -139,7 +153,7 @@ export async function deleteSession(formData: FormData): Promise<void> {
 
 export async function deleteTerm(formData: FormData): Promise<void> {
   try {
-    await getContext()
+    const { user } = await getContext()
     const supabase = await createClient()
     const id = formData.get('id') as string
     if (!id) {
@@ -147,11 +161,19 @@ export async function deleteTerm(formData: FormData): Promise<void> {
       return
     }
 
-    const { error } = await supabase.from('terms').delete().eq('id', id)
+    const { error } = await supabase
+      .from('terms')
+      .update({ status: 'archived', is_active: false, closed_at: new Date().toISOString(), closed_by: user.id })
+      .eq('id', id)
+
     if (error) {
-      console.error('Error deleting term:', error)
+      console.error('Error archiving term:', error)
       return
     }
+
+    await supabase.from('audit_logs').insert({
+      user_id: user.id, action: 'term_archived', table_name: 'terms', record_id: id, new_data: { status: 'archived' },
+    })
 
     revalidatePath('/settings/academic')
   } catch (error: any) {

@@ -44,6 +44,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Fee structure not found' }, { status: 404 })
   }
 
+  // Mirror the is_active guard bulk_issue_invoices() already enforces —
+  // an individually-targeted invoice must not be issued to a withdrawn,
+  // transferred, graduated, suspended, or archived student.
+  const { data: learner } = await supabase
+    .from('learners').select('id, is_active, status').eq('id', learnerId).eq('organization_id', orgId).maybeSingle()
+  if (!learner) {
+    return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+  }
+  if (!learner.is_active) {
+    return NextResponse.json({ error: `This student's status is "${learner.status}" — invoices cannot be issued` }, { status: 400 })
+  }
+
   const { data: existing } = await supabase
     .from('student_fee_accounts')
     .select('id')

@@ -22,27 +22,40 @@ export async function deleteStudent(formData: FormData) {
   }
 
   try {
-    // Clear dependent score records first (hard delete requires this
-    // if scores.learner_id has a foreign key without ON DELETE CASCADE)
-    const { error: scoresError } = await supabase
-      .from('scores')
-      .delete()
-      .eq('learner_id', id)
+    const { data: existing } = await supabase
+      .from('learners').select('id, status').eq('id', id).maybeSingle()
 
-    if (scoresError) {
-      console.error('Error deleting scores:', scoresError)
-      redirect('/students?error=delete_failed')
-    }
+    if (!existing) redirect('/students?error=not_found')
+    if (existing.status === 'archived') redirect('/students?success=deleted')
 
-    const { error: deleteError } = await supabase
+    // Soft-delete only: scores, reports, attendance, fee accounts, and
+    // parent links are never touched, so all history stays intact. This
+    // replaces the previous hard delete entirely — nothing under this
+    // learner_id is deleted anymore.
+    const { error: archiveError } = await supabase
       .from('learners')
-      .delete()
+      .update({
+        status: 'archived',
+        is_active: false,
+        status_reason: 'Removed via student list',
+        status_effective_date: new Date().toISOString().split('T')[0],
+        status_changed_by: user.id,
+        status_changed_at: new Date().toISOString(),
+      })
       .eq('id', id)
 
-    if (deleteError) {
-      console.error('Error deleting student:', deleteError)
+    if (archiveError) {
+      console.error('Error archiving student:', archiveError)
       redirect('/students?error=delete_failed')
     }
+
+    await supabase.from('audit_logs').insert({
+      user_id: user.id,
+      action: 'student_archived',
+      table_name: 'learners',
+      record_id: id,
+      new_data: { status: 'archived' },
+    })
 
     revalidatePath('/students')
     redirect('/students?success=deleted')
@@ -50,9 +63,64 @@ export async function deleteStudent(formData: FormData) {
     if (isRedirectError(error)) {
       throw error
     }
-    console.error('Unexpected error deleting student:', error)
+    console.error('Unexpected error archiving student:', error)
     redirect('/students?error=unexpected')
   }
+}
+
+// Full lifecycle action — withdraw/transfer/graduate/suspend with reason
+// and effective date, per the approved student-lifecycle requirement.
+// Separate from deleteStudent (which is the "remove from list" quick-action);
+// this is the deliberate status-change path with full context.
+export async function updateStudentStatus(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const id = formData.get('id') as string
+  const status = formData.get('status') as string
+  const reason = (formData.get('reason') as string)?.trim() || null
+  const effectiveDate = (formData.get('effective_date') as string) || new Date().toISOString().split('T')[0]
+  const destinationSchool = (formData.get('destination_school') as string)?.trim() || null
+
+  const validStatuses = ['active', 'withdrawn', 'transferred', 'graduated', 'suspended']
+  if (!id || !validStatuses.includes(status)) {
+    redirect(`/students/${id}?error=invalid_status`)
+  }
+
+  const { data: existing } = await supabase
+    .from('learners').select('id, status').eq('id', id).maybeSingle()
+  if (!existing) redirect('/students?error=not_found')
+
+  const { error } = await supabase
+    .from('learners')
+    .update({
+      status,
+      is_active: status === 'active',
+      status_reason: reason,
+      status_effective_date: effectiveDate,
+      status_changed_by: user.id,
+      status_changed_at: new Date().toISOString(),
+      destination_school: status === 'transferred' ? destinationSchool : null,
+    })
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error updating student status:', error)
+    redirect(`/students/${id}?error=status_update_failed`)
+  }
+
+  await supabase.from('audit_logs').insert({
+    user_id: user.id,
+    action: 'student_status_changed',
+    table_name: 'learners',
+    record_id: id,
+    new_data: { previous_status: existing.status, new_status: status, reason, effective_date: effectiveDate },
+  })
+
+  revalidatePath('/students')
+  revalidatePath(`/students/${id}`)
+  redirect(`/students/${id}?success=status_updated`)
 }
 
 // ✅ NEW: Create a single student
