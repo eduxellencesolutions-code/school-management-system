@@ -11,16 +11,25 @@ export async function GET() {
 
   const { data: reps, error } = await supabase
     .from('representatives')
-    .select('id, full_name, email, level, status, territory_state, qualified_customers_count, total_commission_earned, total_commission_paid, joined_at')
-    .order('qualified_customers_count', { ascending: false });
+    .select('id, full_name, email, phone, referral_code, level, status, territory_state, qualified_customers_count, total_commission_earned, total_commission_paid, joined_at, photo_url, photo_status, photo_rejection_reason, photo_reviewed_at')
+    .order('joined_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const repIds = (reps ?? []).map(r => r.id);
-  const [{ data: allReferrals }, { data: allCommissions }, { data: allBankAccounts }] = await Promise.all([
+
+  const { data: latestVersion } = await supabase
+    .from('representative_agreement_versions')
+    .select('id, version')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const [{ data: allReferrals }, { data: allCommissions }, { data: allBankAccounts }, { data: allAcceptances }] = await Promise.all([
     repIds.length > 0 ? supabase.from('referrals').select('representative_id, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('commissions').select('representative_id, amount, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('bank_accounts').select('id, representative_id, bank_name, account_number, account_name, is_verified').in('representative_id', repIds) : Promise.resolve({ data: [] }),
+    repIds.length > 0 && latestVersion ? supabase.from('representative_agreement_acceptances').select('representative_id, accepted_at').eq('agreement_version_id', latestVersion.id).in('representative_id', repIds) : Promise.resolve({ data: [] }),
   ]);
 
   const enriched = (reps ?? []).map(rep => {
@@ -30,6 +39,7 @@ export async function GET() {
     const conversionRate = referrals.length > 0 ? Math.round((paidReferrals / referrals.length) * 100) : 0;
     const pendingCommission = commissions.filter(c => c.status === 'pending' || c.status === 'payable').reduce((s, c) => s + c.amount, 0);
     const bankAccounts = (allBankAccounts ?? []).filter(b => b.representative_id === rep.id);
+    const acceptance = (allAcceptances ?? []).find(a => a.representative_id === rep.id);
     return {
       ...rep,
       totalReferrals: referrals.length,
@@ -37,6 +47,9 @@ export async function GET() {
       conversionRate,
       pendingCommission,
       bankAccounts,
+      agreementAccepted: !!acceptance,
+      agreementAcceptedAt: acceptance?.accepted_at ?? null,
+      agreementVersion: latestVersion?.version ?? null,
     };
   });
 

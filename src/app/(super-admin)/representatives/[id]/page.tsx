@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import RepManagementCentre from '@/components/super-admin/RepManagementCentre'
+import RepProfilePanel from '@/components/super-admin/RepProfilePanel'
 
 export const dynamic = 'force-dynamic'
 
-export default async function RepresentativesPage() {
+export default async function RepresentativeProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -14,11 +15,7 @@ export default async function RepresentativesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-ink">Representative Management Centre</h1>
-        <p className="text-sm text-ink-muted mt-1">Review identity, agreements, account status and performance across the representative network</p>
-      </div>
-      <RepManagementCentre />
+      <RepProfilePanel repId={id} />
     </div>
   )
 }
