@@ -19,7 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: rep } = await supabase
     .from('representatives')
-    .select('id, full_name, referral_code, level, status, photo_url, photo_status, photo_reviewed_at')
+    .select('id, full_name, referral_code, level, status, photo_url, photo_status, photo_reviewed_at, qualified_customers_count, commission_rate')
     .eq('id', id)
     .maybeSingle()
   if (!rep) return NextResponse.json({ error: 'Representative not found' }, { status: 404 })
@@ -54,8 +54,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: logoSetting } = await supabase.from('platform_settings').select('value').eq('key', 'company_logo').maybeSingle()
   const logoUrl = (logoSetting?.value as any)?.url ?? null
 
+  const { data: showCommissionSetting } = await supabase.from('platform_settings').select('value').eq('key', 'id_card_show_commission').maybeSingle()
+  const showCommission = showCommissionSetting?.value === true
+
+  const { data: tiers } = await supabase
+    .from('growth_level_thresholds')
+    .select('level, label, min_schools, commission_rate')
+    .order('level', { ascending: true })
+
+  const sorted = tiers ?? []
+  let currentTier = sorted[0]
+  for (const t of sorted) {
+    if (rep.qualified_customers_count >= t.min_schools) currentTier = t
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-  const verifyUrl = `${siteUrl}/verify/${rep.referral_code}`
+  const verifyUrl = siteUrl + '/verify/' + rep.referral_code
 
   return NextResponse.json({
     eligible: true,
@@ -63,8 +77,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       fullName: rep.full_name,
       referralCode: rep.referral_code,
       designation: DESIGNATIONS[rep.level] ?? 'Authorized Representative',
-      status: 'Authorized Representative',
+      status: rep.status,
       issuedOn: rep.photo_reviewed_at,
+    },
+    badge: {
+      label: currentTier?.label ?? 'Starter',
+      commissionRate: showCommission ? Number(currentTier?.commission_rate ?? rep.commission_rate) : null,
     },
     photoUrl: signed?.signedUrl ?? null,
     logoUrl,

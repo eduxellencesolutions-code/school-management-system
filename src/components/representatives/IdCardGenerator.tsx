@@ -51,6 +51,27 @@ function statusColor(status: string) {
   return { bg: '#fef2f2', text: '#b91c1c', label: status.toUpperCase() }
 }
 
+// Shrinks font size until the text fits maxWidth, never going below minPx.
+function fitCanvasFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, startPx: number, minPx: number, weight: string, family: string): number {
+  let size = startPx
+  ctx.font = weight + ' ' + size + 'px ' + family
+  while (ctx.measureText(text).width > maxWidth && size > minPx) {
+    size -= 1
+    ctx.font = weight + ' ' + size + 'px ' + family
+  }
+  return size
+}
+
+function fitPdfFont(pdf: jsPDF, text: string, maxWidthMm: number, startPt: number, minPt: number): number {
+  let size = startPt
+  pdf.setFontSize(size)
+  while (pdf.getTextWidth(text) > maxWidthMm && size > minPt) {
+    size -= 0.5
+    pdf.setFontSize(size)
+  }
+  return size
+}
+
 const PX_PER_MM = 12
 const CANVAS_W = Math.round(CARD_W_MM * PX_PER_MM)
 const CANVAS_H = Math.round(CARD_H_MM * PX_PER_MM)
@@ -111,8 +132,7 @@ async function renderFrontCanvas(data: any, qrDataUrl: string): Promise<HTMLCanv
   }
 
   ctx.fillStyle = '#ffffff'
-  ctx.font = (4.2 * m) + 'px Arial, sans-serif'
-  ctx.font = '700 ' + ctx.font
+  ctx.font = '700 ' + (4.2 * m) + 'px Arial, sans-serif'
   ctx.textAlign = 'left'
   ctx.fillText('EDUXELLENCE SOLUTIONS', 13 * m, 6.5 * m)
   ctx.fillStyle = GOLD
@@ -137,8 +157,10 @@ async function renderFrontCanvas(data: any, qrDataUrl: string): Promise<HTMLCanv
   ctx.stroke()
 
   const infoX = 30 * m
+  const nameMaxWidth = CANVAS_W - infoX - (4 * m)
   ctx.fillStyle = TEXT
-  ctx.font = '700 ' + (4.6 * m) + 'px Arial, sans-serif'
+  const nameSize = fitCanvasFont(ctx, rep.fullName, nameMaxWidth, 4.6 * m, 2.6 * m, '700', 'Arial, sans-serif')
+  ctx.font = '700 ' + nameSize + 'px Arial, sans-serif'
   ctx.fillText(rep.fullName, infoX, 20 * m)
 
   ctx.font = '600 ' + (2.7 * m) + 'px Arial, sans-serif'
@@ -220,9 +242,11 @@ async function buildPdf(data: any, qrDataUrl: string): Promise<jsPDF> {
   pdf.roundedRect(photoBox.x, photoBox.y, photoBox.w, photoBox.h, 1.5, 1.5, 'S')
 
   const infoX = 28
+  const nameMaxWidthMm = CARD_W_MM - infoX - 2
   pdf.setTextColor(23, 32, 51)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(12)
+  const nameSize = fitPdfFont(pdf, rep.fullName, nameMaxWidthMm, 12, 7)
+  pdf.setFontSize(nameSize)
   pdf.text(rep.fullName, infoX, 18)
 
   pdf.setFont('helvetica', 'normal')
@@ -320,6 +344,7 @@ export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [renderError, setRenderError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const qrRef = useRef<HTMLCanvasElement>(null)
 
@@ -330,7 +355,12 @@ export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card
   useEffect(() => {
     if (!data?.eligible || !qrRef.current) return
     const qrDataUrl = qrRef.current.toDataURL('image/png')
-    renderFrontCanvas(data, qrDataUrl).then(canvas => setPreviewUrl(canvas.toDataURL('image/png')))
+    renderFrontCanvas(data, qrDataUrl)
+      .then(canvas => setPreviewUrl(canvas.toDataURL('image/png')))
+      .catch(err => {
+        console.error('ID card render failed:', err)
+        setRenderError('Could not render the card preview. Please contact support.')
+      })
   }, [data])
 
   function downloadPng() {
@@ -348,6 +378,9 @@ export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card
       const qrDataUrl = qrRef.current.toDataURL('image/png')
       const pdf = await buildPdf(data, qrDataUrl)
       pdf.save('eduxellence-id-' + data.representative.referralCode + '.pdf')
+    } catch (err) {
+      console.error('PDF generation failed:', err)
+      alert('Could not generate the PDF. Please try again or contact support.')
     } finally {
       setBusy(false)
     }
@@ -365,6 +398,10 @@ export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card
         </ul>
       </div>
     )
+  }
+
+  if (renderError) {
+    return <div className="card p-6 max-w-md mx-auto text-center text-sm text-red-600">{renderError}</div>
   }
 
   return (
