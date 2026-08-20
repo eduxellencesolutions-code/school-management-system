@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import IdCardGenerator from '@/components/representatives/IdCardGenerator'
+import RepSchoolPortfolioSection from '@/components/super-admin/RepSchoolPortfolioSection'
 
 export default function RepProfilePanel({ repId }: { repId: string }) {
   const [data, setData] = useState<any>(null)
@@ -152,19 +153,7 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
         </div>
       </div>
 
-      <div className="card p-5">
-        <h2 className="font-semibold text-sm text-ink mb-3">Assigned Schools / Prospects</h2>
-        {data.referrals.length > 0 ? (
-          <div className="divide-y divide-surface-100">
-            {data.referrals.map((r: any) => (
-              <div key={r.id} className="py-2 flex items-center justify-between text-sm">
-                <span className="text-ink">{r.organizations?.name ?? 'Unknown school'}</span>
-                <span className="text-xs text-ink-muted">{r.status}</span>
-              </div>
-            ))}
-          </div>
-        ) : <p className="text-xs text-ink-faint">No prospects yet.</p>}
-      </div>
+      <RepSchoolPortfolioSection repId={repId} />
 
       <div className="card p-5">
         <h2 className="font-semibold text-sm text-ink mb-3">Representative ID Card</h2>
