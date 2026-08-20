@@ -1,55 +1,176 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { Loader2, Download, Printer } from 'lucide-react'
+import jsPDF from 'jspdf'
+import { Loader2, Download, FileDown } from 'lucide-react'
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  const ir = img.width / img.height, tr = dw / dh
+  let sx = 0, sy = 0, sw = img.width, sh = img.height
+  if (ir > tr) { sh = img.height; sw = sh * tr; sx = (img.width - sw) / 2 }
+  else { sw = img.width; sh = sw / tr; sy = (img.height - sh) / 2 }
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)
+}
+
+function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  const ir = img.width / img.height, tr = dw / dh
+  let w = dw, h = dh
+  if (ir > tr) { h = dw / ir } else { w = dh * ir }
+  ctx.drawImage(img, dx + (dw - w) / 2, dy + (dh - h) / 2, w, h)
+}
+
+const WIDTH = 1013, HEIGHT = 638
+
+async function renderCard(data: any, qrDataUrl: string): Promise<HTMLCanvasElement> {
+  const rep = data.representative
+  const canvas = document.createElement('canvas')
+  canvas.width = WIDTH
+  canvas.height = HEIGHT
+  const ctx = canvas.getContext('2d')!
+  ctx.imageSmoothingEnabled = true
+  ;(ctx as any).imageSmoothingQuality = 'high'
+
+  const bg = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT)
+  bg.addColorStop(0, '#ffffff')
+  bg.addColorStop(1, '#f4f6fb')
+  roundRectPath(ctx, 0, 0, WIDTH, HEIGHT, 24)
+  ctx.fillStyle = bg
+  ctx.fill()
+  ctx.strokeStyle = '#d8dee8'
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  ctx.save()
+  roundRectPath(ctx, 0, 0, WIDTH, HEIGHT, 24)
+  ctx.clip()
+  ctx.fillStyle = '#111827'
+  ctx.fillRect(0, 0, WIDTH, 70)
+  ctx.restore()
+
+  if (data.logoUrl) {
+    try {
+      const logoImg = await loadImage(data.logoUrl)
+      drawContain(ctx, logoImg, 16, 15, 40, 40)
+    } catch {}
+  }
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '700 26px system-ui, -apple-system, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillText('EDUXELLENCE', 70, 45)
+  ctx.font = '400 18px system-ui, -apple-system, sans-serif'
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'
+  ctx.textAlign = 'right'
+  ctx.fillText('Representative ID', WIDTH - 20, 45)
+  ctx.textAlign = 'left'
+
+  if (data.photoUrl) {
+    try {
+      const photoImg = await loadImage(data.photoUrl)
+      ctx.save()
+      roundRectPath(ctx, 30, 105, 180, 180, 16)
+      ctx.clip()
+      drawCover(ctx, photoImg, 30, 105, 180, 180)
+      ctx.restore()
+      ctx.strokeStyle = '#e5e7eb'
+      ctx.lineWidth = 3
+      roundRectPath(ctx, 30, 105, 180, 180, 16)
+      ctx.stroke()
+    } catch {}
+  }
+
+  ctx.fillStyle = '#111827'
+  ctx.font = '700 30px system-ui, -apple-system, sans-serif'
+  ctx.fillText(rep.fullName, 240, 140)
+  ctx.fillStyle = '#6b7280'
+  ctx.font = '400 20px system-ui, -apple-system, sans-serif'
+  ctx.fillText(rep.designation, 240, 175)
+  ctx.fillStyle = '#374151'
+  ctx.font = '400 18px ui-monospace, monospace'
+  ctx.fillText('ID: ' + rep.referralCode, 240, 215)
+
+  roundRectPath(ctx, 240, 235, 200, 30, 15)
+  ctx.fillStyle = '#ecfdf5'
+  ctx.fill()
+  ctx.fillStyle = '#059669'
+  ctx.font = '600 16px system-ui, -apple-system, sans-serif'
+  ctx.fillText(rep.status, 255, 256)
+
+  try {
+    const qrImg = await loadImage(qrDataUrl)
+    const wasSmoothing = ctx.imageSmoothingEnabled
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(qrImg, WIDTH - 140, 100, 100, 100)
+    ctx.imageSmoothingEnabled = wasSmoothing
+  } catch {}
+
+  ctx.fillStyle = '#9ca3af'
+  ctx.font = '400 14px system-ui, -apple-system, sans-serif'
+  ctx.fillText('Issued ' + (rep.issuedOn ? new Date(rep.issuedOn).toLocaleDateString('en-NG') : '—'), 30, HEIGHT - 20)
+
+  return canvas
+}
 
 export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card' }: { apiUrl?: string }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const qrRef = useRef<HTMLCanvasElement>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     fetch(apiUrl).then(r => r.json()).then(d => { setData(d); setLoading(false) })
   }, [apiUrl])
 
-  async function downloadPng() {
+  useEffect(() => {
     if (!data?.eligible || !qrRef.current) return
-    setExporting(true)
-    try {
-      const qrDataUrl = qrRef.current.toDataURL('image/png')
-      const width = 1013, height = 638
-      const svg = buildCardSvg(data, qrDataUrl, width, height)
-      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-      const url = URL.createObjectURL(svgBlob)
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, width, height)
-        URL.revokeObjectURL(url)
-        const link = document.createElement('a')
-        link.download = `eduxellence-id-${data.representative.referralCode}.png`
-        link.href = canvas.toDataURL('image/png')
-        link.click()
-        setExporting(false)
-      }
-      img.onerror = () => {
-        alert('Could not generate the image � this can happen if the photo or logo host does not allow cross-origin export. Try Print instead.')
-        setExporting(false)
-      }
-      img.src = url
-    } catch {
-      setExporting(false)
-    }
+    const qrDataUrl = qrRef.current.toDataURL('image/png')
+    renderCard(data, qrDataUrl).then(canvas => {
+      canvasRef.current = canvas
+      setPreviewUrl(canvas.toDataURL('image/png'))
+    })
+  }, [data])
+
+  function downloadPng() {
+    if (!canvasRef.current || !data) return
+    const link = document.createElement('a')
+    link.download = `eduxellence-id-${data.representative.referralCode}.png`
+    link.href = canvasRef.current.toDataURL('image/png', 1.0)
+    link.click()
   }
 
-  function print() {
-    window.print()
+  function downloadPdf() {
+    if (!canvasRef.current || !data) return
+    setBusy(true)
+    try {
+      const imgData = canvasRef.current.toDataURL('image/png', 1.0)
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'in', format: [3.375, 2.125] })
+      pdf.addImage(imgData, 'PNG', 0, 0, 3.375, 2.125, undefined, 'FAST')
+      pdf.save(`eduxellence-id-${data.representative.referralCode}.pdf`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>
@@ -60,99 +181,40 @@ export default function IdCardGenerator({ apiUrl = '/api/representatives/id-card
         <p className="font-semibold text-ink mb-2">ID Card unavailable</p>
         <p className="text-sm text-ink-muted mb-3">Your official Representative ID card cannot be generated yet.</p>
         <ul className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3 text-left space-y-1">
-          {data?.missing?.map((m: string, i: number) => <li key={i}>� {m}</li>)}
+          {data?.missing?.map((m: string, i: number) => <li key={i}>• {m}</li>)}
         </ul>
       </div>
     )
   }
 
-  const rep = data.representative
-
   return (
     <div className="flex flex-col items-center gap-4">
       <div style={{ display: 'none' }}>
-        <QRCodeCanvas ref={qrRef as any} value={data.verifyUrl} size={200} />
+        <QRCodeCanvas ref={qrRef as any} value={data.verifyUrl} size={400} />
       </div>
 
-      <div
-        ref={cardRef}
-        id="id-card-print-area"
-        style={{
-          width: '337.5px', height: '212.5px', borderRadius: '12px', overflow: 'hidden',
-          background: 'linear-gradient(135deg, #ffffff 0%, #f4f6fb 100%)',
-          border: '1px solid #d8dee8', boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-          position: 'relative', fontFamily: 'system-ui, sans-serif',
-        }}
-      >
-        <div style={{ background: '#111827', color: 'white', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {data.logoUrl && <img src={data.logoUrl} alt="" style={{ height: '18px', objectFit: 'contain' }} crossOrigin="anonymous" />}
-          <span style={{ fontSize: '11px', fontWeight: 700 }}>EDUXELLENCE</span>
-          <span style={{ fontSize: '9px', marginLeft: 'auto', opacity: 0.8 }}>Representative ID</span>
+      {previewUrl ? (
+        <img
+          src={previewUrl} alt="Representative ID Card"
+          style={{ width: '337.5px', height: '212.5px', borderRadius: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+        />
+      ) : (
+        <div style={{ width: '337.5px', height: '212.5px' }} className="flex items-center justify-center">
+          <Loader2 className="animate-spin" size={20} />
         </div>
-        <div style={{ display: 'flex', padding: '10px 12px', gap: '10px' }}>
-          {data.photoUrl && (
-            <img
-              src={data.photoUrl} alt={rep.fullName} crossOrigin="anonymous"
-              style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '8px', border: '2px solid #e5e7eb', flexShrink: 0 }}
-            />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: '13px', fontWeight: 700, color: '#111827', margin: 0 }}>{rep.fullName}</p>
-            <p style={{ fontSize: '10px', color: '#6b7280', margin: '2px 0' }}>{rep.designation}</p>
-            <p style={{ fontSize: '9px', color: '#374151', margin: '4px 0 0', fontFamily: 'monospace' }}>ID: {rep.referralCode}</p>
-            <span style={{ fontSize: '8px', background: '#ecfdf5', color: '#059669', padding: '2px 6px', borderRadius: '999px', display: 'inline-block', marginTop: '4px', fontWeight: 600 }}>
-              {rep.status}
-            </span>
-          </div>
-          <img src={qrRef.current?.toDataURL?.() ?? ''} alt="QR" style={{ width: '48px', height: '48px', flexShrink: 0 }} />
-        </div>
-        <div style={{ position: 'absolute', bottom: '6px', left: '12px', fontSize: '7px', color: '#9ca3af' }}>
-          Issued {rep.issuedOn ? new Date(rep.issuedOn).toLocaleDateString('en-NG') : '�'}
-        </div>
-      </div>
+      )}
 
-      <div className="flex gap-2 no-print">
-        <button onClick={downloadPng} disabled={exporting} className="btn-primary btn-sm btn flex items-center gap-1.5">
-          <Download size={14} /> {exporting ? 'Preparing�' : 'Download ID Card'}
+      <div className="flex gap-2">
+        <button onClick={downloadPng} disabled={!previewUrl} className="btn-secondary btn-sm btn flex items-center gap-1.5">
+          <Download size={14} /> Download PNG
         </button>
-        <button onClick={print} className="btn-secondary btn-sm btn flex items-center gap-1.5">
-          <Printer size={14} /> Print ID Card
+        <button onClick={downloadPdf} disabled={!previewUrl || busy} className="btn-primary btn-sm btn flex items-center gap-1.5">
+          <FileDown size={14} /> {busy ? 'Preparing…' : 'Download PDF'}
         </button>
       </div>
-
-      <style jsx global>{`
-        @media print {
-          body * { visibility: hidden; }
-          #id-card-print-area, #id-card-print-area * { visibility: visible; }
-          #id-card-print-area { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); }
-          .no-print { display: none !important; }
-        }
-      `}</style>
+      <p className="text-xs text-ink-faint text-center max-w-xs">
+        The PDF is sized to a real ID card (3.375" × 2.125") for accurate printing.
+      </p>
     </div>
   )
-}
-
-function buildCardSvg(data: any, qrDataUrl: string, width: number, height: number) {
-  const rep = data.representative
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-      <rect width="${width}" height="${height}" rx="24" fill="#ffffff" stroke="#d8dee8"/>
-      <rect width="${width}" height="70" fill="#111827"/>
-      <text x="70" y="45" fill="white" font-size="26" font-weight="700" font-family="system-ui">EDUXELLENCE</text>
-      ${data.logoUrl ? `<image href="${data.logoUrl}" x="16" y="15" width="40" height="40"/>` : ''}
-      <text x="${width - 20}" y="45" fill="white" font-size="18" text-anchor="end" opacity="0.8" font-family="system-ui">Representative ID</text>
-      ${data.photoUrl ? `<image href="${data.photoUrl}" x="30" y="105" width="180" height="180" clip-path="inset(0 round 16)"/>` : ''}
-      <text x="240" y="140" font-size="30" font-weight="700" fill="#111827" font-family="system-ui">${escapeXml(rep.fullName)}</text>
-      <text x="240" y="175" font-size="20" fill="#6b7280" font-family="system-ui">${escapeXml(rep.designation)}</text>
-      <text x="240" y="215" font-size="18" fill="#374151" font-family="monospace">ID: ${escapeXml(rep.referralCode)}</text>
-      <rect x="240" y="235" width="200" height="30" rx="15" fill="#ecfdf5"/>
-      <text x="255" y="255" font-size="16" fill="#059669" font-weight="600" font-family="system-ui">${escapeXml(rep.status)}</text>
-      <image href="${qrDataUrl}" x="${width - 140}" y="100" width="100" height="100"/>
-      <text x="30" y="${height - 20}" font-size="14" fill="#9ca3af" font-family="system-ui">Issued ${rep.issuedOn ? new Date(rep.issuedOn).toLocaleDateString('en-NG') : '�'}</text>
-    </svg>
-  `
-}
-
-function escapeXml(s: string) {
-  return String(s ?? '').replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] || c))
 }
