@@ -1,15 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, TrendingUp } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import WithdrawalPanel from './WithdrawalPanel'
-
-const LEVEL_THRESHOLDS: Record<string, { next: string; target: number }> = {
-  growth_volunteer: { next: 'Certified Representative', target: 20 },
-  certified_representative: { next: 'State Representative', target: 100 },
-  state_representative: { next: 'Zonal Representative', target: 300 },
-  zonal_representative: { next: '', target: 0 },
-}
+import GrowthLevelCard from './GrowthLevelCard'
 
 export default function RepDashboard() {
   const [data, setData] = useState<any>(null)
@@ -30,32 +24,16 @@ export default function RepDashboard() {
   if (!data) return null
 
   const { representative: rep, referrals, commissions, wallet, bankAccounts, withdrawals } = data
-  const levelInfo = LEVEL_THRESHOLDS[rep.level]
-  const progressPct = levelInfo?.target ? Math.min(100, (rep.qualified_customers_count / levelInfo.target) * 100) : 100
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-4">
       <div className="card p-5">
         <p className="text-sm text-ink-muted">Welcome, {rep.full_name}</p>
-        <p className="text-xs text-ink-faint">Level: {rep.level.replace(/_/g, ' ')} · Territory: {rep.territory_state ?? '—'}</p>
+        <p className="text-xs text-ink-faint">Territory: {rep.territory_state ?? '—'}</p>
         <p className="text-xs text-ink-faint font-mono mt-1">Referral code: {rep.referral_code}</p>
       </div>
 
-      {levelInfo?.target > 0 && (
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp size={14} className="text-brand-500" />
-            <p className="text-sm font-medium text-ink">Progress to {levelInfo.next}</p>
-          </div>
-          <div className="w-full h-2 bg-surface-100 rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-brand-500" style={{ width: `${progressPct}%` }} />
-          </div>
-          <p className="text-xs text-ink-faint">
-            {rep.qualified_customers_count} / {levelInfo.target} qualified customers
-            {rep.qualified_customers_count < levelInfo.target && ` — ${levelInfo.target - rep.qualified_customers_count} more to go`}
-          </p>
-        </div>
-      )}
+      <GrowthLevelCard />
 
       {/* ✅ Withdrawal Panel */}
       <WithdrawalPanel wallet={wallet} bankAccounts={bankAccounts} withdrawals={withdrawals} onRefresh={load} />

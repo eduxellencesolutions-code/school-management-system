@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen, Settings } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 import { getVisibleNavItems, type NavAccess } from '@/lib/auth/navConfig'
@@ -25,6 +25,7 @@ const ICONS: Record<string, any> = {
   'platform-users': UsersRound,
   team: UsersRound,
   resources: FolderOpen,
+  settings: Settings,
 }
 
 export default function SuperAdminShell({

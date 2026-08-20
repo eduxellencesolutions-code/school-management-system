@@ -7,6 +7,7 @@ import SchoolStatusActions from '@/components/super-admin/SchoolStatusActions'
 import ReassignAdminForm from '@/components/super-admin/ReassignAdminForm'
 import DeleteSchoolForm from '@/components/super-admin/DeleteSchoolForm'
 import FeatureOverridePanel from '@/components/super-admin/FeatureOverridePanel'
+import AcademicPeriodOversight from '@/components/super-admin/AcademicPeriodOversight'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 
 export const dynamic = 'force-dynamic'
@@ -91,6 +92,20 @@ export default async function SchoolDetailPage({ params }: Props) {
     referredByName = rep?.full_name ?? null;
   }
 
+  // — NEW: Fetch academic sessions/terms for Super Admin oversight —
+  const { data: academicSessions } = await admin
+    .from('academic_sessions')
+    .select('id, name, status, is_active')
+    .eq('organization_id', id)
+    .order('name', { ascending: false })
+
+  const sessionIds = (academicSessions ?? []).map(s => s.id)
+  const { data: academicTerms } = sessionIds.length > 0
+    ? await admin.from('terms').select('id, name, session_id, status, is_active, closed_at, closed_reason').in('session_id', sessionIds).order('name')
+    : { data: [] }
+
+  const canOverride = access.isSuperAdmin || hasPermission(access, 'academic.emergency_override')
+
   // ✅ FIX 1: Simplified to just 'admin' (school_admin doesn't exist)
   const currentAdmin = users?.find(u => u.role === 'admin')
   const teachers = users?.filter(u => u.role === 'teacher') ?? []
@@ -164,6 +179,14 @@ export default async function SchoolDetailPage({ params }: Props) {
 
       {/* ── NEW: Feature Override Panel ── */}
       <FeatureOverridePanel orgId={org.id} />
+
+      {/* ── NEW: Academic Period Oversight ── */}
+      <AcademicPeriodOversight
+        orgId={org.id}
+        sessions={academicSessions ?? []}
+        terms={academicTerms ?? []}
+        canOverride={canOverride}
+      />
 
       {/* ── NEW: Support Tickets Card ── */}
       <div className="card p-5">

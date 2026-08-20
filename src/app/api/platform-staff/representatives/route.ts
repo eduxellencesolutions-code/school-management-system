@@ -11,7 +11,7 @@ export async function GET() {
 
   const { data: reps, error } = await supabase
     .from('representatives')
-    .select('id, full_name, email, phone, referral_code, level, status, territory_state, qualified_customers_count, total_commission_earned, total_commission_paid, joined_at, photo_url, photo_status, photo_rejection_reason, photo_reviewed_at')
+    .select('id, full_name, email, phone, referral_code, level, status, territory_state, qualified_customers_count, commission_rate, total_commission_earned, total_commission_paid, joined_at, photo_url, photo_status, photo_rejection_reason, photo_reviewed_at')
     .order('joined_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -25,12 +25,26 @@ export async function GET() {
     .limit(1)
     .maybeSingle();
 
+  const { data: growthTiers } = await supabase
+    .from('growth_level_thresholds')
+    .select('level, label, min_schools, commission_rate')
+    .order('level', { ascending: true });
+
   const [{ data: allReferrals }, { data: allCommissions }, { data: allBankAccounts }, { data: allAcceptances }] = await Promise.all([
     repIds.length > 0 ? supabase.from('referrals').select('representative_id, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('commissions').select('representative_id, amount, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('bank_accounts').select('id, representative_id, bank_name, account_number, account_name, is_verified').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 && latestVersion ? supabase.from('representative_agreement_acceptances').select('representative_id, accepted_at').eq('agreement_version_id', latestVersion.id).in('representative_id', repIds) : Promise.resolve({ data: [] }),
   ]);
+
+  function growthLevelFor(qualifiedCount: number) {
+    const sorted = growthTiers ?? [];
+    let current = sorted[0];
+    for (const tier of sorted) {
+      if (qualifiedCount >= tier.min_schools) current = tier;
+    }
+    return current ?? { level: 1, label: 'Starter' };
+  }
 
   const enriched = (reps ?? []).map(rep => {
     const referrals = (allReferrals ?? []).filter(r => r.representative_id === rep.id);
@@ -40,6 +54,7 @@ export async function GET() {
     const pendingCommission = commissions.filter(c => c.status === 'pending' || c.status === 'payable').reduce((s, c) => s + c.amount, 0);
     const bankAccounts = (allBankAccounts ?? []).filter(b => b.representative_id === rep.id);
     const acceptance = (allAcceptances ?? []).find(a => a.representative_id === rep.id);
+    const tier = growthLevelFor(rep.qualified_customers_count);
     return {
       ...rep,
       totalReferrals: referrals.length,
@@ -50,6 +65,8 @@ export async function GET() {
       agreementAccepted: !!acceptance,
       agreementAcceptedAt: acceptance?.accepted_at ?? null,
       agreementVersion: latestVersion?.version ?? null,
+      growthLevel: tier.level,
+      growthLabel: tier.label,
     };
   });
 

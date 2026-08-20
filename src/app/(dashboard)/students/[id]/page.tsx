@@ -6,6 +6,7 @@ import StudentEditForm from '@/components/students/StudentEditForm'
 import StudentScoreHistory from '@/components/students/StudentScoreHistory'
 import DeleteStudentButton from '@/components/students/DeleteStudentButton'
 import ParentGuardianCard from '@/components/students/ParentGuardianCard'
+import StudentStatusForm from '@/components/students/StudentStatusForm'
 
 interface Props { 
   params: Promise<{ id: string }> 
@@ -150,6 +151,15 @@ export default async function StudentDetailPage({ params }: Props) {
           <div className="stat-label">Enrolled</div>
         </div>
       </div>
+
+      {/* Status / Lifecycle */}
+      <StudentStatusForm
+        studentId={learner.id}
+        currentStatus={learner.status ?? 'active'}
+        statusReason={learner.status_reason}
+        statusEffectiveDate={learner.status_effective_date}
+        destinationSchool={learner.destination_school}
+      />
 
       {/* Parent / Guardian */}
       <ParentGuardianCard

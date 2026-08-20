@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Loader2, ArrowLeft } from 'lucide-react'
+import IdCardGenerator from '@/components/representatives/IdCardGenerator'
 
 export default function RepProfilePanel({ repId }: { repId: string }) {
   const [data, setData] = useState<any>(null)
@@ -74,7 +75,8 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
             <span className={
               rep.photo_status === 'approved' ? 'text-green-600 font-medium' :
               rep.photo_status === 'rejected' ? 'text-red-600 font-medium' :
-              rep.photo_status === 'pending_review' ? 'text-amber-600 font-medium' : 'text-ink-faint'
+              rep.photo_status === 'pending_review' ? 'text-amber-600 font-medium' :
+              'text-ink-faint'
             }>
               {rep.photo_status === 'pending_review' ? 'Pending Approval' : rep.photo_status.replace('_', ' ')}
             </span>
@@ -118,10 +120,11 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
           </div>
 
           <div>
-            <h2 className="font-semibold text-sm text-ink mb-2">Performance</h2>
+            <h2 className="font-semibold text-sm text-ink mb-2">Performance & Growth</h2>
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
               <dt className="text-ink-faint">Prospects</dt><dd className="text-ink">{data.referrals.length}</dd>
-              <dt className="text-ink-faint">Qualified</dt><dd className="text-ink">{rep.qualified_customers_count}</dd>
+              <dt className="text-ink-faint">Qualified Schools</dt><dd className="text-ink">{rep.qualified_customers_count}</dd>
+              <dt className="text-ink-faint">Commission Rate</dt><dd className="text-ink font-semibold">{rep.commission_rate}%</dd>
               <dt className="text-ink-faint">Commission Earned</dt><dd className="text-ink">₦{Number(rep.total_commission_earned).toLocaleString()}</dd>
               <dt className="text-ink-faint">Commission Paid</dt><dd className="text-ink">₦{Number(rep.total_commission_paid).toLocaleString()}</dd>
               <dt className="text-ink-faint">Pending Commission</dt><dd className="text-ink">₦{data.pendingCommission.toLocaleString()}</dd>
@@ -161,6 +164,11 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
             ))}
           </div>
         ) : <p className="text-xs text-ink-faint">No prospects yet.</p>}
+      </div>
+
+      <div className="card p-5">
+        <h2 className="font-semibold text-sm text-ink mb-3">Representative ID Card</h2>
+        <IdCardGenerator apiUrl={`/api/platform-staff/representatives/${repId}/id-card`} />
       </div>
 
       <div className="card p-5">

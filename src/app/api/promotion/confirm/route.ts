@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { fromGroupId, toGroupId, sessionId, reportId, decisions } = body;
+  const { fromGroupId, toGroupId, sessionId, reportId, decisions, newSessionId } = body;
 
   if (!fromGroupId || !toGroupId || !sessionId || !reportId || !Array.isArray(decisions) || decisions.length === 0) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -103,6 +103,7 @@ export async function POST(request: Request) {
     p_to_group_id: toGroupId,
     p_report_id: reportId,
     p_confirmed_moves: confirmedMoves,
+    p_new_session_id: newSessionId ?? null,
   });
 
   if (promotionError) {
