@@ -6,10 +6,7 @@ export interface NavItem {
   requiredPermission?: string
   superAdminOnly?: boolean
 }
-// Single source of truth for what each admin route requires. Keep this in
-// sync with the actual per-page checks (hasPermission(...) / has_platform_permission RPC)
-// in each page.tsx � this file only controls what's *shown* in nav; the
-// pages themselves remain the real enforcement point.
+
 export const NAV_ITEMS: NavItem[] = [
   { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },
   { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
@@ -19,7 +16,12 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
   { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },
-  { key: 'representatives', href: '/representatives', label: 'Representatives', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'representatives', href: '/representatives', label: 'All Representatives', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'rep-performance', href: '/representatives/performance', label: 'Rep Performance', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'school-portfolios', href: '/representatives/school-portfolios', label: 'School Portfolios', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'rep-followups', href: '/representatives/follow-ups', label: 'Rep Follow-ups', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'rep-feedback', href: '/representatives/feedback', label: 'Rep Feedback', section: 'more', requiredPermission: 'representatives.view' },
+  { key: 'rep-escalations', href: '/representatives/escalations', label: 'Rep Escalations', section: 'more', requiredPermission: 'support.view' },
   { key: 'resources', href: '/resources', label: 'Rep Resources', section: 'more', requiredPermission: 'representatives.view' },
   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
@@ -28,16 +30,19 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'team', href: '/team', label: 'Team', section: 'more', superAdminOnly: true },
   { key: 'settings', href: '/platform-settings', label: 'Settings', section: 'more', superAdminOnly: true },
 ]
+
 export interface NavAccess {
   isSuperAdmin: boolean
   permissions: string[]
 }
+
 export function canAccessNavItem(item: NavItem, access: NavAccess): boolean {
   if (access.isSuperAdmin) return true
   if (item.superAdminOnly) return false
-  if (!item.requiredPermission) return true // e.g. 'overview' � always reachable, page itself routes staff onward
+  if (!item.requiredPermission) return true
   return access.permissions.includes(item.requiredPermission)
 }
+
 export function getVisibleNavItems(access: NavAccess): NavItem[] {
   return NAV_ITEMS.filter(item => canAccessNavItem(item, access))
 }

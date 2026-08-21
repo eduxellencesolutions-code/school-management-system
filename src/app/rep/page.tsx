@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { TicketIcon, GraduationCap, BookOpen, CreditCard } from 'lucide-react'
+import { TicketIcon, GraduationCap, BookOpen, CreditCard, Building2 } from 'lucide-react'
 import RepDashboard from '@/components/representatives/RepDashboard'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -46,6 +46,9 @@ export default async function RepPage() {
       <div className="flex justify-end items-center gap-2 max-w-4xl mx-auto mb-4 flex-wrap">
         <Link href="/rep/onboarding" className="btn-secondary btn-sm btn flex items-center gap-1.5">
           <GraduationCap size={14} /> Onboarding
+        </Link>
+        <Link href="/rep/schools" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+          <Building2 size={14} /> My School Portfolio
         </Link>
         <Link href="/rep/resources" className="btn-secondary btn-sm btn flex items-center gap-1.5">
           <BookOpen size={14} /> Resource Centre

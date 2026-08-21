@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: existingTicket } = await supabase
     .from('support_tickets')
-    .select('submitted_by_user_id, subject, status')
+    .select('submitted_by_user_id, subject, status, representative_id, organization_id')
     .eq('id', id)
     .single();
 
@@ -41,6 +41,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       created_at: new Date().toISOString(),
     });
     if (notifError) console.error('Failed to send resolution notification:', notifError);
+  }
+
+  // Separately notify the representative who escalated this, if any —
+  // on ANY status change, not just resolved, since "Under Review" /
+  // "In Progress" updates matter to a rep tracking a school's issue too.
+  if (status && status !== existingTicket?.status && existingTicket?.representative_id) {
+    const { data: repRow } = await supabase
+      .from('representatives')
+      .select('user_id')
+      .eq('id', existingTicket.representative_id)
+      .single();
+
+    if (repRow?.user_id) {
+      const { error: repNotifError } = await supabase.from('notifications').insert({
+        user_id: repRow.user_id,
+        organization_id: existingTicket.organization_id ?? null,
+        title: 'Escalation status updated',
+        body: `Your reported issue "${existingTicket.subject}" is now: ${status}.`,
+        is_read: false,
+        metadata: { type: 'escalation_status_changed', ticket_id: id, link: `/rep/schools/${existingTicket.organization_id}` },
+        created_at: new Date().toISOString(),
+      });
+      if (repNotifError) console.error('Failed to send rep escalation notification:', repNotifError);
+    }
   }
 
   await supabase.rpc('log_platform_action', {

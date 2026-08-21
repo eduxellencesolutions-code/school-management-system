@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import WithdrawalPanel from './WithdrawalPanel'
 import GrowthLevelCard from './GrowthLevelCard'
+import SchoolPortfolioSummaryCard from './SchoolPortfolioSummaryCard'
 
 export default function RepDashboard() {
   const [data, setData] = useState<any>(null)
@@ -38,14 +39,16 @@ export default function RepDashboard() {
       {/* ✅ Withdrawal Panel */}
       <WithdrawalPanel wallet={wallet} bankAccounts={bankAccounts} withdrawals={withdrawals} onRefresh={load} />
 
+      <SchoolPortfolioSummaryCard />
+
       <div className="card">
-        <div className="card-header font-semibold text-sm">My Referrals</div>
+        <div className="card-header font-semibold text-sm">Solo Teacher Referrals</div>
         <div className="divide-y divide-surface-100">
-          {referrals.length === 0 ? (
-            <p className="p-4 text-sm text-ink-muted text-center">No referrals yet. Share your code to get started.</p>
-          ) : referrals.map((r: any) => (
+          {referrals.filter((r: any) => r.targetType !== 'school').length === 0 ? (
+            <p className="p-4 text-sm text-ink-muted text-center">No solo teacher referrals yet.</p>
+          ) : referrals.filter((r: any) => r.targetType !== 'school').map((r: any) => (
             <div key={r.id} className="p-3 flex justify-between items-center text-sm">
-              <span>{r.targetName} <span className="text-xs text-ink-faint">({r.targetType === 'school' ? 'School' : 'Solo Teacher'})</span></span>
+              <span>{r.targetName}</span>
               <span className={`badge text-[10px] ${r.status === 'qualified' ? 'badge-green' : 'badge-gray'}`}>{r.status}</span>
             </div>
           ))}
