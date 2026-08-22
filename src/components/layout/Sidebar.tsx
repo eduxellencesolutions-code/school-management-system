@@ -44,6 +44,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     small_school: 'Small School',
     standard_school: 'Standard School',
     premium_school: 'Premium',
+    founding_500: 'Founding 500 Promo',
   }
 
   const has = (key: string) => !isSoloTeacher && features.includes(key)
@@ -65,7 +66,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
     ...(has('fees') && canDo('fees.manage_structures') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
     ...(has('fees') && canDo('finance.issue_invoices') ? [{ label: 'Issue Invoices', href: '/fees/issue-invoices', icon: FilePlus2 }] : []),
-    ...(has('fees') && canDo('fees.record_payment') ? [{ label: 'Record Payments', href: '/fees/payments', icon: CreditCard }] : []),  // ✅ NEW
+    ...(has('fees') && canDo('fees.record_payment') ? [{ label: 'Record Payments', href: '/fees/payments', icon: CreditCard }] : []),
     ...(isAdmin && has('advanced_finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
   ]
 

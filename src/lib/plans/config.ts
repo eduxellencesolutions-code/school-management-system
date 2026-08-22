@@ -2,7 +2,7 @@
 // Everything else in the app should read from here — never hardcode
 // a limit or feature check anywhere else.
 
-export type PlanKey = 'free' | 'solo_teacher_pro' | 'small_school' | 'standard_school' | 'premium_school'
+export type PlanKey = 'free' | 'solo_teacher_pro' | 'small_school' | 'standard_school' | 'premium_school' | 'founding_500'
 
 export type ApprovalWorkflow = 'none' | 'principal' | 'multi_level'
 export type AuditLogLevel = 'none' | 'basic' | 'advanced' | 'full'
@@ -135,7 +135,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   small_school: {
     label: 'Small School',
     limits: {
-      maxStudents: 100, // was 500
+      maxStudents: 100,
       maxTeachers: 25,
       maxAdmins: 2,
       maxAcademicSessions: 'unlimited',
@@ -175,7 +175,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   standard_school: {
     label: 'Standard School',
     limits: {
-      maxStudents: 300, // was 2000
+      maxStudents: 300,
       maxTeachers: 100,
       maxAdmins: 10,
       maxAcademicSessions: 'unlimited',
@@ -215,7 +215,47 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   premium_school: {
     label: 'Premium School',
     limits: {
-      maxStudents: 500, // was 5000 — this becomes the BASE tier; capacity extensions override this per-org
+      maxStudents: 500,
+      maxTeachers: 300,
+      maxAdmins: 'unlimited',
+      maxAcademicSessions: 'unlimited',
+      maxClasses: 'unlimited',
+      maxSubjects: 'unlimited',
+      maxCustomTemplates: 'unlimited',
+      maxTeacherSignatures: 'unlimited',
+    },
+    features: {
+      studentRegistration: true,
+      teacherManagement: true,
+      studentPromotion: true,
+      automaticResultComputation: true,
+      pdfReportCards: true,
+      broadsheetGeneration: true,
+      excelImportExport: true,
+      attendanceManagement: true,
+      behaviouralPsychomotorAssessment: true,
+      aiGeneratedRemarks: true,
+      studentPortal: true,
+      parentPortal: true,
+      teacherPortal: true,
+      onlineResultChecker: true,
+      schoolBranding: 'full',
+      principalSignature: true,
+      resultApprovalWorkflow: 'multi_level',
+      publishLockResults: true,
+      archiveAcademicSessions: true,
+      restoreArchivedReports: true,
+      auditLogs: 'full',
+      emailNotifications: true,
+      resultHistory: 'unlimited',
+      priorityProcessing: true,
+      prioritySupport: 'dedicated',
+    },
+  },
+  founding_500: {
+    label: 'Founding 500 Promo',
+    limits: {
+      maxStudents: 500,
       maxTeachers: 300,
       maxAdmins: 'unlimited',
       maxAcademicSessions: 'unlimited',

@@ -29,7 +29,7 @@ export default async function DashboardPage() {
 
   // Use helper for plan features
   const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
-  const planFeatures = (!orgId) ? [] : await getPlanFeatures(supabase, orgPlanKey)
+  const planFeatures = (!orgId) ? [] : await getPlanFeatures(supabase, orgPlanKey, orgId)
 
   // Real, table-derived "minimum plan required" per feature, for correct
   // upgrade messaging (Institution tiers only -- never compared against

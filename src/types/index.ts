@@ -4,7 +4,7 @@ export type OrgType = 'school' | 'university' | 'centre'
 export type UserRole = 'admin' | 'teacher' | 'lecturer' | 'assistant'
 export type GroupType = 'class' | 'course' | 'department'
 export type Gender = 'M' | 'F' | 'Other'
-export type SubscriptionPlan = 'free' | 'teacher' | 'small_school' | 'standard_school' | 'premium_school'
+export type SubscriptionPlan = 'free' | 'teacher' | 'small_school' | 'standard_school' | 'premium_school' | 'founding_500'
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled' | 'trial'
 
 // ─── Core Entities ───────────────────────────────────────────────────────────
@@ -320,6 +320,19 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
     max_staff: 30,
   },
   premium_school: {
+    max_groups: null,
+    max_learners: null,
+    max_subjects_per_group: null,
+    has_branding: true,
+    has_pdf_export: true,
+    has_excel_export: true,
+    has_analytics: true,
+    has_ai_remarks: true,
+    has_multi_staff: true,
+    has_parent_portal: true,
+    max_staff: null,
+  },
+  founding_500: {
     max_groups: null,
     max_learners: null,
     max_subjects_per_group: null,

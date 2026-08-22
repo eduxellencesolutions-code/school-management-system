@@ -24,6 +24,7 @@ const PLAN_LABELS: Record<string, string> = {
   small_school: 'Small School',
   standard_school: 'Standard School',
   premium_school: 'Premium',
+  founding_500: 'Founding 500 Promo',
 }
 
 export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, currentPlanKey, requiredPlanMap }: Props) {
