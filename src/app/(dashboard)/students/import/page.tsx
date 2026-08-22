@@ -31,6 +31,35 @@ interface ParsedRow extends CSVRow {
 
 interface Group { id: string; name: string }
 
+// Excel stores dates as serial numbers (days since 1899-12-30) when the
+// cell wasn't explicitly formatted/read as text. xlsx's sheet_to_json can
+// hand these back as raw numeric strings instead of ISO dates — this
+// converts either a serial number or an already-valid date string into
+// YYYY-MM-DD, and returns null if it's neither.
+function normalizeDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+
+  const str = String(value).trim()
+
+  // Excel serial date (all digits, no separators)
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const serial = Number(str)
+    // Excel's epoch is 1899-12-30; also correct for Excel's fictitious
+    // Feb 29, 1900 leap-year bug by using the standard offset of 25569
+    // days between the Excel epoch and the Unix epoch.
+    const utcDays = serial - 25569
+    const utcMs = utcDays * 86400 * 1000
+    const date = new Date(utcMs)
+    if (isNaN(date.getTime())) return null
+    return date.toISOString().split('T')[0]
+  }
+
+  // Already a normal date string (e.g. "2015-03-12", "12/03/2015")
+  const parsed = new Date(str)
+  if (isNaN(parsed.getTime())) return null
+  return parsed.toISOString().split('T')[0]
+}
+
 export default function ImportStudentsPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -93,6 +122,12 @@ export default function ImportStudentsPage() {
     if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
       errors.push('invalid email')
     }
+
+    const normalizedDob = row.date_of_birth ? normalizeDate(row.date_of_birth) : null
+    if (row.date_of_birth && !normalizedDob) {
+      errors.push('invalid date_of_birth — could not parse')
+    }
+
     const normalizedGender = row.gender
       ? (['m', 'male'].includes(row.gender.toLowerCase()) ? 'M'
         : ['f', 'female'].includes(row.gender.toLowerCase()) ? 'F' : 'Other')
@@ -101,6 +136,7 @@ export default function ImportStudentsPage() {
     return {
       ...row,
       gender: normalizedGender,
+      date_of_birth: normalizedDob ?? undefined,
       _row: index + 2,
       _errors: errors,
       _status: errors.length > 0 ? 'error' : 'valid',
@@ -174,7 +210,7 @@ export default function ImportStudentsPage() {
     if (file) handleFile(file)
   }
 
-  // ✅ UPDATED: Uses server action with direct parameters (matching the updated server action signature)
+  // ✅ UPDATED: Uses FormData to match the server action signature
   async function runImport() {
     if (!selectedGroup) { toast.error('Select a class first'); return }
     const validRows = parsed.filter(r => r._status === 'valid')
@@ -182,25 +218,25 @@ export default function ImportStudentsPage() {
 
     setImporting(true)
 
-    const result = await importStudents(
-      selectedGroup,
-      validRows.map(r => ({
-        first_name: r.first_name,
-        last_name: r.last_name,
-        other_names: r.other_names,
-        admission_number: r.admission_number,
-        gender: r.gender,
-        date_of_birth: r.date_of_birth,
-        guardian_name: r.guardian_name,
-        guardian_phone: r.guardian_phone,
-        email: r.email,
-      }))
-    )
+    const formData = new FormData()
+    formData.append('group_id', selectedGroup)
+    formData.append('rows', JSON.stringify(validRows.map(r => ({
+      first_name: r.first_name,
+      last_name: r.last_name,
+      other_names: r.other_names,
+      admission_number: r.admission_number,
+      gender: r.gender,
+      date_of_birth: r.date_of_birth,
+      guardian_name: r.guardian_name,
+      guardian_phone: r.guardian_phone,
+      email: r.email,
+    }))))
 
+    const result = await importStudents(formData)
     setImporting(false)
 
     if (!result.success) {
-      toast.error(result.error || 'Import failed')
+      toast.error(result.message || 'Import failed')
       return
     }
 
