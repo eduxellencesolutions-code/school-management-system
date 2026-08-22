@@ -190,6 +190,11 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
                         {requiredPlanLabel(card)}
                       </span>
                     )}
+                    {unlocked && currentPlanKey === 'founding_500' && (
+                      <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                        Included with Founding 500
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-ink-faint mt-0.5">{card.description}</p>
                 </div>
