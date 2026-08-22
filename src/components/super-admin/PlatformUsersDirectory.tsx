@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Search, Loader2, Lock, Unlock, X, Shield, Building2, Handshake, UsersRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { lockAccount, unlockAccount, forcePasswordReset, regenerateParentAccessCode, setParentPortalAccess, revokeSessions } from '@/app/(super-admin)/security/actions'
@@ -28,12 +28,12 @@ export default function PlatformUsersDirectory({
   canManageLocks, 
   canForceReset, 
   canManageParentAccess,
-  canRevokeSessions  // ✅ NEW
+  canRevokeSessions
 }: { 
   canManageLocks: boolean; 
   canForceReset: boolean; 
   canManageParentAccess: boolean;
-  canRevokeSessions: boolean;  // ✅ NEW
+  canRevokeSessions: boolean;
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<UserRow[]>([])
@@ -44,22 +44,27 @@ export default function PlatformUsersDirectory({
   const [lockReason, setLockReason] = useState('')
   const [resetReason, setResetReason] = useState('')
   const [parentActionReason, setParentActionReason] = useState('')
-  const [revokeReason, setRevokeReason] = useState('')  // ✅ NEW
+  const [revokeReason, setRevokeReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [isDefaultList, setIsDefaultList] = useState(true)
 
   const runSearch = useCallback(async (q: string) => {
-    if (q.trim().length < 2) { setResults([]); return }
     setLoading(true)
     try {
       const res = await fetch(`/api/platform-users/search?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setResults(data.users ?? [])
+      setIsDefaultList(data.isDefaultList ?? false)
     } catch {
       toast.error('Search failed')
     } finally {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    runSearch('')
+  }, [runSearch])
 
   function handleQueryChange(v: string) {
     setQuery(v)
@@ -87,7 +92,7 @@ export default function PlatformUsersDirectory({
     setLockReason('')
     setResetReason('')
     setParentActionReason('')
-    setRevokeReason('')  // ✅ NEW
+    setRevokeReason('')
   }
 
   async function handleLock() {
@@ -164,7 +169,6 @@ export default function PlatformUsersDirectory({
     openDrawer(selectedId)
   }
 
-  // ✅ NEW: Revoke Sessions handler
   async function handleRevokeSessions() {
     if (!selectedId) return
     if (!revokeReason.trim()) { toast.error('A reason is required'); return }
@@ -198,6 +202,14 @@ export default function PlatformUsersDirectory({
 
         {!loading && query.trim().length >= 2 && results.length === 0 && (
           <p className="p-6 text-sm text-ink-faint text-center">No users found.</p>
+        )}
+
+        {!loading && query.trim().length < 2 && results.length === 0 && (
+          <p className="p-6 text-sm text-ink-faint text-center">No users yet.</p>
+        )}
+
+        {isDefaultList && !loading && results.length > 0 && (
+          <p className="px-4 pt-3 text-xs text-ink-faint">Showing recently active users. Search to narrow down.</p>
         )}
 
         {!loading && results.length > 0 && (
@@ -249,10 +261,6 @@ export default function PlatformUsersDirectory({
               </tbody>
             </table>
           </div>
-        )}
-
-        {!loading && query.trim().length < 2 && (
-          <p className="p-6 text-sm text-ink-faint text-center">Type at least 2 characters to search.</p>
         )}
       </div>
 
@@ -356,7 +364,6 @@ export default function PlatformUsersDirectory({
                   </div>
                 )}
 
-                {/* ✅ Revoke Sessions - only for non-parent users */}
                 {canRevokeSessions && detail.profile.role !== 'parent' && (
                   <div className="pt-3 border-t border-surface-100">
                     <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Revoke Sessions</p>
@@ -378,7 +385,6 @@ export default function PlatformUsersDirectory({
                   </div>
                 )}
 
-                {/* ✅ Force Password Reset - only for non-parent users */}
                 {canForceReset && detail.profile.role !== 'parent' && (
                   <div className="pt-3 border-t border-surface-100">
                     <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Force Password Reset</p>
@@ -400,7 +406,6 @@ export default function PlatformUsersDirectory({
                   </div>
                 )}
 
-                {/* ✅ Parent Portal Access - only for parent users */}
                 {canManageParentAccess && detail.profile.role === 'parent' && (
                   <div className="pt-3 border-t border-surface-100">
                     <p className="text-xs font-semibold text-ink-muted uppercase mb-2">Parent Portal Access</p>

@@ -16,6 +16,7 @@ export default function RepFeedbackHub() {
   const [category, setCategory] = useState('')
   const [feedback, setFeedback] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/platform-staff/representatives/management-summary')
@@ -30,6 +31,18 @@ export default function RepFeedbackHub() {
     fetch(`/api/platform-staff/feedback?${params}`)
       .then(r => r.json()).then(d => setFeedback(d.feedback ?? [])).finally(() => setLoading(false))
   }, [selectedRepId, category])
+
+  async function updateStatus(id: string, status: string) {
+    setUpdating(id)
+    const res = await fetch(`/api/platform-staff/feedback/${id}/status`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    setUpdating(null)
+    if (res.ok) {
+      setFeedback(prev => prev.map(f => f.id === id ? { ...f, status } : f))
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,12 +63,27 @@ export default function RepFeedbackHub() {
         ) : (
           <div className="divide-y divide-surface-100">
             {feedback.map((f: any) => (
-              <div key={f.id} className="py-3 text-sm">
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-100 text-ink-muted mr-2">{f.category}</span>
-                <span className="font-medium text-ink">{f.organizations?.name}</span>
-                <span className="text-ink-faint text-xs"> · by {f.representatives?.full_name} · {new Date(f.created_at).toLocaleDateString('en-NG')}</span>
-                <p className="text-ink-muted text-xs mt-0.5">{(f.subtype ?? f.satisfaction ?? '').replace(/_/g, ' ')}</p>
-                {f.biggest_challenge && <p className="text-ink-faint text-xs">{f.biggest_challenge}</p>}
+              <div key={f.id} className="py-3 text-sm flex items-start justify-between gap-3">
+                <div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-100 text-ink-muted mr-2">{f.category}</span>
+                  <span className="font-medium text-ink">{f.organizations?.name}</span>
+                  <span className="text-ink-faint text-xs"> · by {f.representatives?.full_name} · {new Date(f.created_at).toLocaleDateString('en-NG')}</span>
+                  <p className="text-ink-muted text-xs mt-0.5">{(f.subtype ?? f.satisfaction ?? '').replace(/_/g, ' ')}</p>
+                  {f.biggest_challenge && <p className="text-ink-faint text-xs">{f.biggest_challenge}</p>}
+                  {f.response && <p className="text-xs text-brand-600 mt-1">Response: {f.response}</p>}
+                </div>
+                <select
+                  disabled={updating === f.id}
+                  value={f.status ?? 'new'}
+                  onChange={e => updateStatus(f.id, e.target.value)}
+                  className="input text-xs w-auto"
+                >
+                  <option value="new">New</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="action_required">Action Required</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
               </div>
             ))}
           </div>

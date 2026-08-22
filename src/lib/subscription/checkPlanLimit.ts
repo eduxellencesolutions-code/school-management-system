@@ -19,6 +19,11 @@ export async function checkPlanLimit(
   const config = getPlanConfig(plan ?? 'free')
   let limit = config.limits[limitType]
 
+  // Solo teachers on the free plan get a lower cap (10) than institutions on the same plan (30)
+  if (limitType === 'maxStudents' && plan === 'free' && !orgId) {
+    limit = 10
+  }
+
   // Premium School has a variable capacity stored per-org, overriding the static config default
   if (limitType === 'maxStudents' && plan === 'premium_school' && orgId) {
     const { data: orgRow } = await supabase.from('organizations').select('student_capacity').eq('id', orgId).single()

@@ -21,11 +21,27 @@ export async function GET(request: NextRequest) {
   if (!allowed) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
 
   const q = request.nextUrl.searchParams.get('q')?.trim()
-  if (!q || q.length < 2) {
-    return NextResponse.json({ users: [] })
-  }
-
   const admin = serviceClient()
+
+  // No search query yet — show the most recently active users instead of
+  // an empty state, so Super Admin sees the platform is populated without
+  // having to search first. Same enrichment pipeline as a real search,
+  // just a different initial row set (recent last_login instead of ilike match).
+  if (!q || q.length < 2) {
+    const { data: recentRows, error: recentError } = await admin
+      .from('users')
+      .select('id, name, email, phone, role, organization_id, account_status, subscription_plan, subscription_status, last_login')
+      .not('last_login', 'is', null)
+      .order('last_login', { ascending: false })
+      .limit(20)
+
+    if (recentError) {
+      console.error('platform user recent-list error (users):', recentError)
+      return NextResponse.json({ error: 'Failed to load recent users' }, { status: 500 })
+    }
+
+    return NextResponse.json({ users: await enrichRows(admin, (recentRows ?? []).map(r => ({ ...r, __isParentMatch: false }))), isDefaultList: true })
+  }
 
   // Primary search: direct users (admins, teachers, principals, reps, staff —
   // anyone whose real contact info actually lives on this table).
@@ -42,7 +58,7 @@ export async function GET(request: NextRequest) {
 
   // ✅ FIX: Changed from 'parents' to 'parent_accounts'
   const { data: parentRows, error: parentError } = await admin
-    .from('parent_accounts')  // ← FIXED: was 'parents'
+    .from('parent_accounts')
     .select('auth_user_id, full_name, email, phone, access_code_active')
     .or(`full_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
     .limit(50)
@@ -89,6 +105,14 @@ export async function GET(request: NextRequest) {
       }),
   ]
 
+  return NextResponse.json({ users: await enrichRows(admin, allRows), isDefaultList: false })
+}
+
+// Extracted so both the default-list path and the search path enrich rows
+// (org name, representative badge, staff badge, primaryType label) the
+// exact same way — no duplicated logic, no risk of the two paths drifting
+// out of sync with each other over time.
+async function enrichRows(admin: ReturnType<typeof serviceClient>, allRows: any[]) {
   const orgIds = [...new Set(allRows.map(r => r.organization_id).filter(Boolean))]
   const userIds = allRows.map(r => r.id)
 
@@ -108,7 +132,7 @@ export async function GET(request: NextRequest) {
   const repSet = new Set((repRows ?? []).map(r => r.user_id))
   const staffSet = new Set((staffRows ?? []).map(s => s.user_id))
 
-  const results = allRows.map(u => {
+  return allRows.map(u => {
     const org = u.organization_id ? orgMap.get(u.organization_id) : null
     const isRep = repSet.has(u.id) || u.role === 'representative'
     const isStaff = staffSet.has(u.id)
@@ -158,6 +182,4 @@ export async function GET(request: NextRequest) {
       },
     }
   })
-
-  return NextResponse.json({ users: results })
 }

@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen, Settings } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen, Settings, TrendingUp, Briefcase, PhoneCall, MessageSquare, AlertTriangle, ChevronRight } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
-import { getVisibleNavItems, type NavAccess } from '@/lib/auth/navConfig'
+import { getVisibleNavItems, NAV_GROUPS, type NavAccess } from '@/lib/auth/navConfig'
 
 const ICONS: Record<string, any> = {
   overview: LayoutDashboard,
@@ -19,6 +19,11 @@ const ICONS: Record<string, any> = {
   commissions: DollarSign,
   withdrawals: Wallet,
   representatives: Handshake,
+  'rep-performance': TrendingUp,
+  'school-portfolios': Briefcase,
+  'rep-followups': PhoneCall,
+  'rep-feedback': MessageSquare,
+  'rep-escalations': AlertTriangle,
   security: ShieldAlert,
   audit: ShieldAlert,
   'platform-announcements': Megaphone,
@@ -39,34 +44,40 @@ export default function SuperAdminShell({
   const supabase = createClient()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [openGroupKey, setOpenGroupKey] = useState<string | null>(null)
   const moreTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const moreDropdownRef = useRef<HTMLDivElement>(null)
+  const groupTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleMoreEnter = () => {
-    if (moreTimeoutRef.current) {
-      clearTimeout(moreTimeoutRef.current)
-      moreTimeoutRef.current = null
-    }
+    if (moreTimeoutRef.current) { clearTimeout(moreTimeoutRef.current); moreTimeoutRef.current = null }
     setIsMoreOpen(true)
   }
-
   const handleMoreLeave = () => {
-    moreTimeoutRef.current = setTimeout(() => {
-      setIsMoreOpen(false)
-    }, 300)
+    moreTimeoutRef.current = setTimeout(() => setIsMoreOpen(false), 300)
+  }
+
+  const handleGroupEnter = (key: string) => {
+    if (groupTimeoutRef.current) { clearTimeout(groupTimeoutRef.current); groupTimeoutRef.current = null }
+    setOpenGroupKey(key)
+  }
+  const handleGroupLeave = () => {
+    groupTimeoutRef.current = setTimeout(() => setOpenGroupKey(null), 250)
   }
 
   useEffect(() => {
     return () => {
-      if (moreTimeoutRef.current) {
-        clearTimeout(moreTimeoutRef.current)
-      }
+      if (moreTimeoutRef.current) clearTimeout(moreTimeoutRef.current)
+      if (groupTimeoutRef.current) clearTimeout(groupTimeoutRef.current)
     }
   }, [])
 
   const visibleItems = getVisibleNavItems(access)
   const primaryItems = visibleItems.filter(i => i.section === 'primary')
-  const moreItems = visibleItems.filter(i => i.section === 'more')
+  const moreItemsRaw = visibleItems.filter(i => i.section === 'more')
+  const moreUngrouped = moreItemsRaw.filter(i => !i.group)
+  const moreGrouped = NAV_GROUPS
+    .map(g => ({ group: g, items: moreItemsRaw.filter(i => i.group === g.key) }))
+    .filter(g => g.items.length > 0)
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -85,7 +96,6 @@ export default function SuperAdminShell({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-1">
             {primaryItems.map(item => {
               const Icon = ICONS[item.key] ?? LayoutDashboard
@@ -100,65 +110,89 @@ export default function SuperAdminShell({
               )
             })}
 
-            {moreItems.length > 0 && (
-              <div
-                className="relative"
-                ref={moreDropdownRef}
-                onMouseEnter={handleMoreEnter}
-                onMouseLeave={handleMoreLeave}
-              >
+            {(moreUngrouped.length > 0 || moreGrouped.length > 0) && (
+              <div className="relative" onMouseEnter={handleMoreEnter} onMouseLeave={handleMoreLeave}>
                 <button className="text-xs text-ink-muted hover:text-ink flex items-center gap-1 px-2 py-1.5 rounded hover:bg-surface-100 transition-colors">
                   More <span className="text-[10px]">▼</span>
                 </button>
                 {isMoreOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[140px] z-50">
-                    {moreItems.map(item => {
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[180px] z-50">
+                    {moreUngrouped.map(item => {
                       const Icon = ICONS[item.key] ?? LayoutDashboard
                       return (
-                        <Link
-                          key={item.key}
-                          href={item.href}
-                          className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors"
-                        >
+                        <Link key={item.key} href={item.href} className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                           <Icon size={13} /> {item.label}
                         </Link>
                       )
                     })}
+
+                    {moreGrouped.map(({ group, items }) => (
+                      <div key={group.key} className="relative" onMouseEnter={() => handleGroupEnter(group.key)} onMouseLeave={handleGroupLeave}>
+                        <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors cursor-default">
+                          <span className="flex items-center gap-2"><Handshake size={13} /> {group.label}</span>
+                          <ChevronRight size={12} />
+                        </div>
+                        {openGroupKey === group.key && (
+                          <div className="absolute right-full top-0 mr-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[170px] z-50">
+                            {items.map(item => {
+                              const Icon = ICONS[item.key] ?? LayoutDashboard
+                              return (
+                                <Link key={item.key} href={item.href} className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors whitespace-nowrap">
+                                  <Icon size={13} /> {item.label}
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             )}
           </nav>
 
-          {/* Mobile Menu */}
           <div className="lg:hidden">
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="btn-secondary btn-sm btn flex items-center gap-1"
-            >
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="btn-secondary btn-sm btn flex items-center gap-1">
               <Menu size={16} />
             </button>
             {isMobileMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[160px] z-50">
-                {visibleItems.map(item => {
+              <div className="absolute right-0 top-full mt-1 bg-white border border-surface-200 rounded shadow-lg py-1 min-w-[180px] z-50">
+                {primaryItems.map(item => {
                   const Icon = ICONS[item.key] ?? LayoutDashboard
                   return (
-                    <Link
-                      key={item.key}
-                      href={item.href}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors"
-                    >
+                    <Link key={item.key} href={item.href} className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
                       <Icon size={13} /> {item.label}
                     </Link>
                   )
                 })}
+                {moreUngrouped.map(item => {
+                  const Icon = ICONS[item.key] ?? LayoutDashboard
+                  return (
+                    <Link key={item.key} href={item.href} className="flex items-center gap-2 px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
+                      <Icon size={13} /> {item.label}
+                    </Link>
+                  )
+                })}
+                {moreGrouped.map(({ group, items }) => (
+                  <div key={group.key}>
+                    <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase">{group.label}</div>
+                    {items.map(item => {
+                      const Icon = ICONS[item.key] ?? LayoutDashboard
+                      return (
+                        <Link key={item.key} href={item.href} className="flex items-center gap-2 pl-5 pr-3 py-1.5 text-xs text-ink-muted hover:bg-surface-50 hover:text-ink transition-colors">
+                          <Icon size={13} /> {item.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                ))}
                 <div className="border-t border-surface-200 my-1"></div>
                 <LogoutButton />
               </div>
             )}
           </div>
 
-          {/* ✅ Desktop Logout - shrink-0 prevents it from being squeezed out */}
           <div className="hidden lg:block shrink-0">
             <LogoutButton />
           </div>

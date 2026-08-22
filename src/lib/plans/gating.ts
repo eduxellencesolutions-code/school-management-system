@@ -97,10 +97,14 @@ export interface GateResult {
 export async function canAddStudent(plan: string, ref: AccountRef): Promise<GateResult> {
   const config = getPlanConfig(plan)
   const usage = await getUsageCounts(ref)
-  const allowed = checkLimit(usage.students, config.limits.maxStudents)
+
+  // Solo teachers on the free plan get a lower cap (10) than institutions on the same plan (30)
+  const maxStudents = (plan === 'free' && ref.type === 'solo') ? 10 : config.limits.maxStudents
+
+  const allowed = checkLimit(usage.students, maxStudents)
   return allowed
     ? { allowed: true }
-    : { allowed: false, reason: `Student limit reached (${config.limits.maxStudents} max on ${config.label} plan). Upgrade to add more students.` }
+    : { allowed: false, reason: `Student limit reached (${maxStudents} max on ${config.label} plan). Upgrade to add more students.` }
 }
 
 export async function canAddTeacher(plan: string, ref: AccountRef): Promise<GateResult> {

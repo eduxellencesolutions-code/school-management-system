@@ -207,13 +207,15 @@ export default function SchoolPortfoliosTable() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-col items-end gap-1.5">
                         <button onClick={() => setShowAssignModal(u.organization_id)} className="btn-sm btn bg-brand-50 text-brand-700 flex items-center gap-1">
                           <UserPlus size={12} /> Assign
                         </button>
-                        <Link href={`/representatives/schools/${u.organization_id}`} className="text-brand-600 text-xs font-medium hover:underline">
-                          View →
-                        </Link>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Link href={`/representatives/schools/${u.organization_id}`} className="text-brand-600 hover:underline">View</Link>
+                          <Link href={`/representatives/schools/${u.organization_id}?tab=history`} className="text-brand-600 hover:underline">Assignment History</Link>
+                          <Link href={`/representatives/schools/${u.organization_id}?tab=followups`} className="text-brand-600 hover:underline">Relationship History</Link>
+                        </div>
                       </div>
                     </td>
                   </tr>

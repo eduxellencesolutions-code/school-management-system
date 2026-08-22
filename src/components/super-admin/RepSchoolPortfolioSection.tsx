@@ -1,6 +1,7 @@
 // src/components/super-admin/RepSchoolPortfolioSection.tsx
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Loader2, Building, AlertTriangle, Phone, Mail } from 'lucide-react'
 
 const STATUS_STYLE: Record<string, string> = {
@@ -104,6 +105,12 @@ export default function RepSchoolPortfolioSection({ repId }: { repId: string }) 
                       : 'No follow-up recorded'}
                     {s.next_follow_up_at && ` · Next: ${new Date(s.next_follow_up_at).toLocaleDateString('en-NG')}`}
                   </span>
+                </div>
+                <div className="flex flex-wrap gap-3 pl-6 mt-1">
+                  <Link href={`/representatives/schools/${s.organization_id}`} className="text-xs text-brand-600 hover:underline">View</Link>
+                  <Link href={`/representatives/schools/${s.organization_id}?tab=followups`} className="text-xs text-brand-600 hover:underline">Follow-up History</Link>
+                  <Link href={`/representatives/schools/${s.organization_id}?tab=feedback`} className="text-xs text-brand-600 hover:underline">Feedback</Link>
+                  <Link href={`/representatives/schools/${s.organization_id}?tab=escalations`} className="text-xs text-brand-600 hover:underline">Escalations</Link>
                 </div>
               </div>
             )

@@ -1,6 +1,7 @@
 // src/components/super-admin/SchoolRelationshipProfile.tsx
 'use client'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Building, History, MessageSquare, AlertTriangle, DollarSign, UserCog, Phone, Mail } from 'lucide-react'
 
@@ -32,10 +33,13 @@ const TABS = [
 ] as const
 
 export default function SchoolRelationshipProfile({ organizationId }: { organizationId: string }) {
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams.get('tab') as typeof TABS[number]['key']) || 'overview'
+  const [tab, setTab] = useState<typeof TABS[number]['key']>(initialTab)
+
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<typeof TABS[number]['key']>('overview')
 
   const [showReassign, setShowReassign] = useState(false)
   const [reps, setReps] = useState<any[]>([])
