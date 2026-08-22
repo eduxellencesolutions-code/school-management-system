@@ -174,7 +174,7 @@ export default function ImportStudentsPage() {
     if (file) handleFile(file)
   }
 
-  // ✅ UPDATED: Uses server action with FormData (matching the server action signature)
+  // ✅ UPDATED: Uses server action with direct parameters (matching the updated server action signature)
   async function runImport() {
     if (!selectedGroup) { toast.error('Select a class first'); return }
     const validRows = parsed.filter(r => r._status === 'valid')
@@ -182,26 +182,25 @@ export default function ImportStudentsPage() {
 
     setImporting(true)
 
-    // ✅ Create FormData to match the server action signature
-    const formData = new FormData()
-    formData.append('group_id', selectedGroup)
-    formData.append('rows', JSON.stringify(validRows.map(r => ({
-      first_name: r.first_name,
-      last_name: r.last_name,
-      other_names: r.other_names,
-      admission_number: r.admission_number,
-      gender: r.gender,
-      date_of_birth: r.date_of_birth,
-      guardian_name: r.guardian_name,
-      guardian_phone: r.guardian_phone,
-      email: r.email,
-    }))))
+    const result = await importStudents(
+      selectedGroup,
+      validRows.map(r => ({
+        first_name: r.first_name,
+        last_name: r.last_name,
+        other_names: r.other_names,
+        admission_number: r.admission_number,
+        gender: r.gender,
+        date_of_birth: r.date_of_birth,
+        guardian_name: r.guardian_name,
+        guardian_phone: r.guardian_phone,
+        email: r.email,
+      }))
+    )
 
-    const result = await importStudents(formData)
     setImporting(false)
 
     if (!result.success) {
-      toast.error(result.message || 'Import failed')
+      toast.error(result.error || 'Import failed')
       return
     }
 
@@ -213,7 +212,6 @@ export default function ImportStudentsPage() {
       toast.error(`${result.failed} row${result.failed !== 1 ? 's' : ''} failed`)
     }
 
-    // Refresh the page after successful import
     router.refresh()
   }
 
@@ -368,7 +366,7 @@ export default function ImportStudentsPage() {
           <div>
             <p className="font-semibold text-ink">{importResults.success} students imported successfully</p>
             {importResults.failed > 0 && (
-              <p className="text-sm text-amber-700">{importResults.failed} rows failed (likely duplicate admission numbers)</p>
+              <p className="text-sm text-amber-700">{importResults.failed} row{importResults.failed !== 1 ? 's' : ''} failed. Check the server logs for the exact reason.</p>
             )}
           </div>
           <Link href={`/students?class=${selectedGroup}`} className="btn-primary btn-sm btn ml-auto">

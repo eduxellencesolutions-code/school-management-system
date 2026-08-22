@@ -139,6 +139,7 @@ export async function importStudents(groupId: string, rows: ImportRow[]): Promis
     const { error, data } = await supabase.from('learners').insert(inserts).select()
 
     if (error) {
+      console.error('Bulk import batch insert error:', error)
       failed += batch.length
     } else {
       success += data?.length ?? batch.length
