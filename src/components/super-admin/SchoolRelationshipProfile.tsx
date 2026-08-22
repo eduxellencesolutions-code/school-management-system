@@ -78,7 +78,7 @@ export default function SchoolRelationshipProfile({ organizationId }: { organiza
   if (error) return <div className="card p-6 text-red-600 max-w-md mx-auto text-center">{error}</div>
   if (!data) return null
 
-  const { school, currentRepresentative, relationship, portfolioHistory, followUps, feedback, escalations } = data
+  const { school, currentRepresentative, relationship, portfolioHistory, followUps, feedback, escalations, studentCount } = data
   const health = HEALTH_STYLE[relationship?.health_status ?? 'no_recent_contact']
 
   return (
@@ -129,6 +129,7 @@ export default function SchoolRelationshipProfile({ organizationId }: { organiza
           <dl className="grid grid-cols-2 gap-y-2 text-sm">
             <dt className="text-ink-faint">School Type</dt><dd className="text-ink capitalize">{school.type}</dd>
             <dt className="text-ink-faint">Principal / Admin</dt><dd className="text-ink">{school.principal_name ?? '—'}</dd>
+            <dt className="text-ink-faint">Students</dt><dd className="text-ink">{studentCount ?? 0}</dd>
             <dt className="text-ink-faint">Phone</dt><dd className="text-ink">{school.contact_phone ?? school.phone ?? '—'}</dd>
             <dt className="text-ink-faint">Email</dt><dd className="text-ink">{school.contact_email ?? school.email ?? '—'}</dd>
             <dt className="text-ink-faint">Address</dt><dd className="text-ink">{school.address ?? '—'}</dd>
@@ -197,6 +198,7 @@ export default function SchoolRelationshipProfile({ organizationId }: { organiza
                   <div>
                     <p className="font-medium text-ink">{t.subject}</p>
                     <p className="text-xs text-ink-faint">{new Date(t.created_at).toLocaleDateString('en-NG')} · {t.priority} · by {t.representatives?.full_name ?? 'Unknown rep'}</p>
+                    {t.attachment_url && <a href={t.attachment_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-xs text-brand-600 hover:underline">📎 View attachment</a>}
                   </div>
                   <span className={`badge text-[10px] ${t.status === 'resolved' || t.status === 'closed' ? 'badge-green' : 'badge-gray'}`}>{t.status}</span>
                 </Link>

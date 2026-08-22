@@ -27,6 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     { data: feedback },
     { data: escalations },
     { data: currentAssignment },
+    { count: studentCount },
   ] = await Promise.all([
     supabase.rpc('get_school_portfolio_history', { p_organization_id: id }),
     supabase.from('representative_follow_ups')
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq('organization_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('support_tickets')
-      .select('id, subject, status, priority, issue_type, category, created_at, resolved_at, closed_at, representatives(full_name)')
+      .select('id, subject, status, priority, issue_type, category, created_at, resolved_at, closed_at, attachment_url, representatives(full_name)')
       .eq('organization_id', id)
       .not('representative_id', 'is', null)
       .order('created_at', { ascending: false }),
@@ -47,6 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq('organization_id', id)
       .is('unassigned_at', null)
       .maybeSingle(),
+    supabase.from('learners').select('id', { count: 'exact', head: true }).eq('organization_id', id),
   ]);
 
   if (historyError) return NextResponse.json({ error: historyError.message }, { status: 500 });
@@ -72,5 +74,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     followUps: followUps ?? [],
     feedback: feedback ?? [],
     escalations: escalations ?? [],
+    studentCount: studentCount ?? 0,
   });
 }

@@ -31,6 +31,8 @@ export default function RepPerformanceList() {
                 <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Active</th>
                 <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Follow-ups</th>
                 <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Overdue</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Completed On Time</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Avg Days to Close</th>
                 <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Open Issues</th>
                 <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Resolved</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Growth Level</th>
@@ -44,6 +46,8 @@ export default function RepPerformanceList() {
                   <td className="px-4 py-3 text-center font-mono">{r.active_schools}</td>
                   <td className="px-4 py-3 text-center font-mono">{r.followups_count}</td>
                   <td className="px-4 py-3 text-center font-mono text-red-600">{r.followups_overdue}</td>
+                  <td className="px-4 py-3 text-center font-mono text-green-600">{r.followup_performance?.followups_completed_on_time ?? 0}</td>
+                  <td className="px-4 py-3 text-center font-mono">{r.followup_performance?.avg_days_to_close_followup ?? '—'}</td>
                   <td className="px-4 py-3 text-center font-mono">{r.open_escalations}</td>
                   <td className="px-4 py-3 text-center font-mono">{r.resolved_escalations}</td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{r.level?.replace(/_/g, ' ')}</td>
