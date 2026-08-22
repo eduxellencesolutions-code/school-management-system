@@ -116,6 +116,10 @@ export default function RepManagementCentre() {
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Agreement</th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Passport</th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Growth Level</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Schools</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Follow-ups</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Feedback</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Open Issues</th>
               <th className="text-center px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Qualified</th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Pending ₦</th>
               <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-muted uppercase">Actions</th>
@@ -146,6 +150,10 @@ export default function RepManagementCentre() {
                   <span className="text-xs font-medium text-ink">{r.growthLabel}</span>
                   <div className="text-xs text-ink-faint">{r.commission_rate}% · {r.qualified_customers_count} schools</div>
                 </td>
+                <td className="px-4 py-3 text-center font-mono">{r.totalSchools}</td>
+                <td className="px-4 py-3 text-center font-mono">{r.followUpsCount}</td>
+                <td className="px-4 py-3 text-center font-mono">{r.feedbackCount}</td>
+                <td className="px-4 py-3 text-center font-mono">{r.openEscalations}</td>
                 <td className="px-4 py-3 text-center font-mono">{r.qualifiedReferrals}</td>
                 <td className="px-4 py-3 text-right font-mono">₦{r.pendingCommission.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">
@@ -154,7 +162,7 @@ export default function RepManagementCentre() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-faint text-sm">No representatives match this filter.</td></tr>
+              <tr><td colSpan={13} className="px-4 py-8 text-center text-ink-faint text-sm">No representatives match this filter.</td></tr>
             )}
           </tbody>
         </table>

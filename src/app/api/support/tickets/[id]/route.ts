@@ -1,3 +1,4 @@
+// src/app/api/support/tickets/[id]/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
@@ -9,11 +10,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: ticket, error } = await supabase
     .from('support_tickets')
-    .select('id, subject, status, priority, submitted_by_user_id, assigned_to, created_at')
+    .select('id, subject, status, priority, submitted_by_user_id, assigned_to, representative_id, organization_id, created_at')
     .eq('id', id)
     .single();
 
   if (error || !ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+
+  // NEW: log the view, but only for representative escalations — this is
+  // the accountability chain doc 12 §11 asks for ("Super Admin viewed
+  // escalation"), not a general audit of every support-ticket open event.
+  if (ticket.representative_id) {
+    const { error: logError } = await supabase.rpc('log_platform_action', {
+      p_actor_id: user.id,
+      p_action: 'escalation_viewed',
+      p_target_type: 'support_tickets',
+      p_target_id: id,
+      p_reason: null,
+      p_metadata: {},
+    });
+    if (logError) console.error('Failed to log escalation view:', logError);
+  }
 
   const { data: messages } = await supabase
     .from('support_ticket_messages')
@@ -41,7 +57,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const body = await request.json();
   const { message, isInternalNote } = body;
-
   if (!message) return NextResponse.json({ error: 'Message is required' }, { status: 400 });
 
   if (isInternalNote) {
@@ -68,7 +83,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .update({ updated_at: new Date().toISOString() })
     .eq('id', id);
 
-  // ✅ Notify the customer when staff sends a real (non-internal) reply.
   if (!isInternalNote) {
     const { data: ticket } = await supabase
       .from('support_tickets')
@@ -86,7 +100,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           is_read: false,
           created_at: new Date().toISOString(),
         });
-
       if (notifError) console.error('Failed to send reply notification:', notifError);
     }
   }

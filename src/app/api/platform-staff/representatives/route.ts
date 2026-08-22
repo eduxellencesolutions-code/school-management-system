@@ -1,3 +1,4 @@
+// src/app/api/platform-staff/representatives/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
@@ -30,11 +31,27 @@ export async function GET() {
     .select('level, label, min_schools, commission_rate')
     .order('level', { ascending: true });
 
-  const [{ data: allReferrals }, { data: allCommissions }, { data: allBankAccounts }, { data: allAcceptances }] = await Promise.all([
+  const [
+    { data: allReferrals },
+    { data: allCommissions },
+    { data: allBankAccounts },
+    { data: allAcceptances },
+    { data: allAssignments },
+    { data: allFollowUps },
+    { data: allFeedback },
+    { data: allTickets },
+  ] = await Promise.all([
     repIds.length > 0 ? supabase.from('referrals').select('representative_id, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('commissions').select('representative_id, amount, status').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 ? supabase.from('bank_accounts').select('id, representative_id, bank_name, account_number, account_name, is_verified').in('representative_id', repIds) : Promise.resolve({ data: [] }),
     repIds.length > 0 && latestVersion ? supabase.from('representative_agreement_acceptances').select('representative_id, accepted_at').eq('agreement_version_id', latestVersion.id).in('representative_id', repIds) : Promise.resolve({ data: [] }),
+    // NEW: portfolio + relationship-management data, same pattern as the
+    // existing parallel queries above — one query per table, filtered
+    // to repIds, then grouped client-side per rep below.
+    repIds.length > 0 ? supabase.from('school_portfolio_assignments').select('representative_id').in('representative_id', repIds).is('unassigned_at', null) : Promise.resolve({ data: [] }),
+    repIds.length > 0 ? supabase.from('representative_follow_ups').select('representative_id').in('representative_id', repIds) : Promise.resolve({ data: [] }),
+    repIds.length > 0 ? supabase.from('school_feedback').select('representative_id').in('representative_id', repIds) : Promise.resolve({ data: [] }),
+    repIds.length > 0 ? supabase.from('support_tickets').select('representative_id, status').in('representative_id', repIds).not('representative_id', 'is', null) : Promise.resolve({ data: [] }),
   ]);
 
   function growthLevelFor(qualifiedCount: number) {
@@ -55,6 +72,14 @@ export async function GET() {
     const bankAccounts = (allBankAccounts ?? []).filter(b => b.representative_id === rep.id);
     const acceptance = (allAcceptances ?? []).find(a => a.representative_id === rep.id);
     const tier = growthLevelFor(rep.qualified_customers_count);
+
+    // NEW
+    const totalSchools = (allAssignments ?? []).filter(a => a.representative_id === rep.id).length;
+    const followUpsCount = (allFollowUps ?? []).filter(f => f.representative_id === rep.id).length;
+    const feedbackCount = (allFeedback ?? []).filter(f => f.representative_id === rep.id).length;
+    const repTickets = (allTickets ?? []).filter(t => t.representative_id === rep.id);
+    const openEscalations = repTickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length;
+
     return {
       ...rep,
       totalReferrals: referrals.length,
@@ -67,6 +92,11 @@ export async function GET() {
       agreementVersion: latestVersion?.version ?? null,
       growthLevel: tier.level,
       growthLabel: tier.label,
+      // NEW
+      totalSchools,
+      followUpsCount,
+      feedbackCount,
+      openEscalations,
     };
   });
 
