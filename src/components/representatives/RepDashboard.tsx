@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import WithdrawalPanel from './WithdrawalPanel'
 import GrowthLevelCard from './GrowthLevelCard'
 import SchoolPortfolioSummaryCard from './SchoolPortfolioSummaryCard'
+import LeaderboardCard from './LeaderboardCard'
 
 export default function RepDashboard() {
   const [data, setData] = useState<any>(null)
@@ -35,6 +36,7 @@ export default function RepDashboard() {
       </div>
 
       <GrowthLevelCard />
+      <LeaderboardCard />
 
       {/* ✅ Withdrawal Panel */}
       <WithdrawalPanel wallet={wallet} bankAccounts={bankAccounts} withdrawals={withdrawals} onRefresh={load} />

@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/rep-alerts",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/leaderboard-snapshot",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/leaderboard-recognitions",
+      "schedule": "0 3 1 * *"
     }
   ]
 }
