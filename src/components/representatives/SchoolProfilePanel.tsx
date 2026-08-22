@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Phone, Mail, MapPin, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { uploadEscalationAttachment } from '@/lib/media/uploadEscalationAttachment'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
@@ -166,24 +167,15 @@ export default function SchoolProfilePanel({ organizationId }: { organizationId:
     let attachmentUrl: string | null = null
     if (attachmentFile) {
       setUploadingAttachment(true)
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: rep } = await supabase.from('representatives').select('id').eq('user_id', user?.id).single()
-      const path = `${rep?.id}/${Date.now()}_${attachmentFile.name}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('escalation-attachments')
-        .upload(path, attachmentFile)
-
+      const tempId = crypto.randomUUID()
+      const result = await uploadEscalationAttachment(attachmentFile, organizationId, tempId)
       setUploadingAttachment(false)
 
-      if (uploadError) {
-        setMessage({ type: 'error', text: `Attachment upload failed: ${uploadError.message}` })
+      if (!result.success) {
+        setMessage({ type: 'error', text: result.error ?? 'Attachment upload failed' })
         return
       }
-
-      const { data: publicUrlData } = supabase.storage.from('escalation-attachments').getPublicUrl(path)
-      attachmentUrl = publicUrlData.publicUrl
+      attachmentUrl = result.url ?? null
     }
 
     setBusy(true); setMessage(null)
