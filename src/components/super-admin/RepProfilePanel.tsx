@@ -5,11 +5,22 @@ import { Loader2, ArrowLeft } from 'lucide-react'
 import IdCardGenerator from '@/components/representatives/IdCardGenerator'
 import RepSchoolPortfolioSection from '@/components/super-admin/RepSchoolPortfolioSection'
 
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'portfolio', label: 'School Portfolio' },
+  { key: 'idcard', label: 'ID Card' },
+  { key: 'audit', label: 'Audit Trail' },
+  { key: 'leaderboard', label: 'Leaderboard' },
+] as const
+
 export default function RepProfilePanel({ repId }: { repId: string }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [tab, setTab] = useState<typeof TABS[number]['key']>('overview')
+  const [leaderboardHistory, setLeaderboardHistory] = useState<any[]>([])
+  const [subDataLoading, setSubDataLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -19,6 +30,13 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
     setLoading(false)
   }
   useEffect(() => { load() }, [repId])
+
+  useEffect(() => {
+    if (tab === 'leaderboard' && leaderboardHistory.length === 0) {
+      setSubDataLoading(true)
+      fetch(`/api/platform-staff/leaderboard/${repId}/history`).then(r => r.json()).then(d => setLeaderboardHistory(d.history ?? [])).finally(() => setSubDataLoading(false))
+    }
+  }, [tab, repId])
 
   async function reviewPhoto(approve: boolean) {
     const declineReason = approve ? null : prompt('Reason for declining this photo?')
@@ -62,118 +80,159 @@ export default function RepProfilePanel({ repId }: { repId: string }) {
         <ArrowLeft size={14} /> Back to Representatives
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card p-5">
-          <h2 className="font-semibold text-sm text-ink mb-3">Passport Photo</h2>
-          {data.signedPhotoUrl ? (
-            <img src={data.signedPhotoUrl} alt={rep.full_name} className="w-full rounded-lg border border-surface-200" />
-          ) : (
-            <div className="aspect-square bg-surface-100 rounded-lg flex items-center justify-center text-xs text-ink-faint">
-              No photo submitted
+      <div className="flex flex-wrap gap-1 border-b border-surface-200">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`text-xs px-3 py-2 flex items-center gap-1.5 border-b-2 transition-colors ${tab === t.key ? 'border-brand-500 text-brand-600 font-medium' : 'border-transparent text-ink-muted hover:text-ink'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="card p-5">
+            <h2 className="font-semibold text-sm text-ink mb-3">Passport Photo</h2>
+            {data.signedPhotoUrl ? (
+              <img src={data.signedPhotoUrl} alt={rep.full_name} className="w-full rounded-lg border border-surface-200" />
+            ) : (
+              <div className="aspect-square bg-surface-100 rounded-lg flex items-center justify-center text-xs text-ink-faint">
+                No photo submitted
+              </div>
+            )}
+            <div className="mt-3 text-xs">
+              <span className={
+                rep.photo_status === 'approved' ? 'text-green-600 font-medium' :
+                rep.photo_status === 'rejected' ? 'text-red-600 font-medium' :
+                rep.photo_status === 'pending_review' ? 'text-amber-600 font-medium' :
+                'text-ink-faint'
+              }>
+                {rep.photo_status === 'pending_review' ? 'Pending Approval' : rep.photo_status.replace('_', ' ')}
+              </span>
+              {rep.photo_status === 'rejected' && rep.photo_rejection_reason && (
+                <p className="text-ink-faint mt-1">Reason: {rep.photo_rejection_reason}</p>
+              )}
             </div>
-          )}
-          <div className="mt-3 text-xs">
-            <span className={
-              rep.photo_status === 'approved' ? 'text-green-600 font-medium' :
-              rep.photo_status === 'rejected' ? 'text-red-600 font-medium' :
-              rep.photo_status === 'pending_review' ? 'text-amber-600 font-medium' :
-              'text-ink-faint'
-            }>
-              {rep.photo_status === 'pending_review' ? 'Pending Approval' : rep.photo_status.replace('_', ' ')}
-            </span>
-            {rep.photo_status === 'rejected' && rep.photo_rejection_reason && (
-              <p className="text-ink-faint mt-1">Reason: {rep.photo_rejection_reason}</p>
+            {rep.photo_status === 'pending_review' && (
+              <div className="flex gap-2 mt-3">
+                <button disabled={busy} onClick={() => reviewPhoto(true)} className="btn-primary btn-sm btn flex-1">Approve Photo</button>
+                <button disabled={busy} onClick={() => reviewPhoto(false)} className="btn-sm btn bg-red-50 text-red-600 flex-1">Decline Photo</button>
+              </div>
             )}
           </div>
-          {rep.photo_status === 'pending_review' && (
-            <div className="flex gap-2 mt-3">
-              <button disabled={busy} onClick={() => reviewPhoto(true)} className="btn-primary btn-sm btn flex-1">Approve Photo</button>
-              <button disabled={busy} onClick={() => reviewPhoto(false)} className="btn-sm btn bg-red-50 text-red-600 flex-1">Decline Photo</button>
+
+          <div className="card p-5 lg:col-span-2 space-y-4">
+            <div>
+              <h2 className="font-semibold text-sm text-ink mb-2">Identity</h2>
+              <dl className="grid grid-cols-2 gap-y-2 text-sm">
+                <dt className="text-ink-faint">Full Name</dt><dd className="text-ink">{rep.full_name}</dd>
+                <dt className="text-ink-faint">Representative ID</dt><dd className="text-ink font-mono">{rep.referral_code}</dd>
+                <dt className="text-ink-faint">Email</dt><dd className="text-ink">{rep.email}</dd>
+                <dt className="text-ink-faint">Phone</dt><dd className="text-ink">{rep.phone ?? '—'}</dd>
+                <dt className="text-ink-faint">Registered</dt><dd className="text-ink">{new Date(rep.joined_at).toLocaleString('en-NG')}</dd>
+                <dt className="text-ink-faint">Last Login</dt><dd className="text-ink">{data.lastLogin ? new Date(data.lastLogin).toLocaleString('en-NG') : 'Never'}</dd>
+              </dl>
             </div>
+
+            <div>
+              <h2 className="font-semibold text-sm text-ink mb-2">Verification</h2>
+              <dl className="grid grid-cols-2 gap-y-2 text-sm">
+                <dt className="text-ink-faint">Agreement</dt>
+                <dd className="text-ink">
+                  {data.agreement.accepted
+                    ? <span className="text-green-600 font-medium">Accepted (v{data.agreement.version})</span>
+                    : <span className="text-amber-600 font-medium">Not accepted</span>}
+                </dd>
+                <dt className="text-ink-faint">Accepted On</dt>
+                <dd className="text-ink">{data.agreement.acceptedAt ? new Date(data.agreement.acceptedAt).toLocaleString('en-NG') : '—'}</dd>
+              </dl>
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-sm text-ink mb-2">Performance & Growth</h2>
+              <dl className="grid grid-cols-2 gap-y-2 text-sm">
+                <dt className="text-ink-faint">Prospects</dt><dd className="text-ink">{data.referrals.length}</dd>
+                <dt className="text-ink-faint">Qualified Schools</dt><dd className="text-ink">{rep.qualified_customers_count}</dd>
+                <dt className="text-ink-faint">Commission Rate</dt><dd className="text-ink font-semibold">{rep.commission_rate}%</dd>
+                <dt className="text-ink-faint">Commission Earned</dt><dd className="text-ink">₦{Number(rep.total_commission_earned).toLocaleString()}</dd>
+                <dt className="text-ink-faint">Commission Paid</dt><dd className="text-ink">₦{Number(rep.total_commission_paid).toLocaleString()}</dd>
+                <dt className="text-ink-faint">Pending Commission</dt><dd className="text-ink">₦{data.pendingCommission.toLocaleString()}</dd>
+              </dl>
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-sm text-ink mb-2">Account Controls</h2>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                rep.status === 'active' ? 'bg-green-50 text-green-600' :
+                rep.status === 'suspended' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'
+              }`}>{rep.status}</span>
+              <input
+                placeholder="Reason (required for suspend/terminate)"
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm mt-2"
+              />
+              <div className="flex gap-2 mt-2">
+                {rep.status !== 'active' && <button disabled={busy} onClick={() => changeStatus('active')} className="btn-sm btn bg-green-50 text-green-600">Reactivate</button>}
+                {rep.status !== 'suspended' && <button disabled={busy} onClick={() => changeStatus('suspended')} className="btn-sm btn bg-amber-50 text-amber-600">Suspend</button>}
+                {rep.status !== 'terminated' && <button disabled={busy} onClick={() => changeStatus('terminated')} className="btn-sm btn bg-red-50 text-red-600">Terminate</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'portfolio' && (
+        <RepSchoolPortfolioSection repId={repId} />
+      )}
+
+      {tab === 'idcard' && (
+        <div className="card p-5">
+          <h2 className="font-semibold text-sm text-ink mb-3">Representative ID Card</h2>
+          <IdCardGenerator apiUrl={`/api/platform-staff/representatives/${repId}/id-card`} />
+        </div>
+      )}
+
+      {tab === 'audit' && (
+        <div className="card p-5">
+          <h2 className="font-semibold text-sm text-ink mb-3">Approval History / Audit Trail</h2>
+          {data.auditHistory.length > 0 ? (
+            <div className="divide-y divide-surface-100">
+              {data.auditHistory.map((a: any) => (
+                <div key={a.id} className="py-2 text-sm">
+                  <span className="text-ink font-medium">{a.action.replace(/_/g, ' ')}</span>
+                  <span className="text-ink-faint"> by {a.actorName} · {new Date(a.created_at).toLocaleString('en-NG')}</span>
+                  {a.reason && <p className="text-xs text-ink-muted mt-0.5">Reason: {a.reason}</p>}
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-xs text-ink-faint">No actions recorded yet.</p>}
+        </div>
+      )}
+
+      {tab === 'leaderboard' && (
+        <div className="card p-5">
+          {subDataLoading ? <Loader2 className="animate-spin" size={16} /> : leaderboardHistory.length === 0 ? (
+            <p className="text-xs text-ink-faint">No leaderboard snapshots for this representative yet.</p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1 mb-3">
+                {leaderboardHistory.map((h: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs text-ink-muted py-1 border-b border-surface-50">
+                    <span>{new Date(h.snapshot_date).toLocaleDateString('en-NG')}</span>
+                    <span>#{h.rank}</span>
+                    <span className="font-mono">{h.performance_score} pts</span>
+                  </div>
+                ))}
+              </div>
+              <Link href={`/representatives/leaderboard/${repId}`} className="text-xs text-brand-600 hover:underline">View full score breakdown →</Link>
+            </>
           )}
         </div>
-
-        <div className="card p-5 lg:col-span-2 space-y-4">
-          <div>
-            <h2 className="font-semibold text-sm text-ink mb-2">Identity</h2>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-ink-faint">Full Name</dt><dd className="text-ink">{rep.full_name}</dd>
-              <dt className="text-ink-faint">Representative ID</dt><dd className="text-ink font-mono">{rep.referral_code}</dd>
-              <dt className="text-ink-faint">Email</dt><dd className="text-ink">{rep.email}</dd>
-              <dt className="text-ink-faint">Phone</dt><dd className="text-ink">{rep.phone ?? '—'}</dd>
-              <dt className="text-ink-faint">Registered</dt><dd className="text-ink">{new Date(rep.joined_at).toLocaleString('en-NG')}</dd>
-              <dt className="text-ink-faint">Last Login</dt><dd className="text-ink">{data.lastLogin ? new Date(data.lastLogin).toLocaleString('en-NG') : 'Never'}</dd>
-            </dl>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-sm text-ink mb-2">Verification</h2>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-ink-faint">Agreement</dt>
-              <dd className="text-ink">
-                {data.agreement.accepted
-                  ? <span className="text-green-600 font-medium">Accepted (v{data.agreement.version})</span>
-                  : <span className="text-amber-600 font-medium">Not accepted</span>}
-              </dd>
-              <dt className="text-ink-faint">Accepted On</dt>
-              <dd className="text-ink">{data.agreement.acceptedAt ? new Date(data.agreement.acceptedAt).toLocaleString('en-NG') : '—'}</dd>
-            </dl>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-sm text-ink mb-2">Performance & Growth</h2>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-ink-faint">Prospects</dt><dd className="text-ink">{data.referrals.length}</dd>
-              <dt className="text-ink-faint">Qualified Schools</dt><dd className="text-ink">{rep.qualified_customers_count}</dd>
-              <dt className="text-ink-faint">Commission Rate</dt><dd className="text-ink font-semibold">{rep.commission_rate}%</dd>
-              <dt className="text-ink-faint">Commission Earned</dt><dd className="text-ink">₦{Number(rep.total_commission_earned).toLocaleString()}</dd>
-              <dt className="text-ink-faint">Commission Paid</dt><dd className="text-ink">₦{Number(rep.total_commission_paid).toLocaleString()}</dd>
-              <dt className="text-ink-faint">Pending Commission</dt><dd className="text-ink">₦{data.pendingCommission.toLocaleString()}</dd>
-            </dl>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-sm text-ink mb-2">Account Controls</h2>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-              rep.status === 'active' ? 'bg-green-50 text-green-600' :
-              rep.status === 'suspended' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'
-            }`}>{rep.status}</span>
-            <input
-              placeholder="Reason (required for suspend/terminate)"
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm mt-2"
-            />
-            <div className="flex gap-2 mt-2">
-              {rep.status !== 'active' && <button disabled={busy} onClick={() => changeStatus('active')} className="btn-sm btn bg-green-50 text-green-600">Reactivate</button>}
-              {rep.status !== 'suspended' && <button disabled={busy} onClick={() => changeStatus('suspended')} className="btn-sm btn bg-amber-50 text-amber-600">Suspend</button>}
-              {rep.status !== 'terminated' && <button disabled={busy} onClick={() => changeStatus('terminated')} className="btn-sm btn bg-red-50 text-red-600">Terminate</button>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <RepSchoolPortfolioSection repId={repId} />
-
-      <div className="card p-5">
-        <h2 className="font-semibold text-sm text-ink mb-3">Representative ID Card</h2>
-        <IdCardGenerator apiUrl={`/api/platform-staff/representatives/${repId}/id-card`} />
-      </div>
-
-      <div className="card p-5">
-        <h2 className="font-semibold text-sm text-ink mb-3">Approval History / Audit Trail</h2>
-        {data.auditHistory.length > 0 ? (
-          <div className="divide-y divide-surface-100">
-            {data.auditHistory.map((a: any) => (
-              <div key={a.id} className="py-2 text-sm">
-                <span className="text-ink font-medium">{a.action.replace(/_/g, ' ')}</span>
-                <span className="text-ink-faint"> by {a.actorName} · {new Date(a.created_at).toLocaleString('en-NG')}</span>
-                {a.reason && <p className="text-xs text-ink-muted mt-0.5">Reason: {a.reason}</p>}
-              </div>
-            ))}
-          </div>
-        ) : <p className="text-xs text-ink-faint">No actions recorded yet.</p>}
-      </div>
+      )}
     </div>
   )
 }
