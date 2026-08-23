@@ -61,6 +61,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
 
   const studentLifeNav = [
     ...(has('basic_attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
+    ...(has('basic_attendance') ? [{ label: 'Attendance Reports', href: '/attendance/reports', icon: FileText }] : []),
     ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
