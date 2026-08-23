@@ -33,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'rep-feedback', href: '/representatives/feedback', label: 'Feedback', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
   { key: 'rep-escalations', href: '/representatives/escalations', label: 'Escalations', section: 'more', requiredPermission: 'support.view', group: 'representatives' },
   { key: 'resources', href: '/resources', label: 'Rep Resources', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-leaderboard', href: '/representatives/leaderboard', label: 'Leaderboard', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
   { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
