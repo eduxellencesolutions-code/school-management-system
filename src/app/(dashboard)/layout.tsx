@@ -50,7 +50,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const subState = await getSubscriptionState(supabase, authUser.id)
 
   // Real plan-feature lookup (backend-driven)
-  const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan)
+  // Pass org.id so feature_overrides are merged correctly
+  const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan, org?.id)
 
   // Real permission set, computed once, mirroring has_permission() exactly.
   // Sidebar uses this only for what to SHOW -- every route/page still enforces
