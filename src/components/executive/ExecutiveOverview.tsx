@@ -2,6 +2,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Loader2, Users, UserPlus, UserMinus, GraduationCap, CalendarCheck, Wallet, AlertTriangle, BookOpen } from 'lucide-react'
+import ClassHealthTable from './ClassHealthTable'
+import DefaultersPanel from './DefaultersPanel'
+import StudentMovement from './StudentMovement'
+import AttendanceIntelligence from './AttendanceIntelligence'
 
 function naira(n: number) {
   return `₦${Math.round(n).toLocaleString('en-NG')}`
@@ -11,6 +15,7 @@ export default function ExecutiveOverview() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     fetch('/api/executive/overview')
@@ -67,6 +72,15 @@ export default function ExecutiveOverview() {
           </p>
         </div>
       )}
+
+      <ClassHealthTable onSelectClass={(id, name) => setSelectedGroup({ id, name })} />
+      <DefaultersPanel 
+        groupId={selectedGroup?.id ?? null} 
+        className={selectedGroup?.name ?? null} 
+        onClose={() => setSelectedGroup(null)} 
+      />
+      <StudentMovement />
+      <AttendanceIntelligence />
     </div>
   )
 }
