@@ -1,4 +1,4 @@
-﻿import { createServerClient } from '@supabase/ssr'
+\import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { NAV_ITEMS } from '@/lib/auth/navConfig'
@@ -68,11 +68,10 @@ export async function middleware(request: NextRequest) {
 
   // Use getClaims() instead of getUser() to avoid refresh token issues
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
-
-  console.log('[middleware] host:', hostname, 'path:', pathname)
-  console.log('[middleware] cookies seen:', request.cookies.getAll().map(c => c.name))
+  
+  // 🔍 DEBUG: Log the exact error to Vercel logs
   console.log('[middleware] claimsError:', claimsError)
-  console.log('[middleware] claimsData present:', !!claimsData?.claims)
+  console.log('[middleware] claimsData:', claimsData)
 
   if (claimsError || !claimsData?.claims) {
     return NextResponse.redirect(new URL('/login', request.url))
