@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getCachedUser } from '@/lib/supabase/getCachedUser'
 import { getUserWorkspaces, Workspace } from '@/lib/workspaces/getUserWorkspaces'
 import Link from 'next/link'
 import { School, Handshake, ShieldCheck, GraduationCap } from 'lucide-react'
@@ -23,7 +24,7 @@ const ICON_STYLES: Record<Workspace['type'], string> = {
 
 export default async function WorkspacesPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getCachedUser()
   if (!user) redirect('/login')
 
   const workspaces = await getUserWorkspaces(supabase, user.id)

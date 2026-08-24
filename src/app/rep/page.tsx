@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getCachedUser } from '@/lib/supabase/getCachedUser'
 import Link from 'next/link'
 import { TicketIcon, GraduationCap, BookOpen, CreditCard, Building2 } from 'lucide-react'
 import RepDashboard from '@/components/representatives/RepDashboard'
@@ -9,7 +10,7 @@ import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
 
 export default async function RepPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getCachedUser()
   if (!user) redirect('/login')
 
   const { data: rep } = await supabase

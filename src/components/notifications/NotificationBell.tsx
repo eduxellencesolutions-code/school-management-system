@@ -1,4 +1,5 @@
 'use client'
+import { getCachedUser } from '@/lib/supabase/getCachedUser';
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -69,7 +70,7 @@ export default function NotificationBell() {
   async function fetchNotifications() {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getCachedUser()
       if (!user) return
 
       const { data, error } = await supabase
@@ -92,7 +93,7 @@ export default function NotificationBell() {
 
   async function markAsRead(notificationId: string) {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getCachedUser()
       if (!user) return
 
       const { error } = await supabase
@@ -118,7 +119,7 @@ export default function NotificationBell() {
 
   async function markAllAsRead() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await getCachedUser()
       if (!user) return
 
       const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)

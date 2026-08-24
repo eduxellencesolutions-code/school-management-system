@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getCachedUser } from '@/lib/supabase/getCachedUser'
 import SuperAdminShell from '@/components/super-admin/SuperAdminShell'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 
@@ -13,7 +14,7 @@ export default async function SuperAdminLayout({
 }) {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getCachedUser()
   if (!user) redirect('/login')
 
   const access = await getStaffAccess(supabase, user.id)

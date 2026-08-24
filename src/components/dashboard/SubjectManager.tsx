@@ -1,4 +1,5 @@
 'use client'
+import { getCachedUser } from '@/lib/supabase/getCachedUser';
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -35,7 +36,7 @@ export default function SubjectManager({ groupId, subjects, templates }: Props) 
     if (!name.trim()) { toast.error('Subject name is required'); return }
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getCachedUser()
     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
 
     const { error } = await supabase.from('subjects').insert({

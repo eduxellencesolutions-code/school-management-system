@@ -1,4 +1,5 @@
 'use client'
+import { getCachedUser } from '@/lib/supabase/getCachedUser';
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
