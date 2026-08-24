@@ -8,15 +8,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAdminHost = hostname.startsWith('admin.')
 
-  // ONE-TIME CLEANUP: purge legacy .eduxellence.org-scoped auth cookies.
-  // Remove this block ~2 weeks after deploy once old cookies have expired.
-  const legacyDomainCookies = request.cookies.getAll().filter(c => c.name.startsWith('sb-'))
   let response = NextResponse.next({ request })
-  if (legacyDomainCookies.length > 0) {
-    legacyDomainCookies.forEach(c => {
-      response.cookies.set(c.name, '', { maxAge: 0, domain: '.eduxellence.org', path: '/' })
-    })
-  }
 
   // Skip session-refresh logic entirely for Next.js Link prefetch requests.
   // These fire silently in the background for every visible link and can
@@ -55,7 +47,6 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          // Mirror cookies onto request before rebuilding response
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -68,11 +59,6 @@ export async function middleware(request: NextRequest) {
 
   // Use getClaims() instead of getUser() to avoid refresh token issues
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
-
-  console.log('[middleware] host:', hostname, 'path:', pathname)
-  console.log('[middleware] cookies seen:', request.cookies.getAll().map(c => c.name))
-  console.log('[middleware] claimsError:', claimsError)
-  console.log('[middleware] claimsData present:', !!claimsData?.claims)
 
   if (claimsError || !claimsData?.claims) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -99,16 +85,12 @@ export async function middleware(request: NextRequest) {
     const ADMIN_PATHS = NAV_ITEMS.map(i => i.href)
     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
-    // ✅ UPDATED: Fallback redirect from /overview to /welcome
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
       const url = request.nextUrl.clone()
       url.pathname = '/welcome'
       return NextResponse.rewrite(url)
     }
 
-    // Single source of truth for per-page access — same map that drives the
-    // nav in SuperAdminShell. A link visible in nav is guaranteed reachable,
-    // and no page-level check can silently disagree with it anymore.
     if (!isSuperAdmin) {
       const matchedItem = NAV_ITEMS.find(
         item => pathname === item.href || pathname.startsWith(item.href + '/')
