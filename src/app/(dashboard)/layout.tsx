@@ -67,7 +67,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .maybeSingle()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-50">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-surface-50">
       <Sidebar
         user={user ?? {
           id: authUser.id,

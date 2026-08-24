@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 
-// Only share the cookie across subdomains on the real production domain —
+// Only share the cookie across subdomains on the real production domain -
 // leaves localhost/dev untouched, where a domain-scoped cookie would just
 // silently fail to set.
 function getCookieDomain(host: string | null): string | undefined {

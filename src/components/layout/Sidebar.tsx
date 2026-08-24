@@ -120,7 +120,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
       {/* Mobile top bar with hamburger — only visible below md breakpoint.
           Adjust/remove this if your app already has its own mobile header;
           in that case just wire that header's menu button to setIsOpen(true). */}
-      <div className="md:hidden flex items-center justify-between px-4 h-12 border-b border-surface-200 bg-white sticky top-0 z-30">
+      <div className="md:hidden w-full shrink-0 flex items-center justify-between px-4 h-12 border-b border-surface-200 bg-white sticky top-0 z-30">
         <span className="font-bold text-sm text-ink">
           Eduxellence <span className="text-brand-500">Results</span>
         </span>

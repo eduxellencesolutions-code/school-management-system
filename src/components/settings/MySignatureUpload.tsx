@@ -1,5 +1,4 @@
 'use client'
-import { getCachedUser } from '@/lib/supabase/getCachedUser';
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -32,7 +31,7 @@ export default function MySignatureUpload({ currentSignatureUrl }: Props) {
 
     setUploading(true)
     try {
-      const { data: { user } } = await getCachedUser()
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
       
       // Generate unique file path
