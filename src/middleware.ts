@@ -16,6 +16,20 @@ export async function middleware(request: NextRequest) {
   const isAdminHost = hostname.startsWith('admin.')
   const cookieDomain = getCookieDomain(hostname)
 
+  // Skip session-refresh logic entirely for Next.js Link prefetch requests.
+  // These fire silently in the background for every visible link and can
+  // race against a real navigation's refresh token, causing spurious
+  // "refresh_token_not_found" sign-outs. Prefetch requests don't need
+  // to run auth checks — the actual navigation request will.
+  const isPrefetch =
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch' ||
+    request.headers.get('sec-purpose')?.includes('prefetch')
+
+  if (isPrefetch) {
+    return NextResponse.next()
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
