@@ -56,6 +56,11 @@ export async function middleware(request: NextRequest) {
 
   // Use getClaims() instead of getUser() to avoid refresh token issues
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+  
+  // 🔍 DEBUG: Log the exact error to Vercel logs
+  console.log('[middleware] claimsError:', claimsError)
+  console.log('[middleware] claimsData:', claimsData)
+
   if (claimsError || !claimsData?.claims) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
