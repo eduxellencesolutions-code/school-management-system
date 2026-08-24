@@ -40,6 +40,8 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          // Mirror cookies onto request before rebuilding response
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, {
@@ -52,10 +54,12 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  // Use getClaims() instead of getUser() to avoid refresh token issues
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+  if (claimsError || !claimsData?.claims) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
+  const userId = claimsData.claims.sub
 
   if (isAdminHost) {
     const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
@@ -64,7 +68,7 @@ export async function middleware(request: NextRequest) {
       : await supabase
           .from('platform_staff')
           .select('id, status')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('status', 'active')
           .maybeSingle()
 
@@ -80,7 +84,7 @@ export async function middleware(request: NextRequest) {
     // ✅ UPDATED: Fallback redirect from /overview to /welcome
     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
       const url = request.nextUrl.clone()
-      url.pathname = '/welcome'  // ✅ Changed from '/overview'
+      url.pathname = '/welcome'
       return NextResponse.rewrite(url)
     }
 
@@ -94,18 +98,18 @@ export async function middleware(request: NextRequest) {
 
       if (matchedItem?.superAdminOnly) {
         const url = request.nextUrl.clone()
-        url.pathname = '/welcome'  // ✅ Changed from '/overview'
+        url.pathname = '/welcome'
         return NextResponse.rewrite(url)
       }
 
       if (matchedItem?.requiredPermission) {
         const { data: hasPermission } = await supabase.rpc('has_platform_permission', {
-          p_user_id: user.id,
+          p_user_id: userId,
           p_permission_key: matchedItem.requiredPermission,
         })
         if (!hasPermission) {
           const url = request.nextUrl.clone()
-          url.pathname = '/welcome'  // ✅ Changed from '/overview'
+          url.pathname = '/welcome'
           return NextResponse.rewrite(url)
         }
       }
