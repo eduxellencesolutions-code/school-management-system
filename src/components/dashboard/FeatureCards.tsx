@@ -13,9 +13,6 @@ interface Props {
   isSoloTeacher: boolean
   planFeatures: string[]
   currentPlanKey: string
-  // Real, table-derived minimum required plan per feature key. No more
-  // hardcoded "requiredPlan: 'Small School'" strings that can drift out of
-  // sync with the actual plan_features table.
   requiredPlanMap: Record<string, InstitutionPlanKey | null>
 }
 
@@ -35,10 +32,6 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
 
   if (isSoloTeacher) return null
 
-  // Card keys below are real plan_features.feature_key values -- verified
-  // against the actual table, not guessed. Previously several of these
-  // ('attendance', 'promotion', see below) did not match any row in the
-  // table at all, meaning has(key) was always false for every plan.
   const allCards = [
     {
       key: 'basic_attendance',
@@ -88,7 +81,7 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Lock,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
-      adminOnly: true, // role gate, not a plan gate -- no table entry, always unlocked for admins
+      adminOnly: true,
     },
     {
       key: 'promotion_wizard',
@@ -108,7 +101,7 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Users,
       color: 'text-brand-600',
       bg: 'bg-brand-50',
-      adminOnly: true, // role gate, no table entry
+      adminOnly: true,
     },
     {
       key: 'announcements',
@@ -118,10 +111,10 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
       icon: Megaphone,
       color: 'text-orange-600',
       bg: 'bg-orange-50',
-      adminOnly: true, // role gate, no table entry
+      adminOnly: true,
     },
     {
-      key: 'promotion_wizard', // same underlying capability as Promotion Center, correctly using the real key directly now
+      key: 'promotion_wizard',
       label: 'Promotion Rules',
       description: 'Set criteria for promotion recommendations',
       href: '/promotion/rules',
@@ -181,17 +174,17 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
                   {unlocked ? <Icon size={16} className={card.color} /> : <Lock size={14} className="text-ink-faint" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <p className={`text-sm font-medium transition-colors ${unlocked ? 'text-ink group-hover:text-brand-700' : 'text-ink-faint'}`}>
                       {card.label}
                     </p>
                     {!unlocked && (
-                      <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                         {requiredPlanLabel(card)}
                       </span>
                     )}
                     {unlocked && currentPlanKey === 'founding_500' && (
-                      <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                         Included with Founding 500
                       </span>
                     )}

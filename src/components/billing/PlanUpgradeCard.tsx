@@ -59,7 +59,7 @@ export default function PlanUpgradeCard({ plan, label }: Props) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-1">
           <span className="text-lg font-bold text-ink">{symbol}{price.toLocaleString()}</span>
           <span className="text-xs text-ink-muted">/ {cycle === 'annual' ? 'year' : 'term'}</span>

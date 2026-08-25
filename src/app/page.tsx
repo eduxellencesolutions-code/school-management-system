@@ -4,22 +4,22 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Nav */}
-      <nav className="border-b border-surface-200 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="font-bold text-xl text-ink">
+      <nav className="border-b border-surface-200 px-4 sm:px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="font-bold text-lg sm:text-xl text-ink shrink-0">
             Eduxellence <span className="text-brand-500">Results</span>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="#features" className="text-sm text-ink-muted hover:text-ink transition-colors">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="#features" className="hidden sm:inline text-sm text-ink-muted hover:text-ink transition-colors">
               Features
             </Link>
-            <Link href="#pricing" className="text-sm text-ink-muted hover:text-ink transition-colors">
+            <Link href="#pricing" className="hidden sm:inline text-sm text-ink-muted hover:text-ink transition-colors">
               Pricing
             </Link>
-            <Link href="/login" className="btn-secondary btn-sm btn">
+            <Link href="/login" className="btn-secondary btn-sm btn whitespace-nowrap">
               Sign in
             </Link>
-            <Link href="/signup" className="btn-primary btn-sm btn">
+            <Link href="/signup" className="btn-primary btn-sm btn whitespace-nowrap">
               Get started free
             </Link>
           </div>
