@@ -149,13 +149,15 @@ export async function createGroup(formData: FormData) {
   const type = formData.get('type') as string
   const sessionId = (formData.get('session_id') as string) || null
   const termId = (formData.get('term_id') as string) || null
+  const section = (formData.get('section') as string) || null
+  const arm = (formData.get('arm') as string)?.trim() || null
 
   if (!name) {
     console.log('❌ [createGroup] Missing class name')
     redirect('/classes/new?error=missing_name')
   }
 
-  console.log('📝 [createGroup] Inserting class:', { name, code, type, sessionId, termId, organization_id: profile?.organization_id ?? null })
+  console.log('📝 [createGroup] Inserting class:', { name, code, type, sessionId, termId, section, arm, organization_id: profile?.organization_id ?? null })
 
   const { data: group, error } = await supabase
     .from('groups')
@@ -167,6 +169,8 @@ export async function createGroup(formData: FormData) {
       instructor_id: user.id,
       session_id: sessionId,
       term_id: termId,
+      section,
+      arm,
       is_active: true,
     })
     .select()

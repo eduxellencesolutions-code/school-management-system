@@ -15,6 +15,8 @@ const schema = z.object({
   type: z.enum(['class', 'course', 'department']),
   session_id: z.string().optional(),
   term_id: z.string().optional(),
+  section: z.enum(['nursery', 'primary', 'secondary', '']).optional(),
+  arm: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -76,6 +78,8 @@ export default function NewClassPage() {
       fd.set('type', data.type)
       if (data.session_id) fd.set('session_id', data.session_id)
       if (data.term_id) fd.set('term_id', data.term_id)
+      if (data.section) fd.set('section', data.section)
+      if (data.arm) fd.set('arm', data.arm)
       
       // ✅ Call server action directly — redirects will work via Next.js
       await createGroup(fd)
@@ -126,6 +130,22 @@ export default function NewClassPage() {
         <div>
           <label className="block text-sm font-medium text-ink mb-1">Class code (optional)</label>
           <input type="text" placeholder="e.g. JSS2A" className="input" {...register('code')} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Section (optional)</label>
+            <select className="input" {...register('section')}>
+              <option value="">Not set</option>
+              <option value="nursery">Nursery</option>
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Arm (optional)</label>
+            <input type="text" placeholder="e.g. A, B, Gold" className="input" {...register('arm')} />
+          </div>
         </div>
 
         <div>
