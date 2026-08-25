@@ -84,6 +84,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
 
   const governanceNav = [
     ...(isAdmin || canDo('executive.view_overview') ? [{ label: 'Executive Dashboard', href: '/executive', icon: TrendingUp }] : []),
+    ...(isAdmin || canDo('executive.view_overview') ? [{ label: 'Executive Notifications', href: '/executive/notifications', icon: Megaphone }] : []),
     ...(isAdmin ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
     ...(isAdmin ? [{ label: 'Parent Management', href: '/parents', icon: Users }] : []),
     ...(isAdmin && has('promotion_wizard') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),

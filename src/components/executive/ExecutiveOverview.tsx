@@ -6,6 +6,8 @@ import ClassHealthTable from './ClassHealthTable'
 import DefaultersPanel from './DefaultersPanel'
 import StudentMovement from './StudentMovement'
 import AttendanceIntelligence from './AttendanceIntelligence'
+import NeedsAttentionPanel from './NeedsAttentionPanel'
+import WeeklyBrief from './WeeklyBrief'
 
 function naira(n: number) {
   return `₦${Math.round(n).toLocaleString('en-NG')}`
@@ -44,6 +46,7 @@ export default function ExecutiveOverview() {
 
   return (
     <div className="flex flex-col gap-6">
+      <NeedsAttentionPanel />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="card p-4">
@@ -81,6 +84,7 @@ export default function ExecutiveOverview() {
       />
       <StudentMovement />
       <AttendanceIntelligence />
+      <WeeklyBrief />
     </div>
   )
 }
