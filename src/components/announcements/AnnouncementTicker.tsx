@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { Megaphone, X } from 'lucide-react'
@@ -18,7 +17,6 @@ export default function AnnouncementTicker() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [dismissedSession, setDismissedSession] = useState(false)
   const [loading, setLoading] = useState(true)
-
   const isPublicPath = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
   useEffect(() => {
@@ -40,11 +38,11 @@ export default function AnnouncementTicker() {
     .join('     •     ')
 
   return (
-    <div className="sticky top-0 z-50 bg-brand-600 text-white overflow-hidden flex items-center h-9">
+    <div className="sticky top-0 z-50 bg-brand-600 text-white overflow-hidden flex items-center h-9 w-full max-w-full">
       <div className="flex items-center gap-2 px-3 shrink-0 bg-brand-700 h-full z-10">
         <Megaphone size={14} />
       </div>
-      <div className="flex-1 overflow-hidden whitespace-nowrap relative h-full flex items-center">
+      <div className="flex-1 min-w-0 overflow-hidden whitespace-nowrap relative h-full flex items-center">
         <div className="inline-block animate-[ticker_30s_linear_infinite] whitespace-nowrap text-sm font-medium px-4">
           {combined}
           <span className="px-8">•</span>

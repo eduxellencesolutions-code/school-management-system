@@ -11,7 +11,6 @@ const inter = Inter({
   variable: '--font-inter',
   display: 'swap',
 })
-
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
@@ -92,7 +91,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body>
+      <body className="overflow-x-hidden w-full max-w-[100vw]">
         {/* ✅ Global Announcement Ticker */}
         <AnnouncementTicker />
         {/* ✅ Tawk.to live chat */}

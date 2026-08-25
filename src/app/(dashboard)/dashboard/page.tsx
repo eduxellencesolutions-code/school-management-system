@@ -405,10 +405,10 @@ export default async function DashboardPage() {
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
-          <p className="page-subtitle">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="page-title break-words">{greeting}, {user?.name?.split(' ')[0]} 👋</h1>
+          <p className="page-subtitle break-words">
             {roleDisplay} • {hasSubjectsOnly
               ? `You teach ${assignedSubjects.length} subject${assignedSubjects.length > 1 ? 's' : ''}`
               : `Here's what's happening with your classes today.`
@@ -434,7 +434,7 @@ export default async function DashboardPage() {
           )}
         </div>
         {(isSoloTeacher || isInstitutionAdmin) && (
-          <Link href="/classes/new" className="btn-primary btn">+ New Class</Link>
+          <Link href="/classes/new" className="btn-primary btn shrink-0">+ New Class</Link>
         )}
       </div>
 
