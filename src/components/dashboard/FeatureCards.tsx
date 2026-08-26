@@ -179,12 +179,12 @@ export default function FeatureCards({ isAdmin, isSoloTeacher, planFeatures, cur
                       {card.label}
                     </p>
                     {!unlocked && (
-                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                      <span className="max-w-full text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-normal break-words">
                         {requiredPlanLabel(card)}
                       </span>
                     )}
                     {unlocked && currentPlanKey === 'founding_500' && (
-                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                      <span className="max-w-full text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-100 text-green-700 whitespace-normal break-words">
                         Included with Founding 500
                       </span>
                     )}
