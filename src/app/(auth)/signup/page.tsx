@@ -383,7 +383,7 @@ function SignupForm() {
             </div>
 
             <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
-              Starts on <strong>Small School plan</strong>. Upgrade anytime from Settings.
+              Starts on <strong>Free plan</strong> — 1 class, up to 30 students. Have a referral code from a rep? Enter it on the previous step and we'll follow up about Founding 500 access. Upgrade anytime from Settings.
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary btn mt-2">
