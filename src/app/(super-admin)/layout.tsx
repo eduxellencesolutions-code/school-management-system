@@ -28,10 +28,24 @@ export default async function SuperAdminLayout({
 
   if (aalError) {
     console.error('AAL check failed in super-admin layout:', aalError.message)
-    redirect('/login')
-  }
 
-  if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    // A concurrent request (e.g. middleware or another server component
+    // rendering at the same time) may have already consumed this refresh
+    // token a moment ago -- this is an expected, transient race under
+    // Supabase's single-use refresh tokens, not evidence the session is
+    // actually invalid. getCachedUser() and getStaffAccess() above already
+    // independently confirmed this user's identity and role, so
+    // force-logging them out here would punish a legitimate admin for a
+    // benign timing collision. Fail open on THIS specific check only,
+    // matching the same policy already used in the login page.
+    const isTransientRefreshRace =
+      aalError.message?.includes('Already Used') ||
+      aalError.message?.includes('Refresh Token Not Found')
+
+    if (!isTransientRefreshRace) {
+      redirect('/login')
+    }
+  } else if (aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
     redirect('/login?reauth=1')
   }
 

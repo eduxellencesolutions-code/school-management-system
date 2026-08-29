@@ -1,36 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  let user
-  try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const { user, transient } = await getAuthenticatedUser(supabase)
 
-    if (error) {
-      // A concurrent request (e.g. the main page load) may have already
-      // consumed this refresh token a moment ago. This is an expected,
-      // transient race under Supabase's single-use refresh tokens, not a
-      // real auth failure -- the browser's cookie will be caught up by
-      // the winning request momentarily. Respond quietly instead of
-      // crashing/logging noise; the ticker will just retry on next mount.
-      if (error.code === 'refresh_token_already_used' || error.code === 'refresh_token_not_found') {
-        return NextResponse.json({ announcements: [] }, { status: 200 })
-      }
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-    user = data.user
-  } catch (err: any) {
-    if (err?.code === 'refresh_token_already_used' || err?.code === 'refresh_token_not_found') {
-      return NextResponse.json({ announcements: [] }, { status: 200 })
-    }
-    throw err
+  if (!user) {
+    // A transient refresh-token race just means "try again shortly" --
+    // respond quietly instead of a hard 401 that gets logged as a real
+    // auth failure. The ticker will just pick up announcements on its
+    // next poll a few seconds later.
+    if (transient) return NextResponse.json({ announcements: [] }, { status: 200 })
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-
-  const supabase = await createClient()
   const audiences = new Set<string>(['all'])
 
   const { data: userRow } = await supabase
