@@ -24,11 +24,21 @@ export default function AnnouncementTicker() {
       setLoading(false)
       return
     }
-    fetch('/api/announcements/active')
-      .then(r => (r.ok ? r.json() : { announcements: [] }))
-      .then(data => setAnnouncements(data.announcements ?? []))
-      .catch(() => setAnnouncements([]))
-      .finally(() => setLoading(false))
+
+    // Delay slightly so this fetch doesn't race the main page navigation's
+    // own auth/token-refresh check -- both hitting the server at the exact
+    // same instant is what was causing intermittent
+    // "refresh_token_already_used" errors. A short delay lets the page's
+    // own request resolve (and refresh the token if needed) first.
+    const timer = setTimeout(() => {
+      fetch('/api/announcements/active')
+        .then(r => (r.ok ? r.json() : { announcements: [] }))
+        .then(data => setAnnouncements(data.announcements ?? []))
+        .catch(() => setAnnouncements([]))
+        .finally(() => setLoading(false))
+    }, 800)
+
+    return () => clearTimeout(timer)
   }, [isPublicPath])
 
   if (isPublicPath || loading || dismissedSession || announcements.length === 0) return null

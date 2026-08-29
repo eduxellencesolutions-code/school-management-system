@@ -3,10 +3,34 @@ import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  let user
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+
+    if (error) {
+      // A concurrent request (e.g. the main page load) may have already
+      // consumed this refresh token a moment ago. This is an expected,
+      // transient race under Supabase's single-use refresh tokens, not a
+      // real auth failure -- the browser's cookie will be caught up by
+      // the winning request momentarily. Respond quietly instead of
+      // crashing/logging noise; the ticker will just retry on next mount.
+      if (error.code === 'refresh_token_already_used' || error.code === 'refresh_token_not_found') {
+        return NextResponse.json({ announcements: [] }, { status: 200 })
+      }
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    user = data.user
+  } catch (err: any) {
+    if (err?.code === 'refresh_token_already_used' || err?.code === 'refresh_token_not_found') {
+      return NextResponse.json({ announcements: [] }, { status: 200 })
+    }
+    throw err
+  }
+
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
+  const supabase = await createClient()
   const audiences = new Set<string>(['all'])
 
   const { data: userRow } = await supabase
@@ -65,7 +89,6 @@ export async function GET() {
     .filter(a => !a.expires_at || new Date(a.expires_at).getTime() > now)
     .slice(0, 10)
 
-  // ── Auto-generated system messages, personalized per persona ──
   const systemEntries: typeof announcements = []
   let urgentShown = false
 
