@@ -4,12 +4,13 @@ import { redirect } from 'next/navigation'
 import { Building, Users, GraduationCap, FileText, TrendingUp, AlertTriangle, DollarSign, UserPlus, AlertCircle, Clock, Ticket } from 'lucide-react'
 import Link from 'next/link'
 import { getStaffAccess, getStaffLandingPath } from '@/lib/auth/getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SuperAdminOverview() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Get staff access and redirect non-super-admins to their landing page

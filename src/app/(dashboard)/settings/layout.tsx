@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import SettingsSidebar from '@/components/settings/SettingsSidebar'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,7 @@ export default async function SettingsLayout({
   children: React.ReactNode
 }) {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile, error: profileError } = await supabase

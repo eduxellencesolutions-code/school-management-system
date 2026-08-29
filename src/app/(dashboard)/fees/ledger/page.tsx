@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import FeeLedgerManager from '@/components/fees/FeeLedgerManager'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function FeeLedgerPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

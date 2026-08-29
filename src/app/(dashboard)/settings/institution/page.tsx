@@ -3,10 +3,11 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Building, Image, PenTool, Users, FileText, Settings } from 'lucide-react'
 import InstitutionSettings from '@/components/settings/InstitutionSettings'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function InstitutionSettingsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   // FIX: Added !users_organization_id_fkey to resolve ambiguous relation

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ReportCard from '@/components/parents/ReportCard'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ParentReportPage({
   params,
@@ -9,7 +10,7 @@ export default async function ParentReportPage({
 }) {
   const { learnerId } = await params
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: parentAccount } = await supabase

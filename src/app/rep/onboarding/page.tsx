@@ -2,10 +2,11 @@ export const runtime = 'nodejs'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import OnboardingClient from './OnboardingClient'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function RepOnboardingPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: rep } = await supabase

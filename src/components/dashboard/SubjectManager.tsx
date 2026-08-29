@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
 import Link from 'next/link'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Subject {
   id: string
@@ -35,7 +36,7 @@ export default function SubjectManager({ groupId, subjects, templates }: Props) 
     if (!name.trim()) { toast.error('Subject name is required'); return }
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
 
     const { error } = await supabase.from('subjects').insert({

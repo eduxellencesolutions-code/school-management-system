@@ -2,10 +2,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ExecutiveOverview from '@/components/executive/ExecutiveOverview'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ExecutivePage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase.from('users').select('organization_id, role').eq('id', authUser.id).single()

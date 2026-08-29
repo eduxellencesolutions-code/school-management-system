@@ -5,13 +5,14 @@ import { ArrowLeft, Plus, Calendar, Star } from 'lucide-react'
 import { createSession, createTerm, deleteSession, deleteTerm, setCurrentTerm } from './actions'
 import CloseTermButton from '@/components/settings/CloseTermButton'
 import CloseSessionButton from '@/components/settings/CloseSessionButton'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function AcademicPeriodsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

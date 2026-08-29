@@ -2,10 +2,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PaymentRecorder from '@/components/fees/PaymentRecorder'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function PaymentsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

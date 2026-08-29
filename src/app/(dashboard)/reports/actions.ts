@@ -4,11 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function generateReport(formData: FormData) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     if (!user) throw new Error('You must be logged in to generate reports')
 
     const groupId = formData.get('group_id') as string
@@ -284,7 +285,7 @@ async function generateReportData(groupId: string, supabase: any, termName: stri
 
 export async function markReportReady(reportId: string) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) throw new Error('Unauthorized')
 
   await supabase.from('reports')
@@ -298,7 +299,7 @@ export async function markReportReady(reportId: string) {
 export async function deleteReport(formData: FormData): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     if (!user) return { success: false, message: 'You must be logged in to delete reports' }
 
     const id = formData.get('id') as string
@@ -325,7 +326,7 @@ export async function deleteReport(formData: FormData): Promise<{ success: boole
 export async function getReport(id: string) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     if (!user) throw new Error('Unauthorized')
 
     console.log('Fetching report:', id)
@@ -363,7 +364,7 @@ export async function restoreReport(formData: FormData) {
   }
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) {
     redirect('/login')
   }
@@ -420,7 +421,7 @@ export async function restoreReport(formData: FormData) {
 // Empty trash - permanently delete all soft-deleted reports
 export async function emptyTrash() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) {
     redirect('/login')
   }

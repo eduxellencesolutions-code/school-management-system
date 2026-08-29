@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Plus, Users, ClipboardList, Settings } from 'lucide-react'
 import DeleteGroupButton from '@/components/classes/DeleteGroupButton'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // ✅ Force dynamic rendering to fix searchParams error
 export const dynamic = 'force-dynamic'
@@ -18,7 +19,7 @@ export default async function ClassesPage({ searchParams }: PageProps) {
     // ✅ Await the searchParams promise
     const params = await searchParams
     const supabase = await createClient()
-    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const { user: authUser } = await getAuthenticatedUser(supabase)
     
     console.log('🔍 Classes Page - User:', authUser?.id)
     

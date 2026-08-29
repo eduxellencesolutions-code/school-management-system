@@ -3,10 +3,11 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { UserPlus } from 'lucide-react'
 import TeacherManager from '@/components/settings/TeacherManager'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function TeachersPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase

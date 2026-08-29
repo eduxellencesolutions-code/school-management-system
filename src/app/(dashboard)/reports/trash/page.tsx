@@ -6,12 +6,13 @@ import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import EmptyTrashButton from '@/components/reports/EmptyTrashButton'
 import { restoreReport } from '@/app/(dashboard)/reports/actions'
 import ToastHandler from '@/components/ToastHandler'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const runtime = 'nodejs'
 
 export default async function TrashPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase

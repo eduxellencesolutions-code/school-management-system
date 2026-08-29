@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 async function snapshotForTerm(supabase: Awaited<ReturnType<typeof createClient>>, orgId: string, termId: string) {
   const { data: accounts } = await supabase
@@ -31,7 +32,7 @@ async function snapshotForTerm(supabase: Awaited<ReturnType<typeof createClient>
 
 export async function GET() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const { data: userRow } = await supabase

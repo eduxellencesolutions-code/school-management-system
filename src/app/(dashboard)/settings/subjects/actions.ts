@@ -5,10 +5,11 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function createSubject(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
@@ -76,7 +77,7 @@ export async function createSubject(formData: FormData) {
 // ✅ NEW: Update subject function with subscription guard
 export async function updateSubject(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const subjectId = formData.get('id') as string
@@ -178,7 +179,7 @@ export async function updateSubject(formData: FormData) {
 // ✅ NEW: Delete subject function (unguarded - cleanup operations are allowed)
 export async function deleteSubject(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const subjectId = formData.get('id') as string

@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 import MFAChallenge from '@/components/auth/MFAChallenge'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email'),
@@ -71,7 +72,7 @@ export default function LoginPage() {
       }
 
       // ── Record successful login attempt ──
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       fetch('/api/auth/record-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

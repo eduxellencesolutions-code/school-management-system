@@ -5,6 +5,7 @@ import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
 import { initiatePaystackCheckout } from '@/lib/payments/paystack'
 import { getPrice, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
 import { CheckoutMetadata } from '@/lib/payments/types'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function POST(req: NextRequest) {
   const { plan, currency, cycle, provider } = await req.json() as {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const { data: profile } = await supabase

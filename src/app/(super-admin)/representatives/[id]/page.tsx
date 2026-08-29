@@ -1,13 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import RepProfilePanel from '@/components/super-admin/RepProfilePanel'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RepresentativeProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: canView } = await supabase.rpc('has_platform_permission', { p_user_id: user.id, p_permission_key: 'representatives.view' })

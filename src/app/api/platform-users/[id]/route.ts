@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 function serviceClient() {
   return createServiceClient(
@@ -14,7 +15,7 @@ function serviceClient() {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const access = await getStaffAccess(supabase, user.id)

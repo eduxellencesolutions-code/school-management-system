@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import RatingGrid from '@/components/psychomotor/RatingGrid'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function PsychomotorPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

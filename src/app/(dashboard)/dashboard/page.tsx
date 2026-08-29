@@ -9,6 +9,7 @@ import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
 import OnboardingBanner from '@/components/dashboard/OnboardingBanner'
 import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
 import { getRequiredPlanMap } from '@/lib/plans/getRequiredPlanMap'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // Real feature_key values used by FeatureCards, kept here so the required-plan
 // lookup only fetches what it needs. Must match the keys used in FeatureCards.tsx.
@@ -16,7 +17,7 @@ const FEATURE_CARD_KEYS = ['basic_attendance', 'affective_psychomotor', 'homewor
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   // FIX: Added !users_organization_id_fkey to resolve ambiguous relation

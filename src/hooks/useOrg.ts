@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PLAN_LIMITS, type Organization, type User, type SubscriptionPlan } from '@/types'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface UseOrgReturn {
   user: User | null
@@ -20,7 +21,7 @@ export function useOrg(): UseOrgReturn {
 
   useEffect(() => {
     async function load() {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
+      const { user: authUser } = await getAuthenticatedUser(supabase)
       if (!authUser) { setLoading(false); return }
 
       const { data: profile } = await supabase

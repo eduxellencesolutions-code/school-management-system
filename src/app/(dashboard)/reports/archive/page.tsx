@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Archive, FileText } from 'lucide-react'
 import { unarchiveReport } from '../[id]/actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ArchivedReportsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

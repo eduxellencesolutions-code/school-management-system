@@ -6,11 +6,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 import { generateAccessCode } from '@/lib/supabase/admin'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // ✅ Updated: Generic permission check (replaces requireAccountLockPermission)
 async function requireStaffPermission(permissionKey: string) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
   const access = await getStaffAccess(supabase, user.id)
   const allowed = access.isSuperAdmin || access.permissions.has(permissionKey)

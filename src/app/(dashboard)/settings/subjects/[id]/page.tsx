@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { updateSubject } from '@/app/(dashboard)/settings/subjects/actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -10,7 +11,7 @@ export default async function EditSubjectPage({ params }: Props) {
   const { id } = await params
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

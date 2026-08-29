@@ -9,6 +9,7 @@ import DeleteSchoolForm from '@/components/super-admin/DeleteSchoolForm'
 import FeatureOverridePanel from '@/components/super-admin/FeatureOverridePanel'
 import AcademicPeriodOversight from '@/components/super-admin/AcademicPeriodOversight'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ interface Props { params: Promise<{ id: string }> }
 export default async function SchoolDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Use permission-based check

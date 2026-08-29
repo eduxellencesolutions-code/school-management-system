@@ -8,10 +8,11 @@ import PlanDowngradeCard from '@/components/billing/PlanDowngradeCard'
 import { getUpgradeOptions, getDowngradeOptions } from '@/lib/plans/downgrade'
 import { PaidPlan } from '@/lib/payments/pricing'
 import MySignatureUpload from '@/components/settings/MySignatureUpload'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase

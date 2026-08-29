@@ -2,10 +2,11 @@ export const runtime = 'nodejs'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import EnrollClient from './EnrollClient'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function FoundingEnrollPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

@@ -3,13 +3,14 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, MessageSquare, Pencil, ArrowLeft } from 'lucide-react'
 import { deleteRemarkTemplate } from './actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function RemarkTemplatesPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

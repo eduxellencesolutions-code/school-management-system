@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // ASSUMPTION: there is no dedicated "super admin" role/table yet.
 // This checks the logged-in user's email against a comma-separated
@@ -12,7 +13,7 @@ import { redirect } from 'next/navigation'
 // `is_super_admin` boolean column if you want something more robust.
 async function getSuperAdminContext() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const allowList = (process.env.SUPER_ADMIN_EMAILS ?? '')

@@ -20,6 +20,7 @@ import {
   PenTool
 } from 'lucide-react'
 import Link from 'next/link'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -49,7 +50,7 @@ export default function AccountPage() {
   // Load user info and signature on mount
   useState(() => {
     async function loadUserInfo() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (user) {
         setUserInfo({
           email: user.email || 'No email set',
@@ -106,7 +107,7 @@ export default function AccountPage() {
   async function handleSignatureUpload(file: File) {
     setUploadingSig(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) throw new Error('Not authenticated')
 
       const ext = file.name.split('.').pop()

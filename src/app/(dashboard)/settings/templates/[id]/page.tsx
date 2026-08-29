@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import TemplateBuilder from '@/components/settings/TemplateBuilder'
 import { updateTemplate } from '../actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -11,7 +12,7 @@ export default async function EditTemplatePage({ params }: Props) {
   const { id } = await params
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: template } = await supabase

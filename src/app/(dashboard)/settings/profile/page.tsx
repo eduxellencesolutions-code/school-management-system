@@ -3,10 +3,11 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, User, Mail, Calendar, Signature } from 'lucide-react'
 import MySignatureUpload from '@/components/settings/MySignatureUpload'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ProfileSettingsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase

@@ -24,6 +24,7 @@ import {
   Zap
 } from 'lucide-react'
 import Link from 'next/link'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface NotificationPreference {
   id: string
@@ -104,7 +105,7 @@ export default function NotificationsPage() {
   const loadPreferences = async () => {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const { data: prefs, error } = await supabase
@@ -129,7 +130,7 @@ export default function NotificationsPage() {
     } catch (error) {
       console.error('Error loading preferences:', error)
       toast.error('Failed to load notification settings')
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (user) {
         setPreferences(getDefaultPreferences(user.id))
       }
@@ -142,7 +143,7 @@ export default function NotificationsPage() {
   const loadNotifications = async () => {
     setLoadingNotifications(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) {
         setNotifications([])
         setUnreadCount(0)
@@ -195,7 +196,7 @@ export default function NotificationsPage() {
 
   const markAllAsRead = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const { error } = await supabase
@@ -233,7 +234,7 @@ export default function NotificationsPage() {
   const handleSavePreferences = async () => {
     setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) throw new Error('Not authenticated')
 
       for (const pref of preferences) {
@@ -268,7 +269,7 @@ export default function NotificationsPage() {
   // ✅ FIX: Use 'body' instead of 'message', remove 'notification_type'
   const sendTestNotification = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       await supabase
@@ -288,7 +289,7 @@ export default function NotificationsPage() {
   const handleResetDefaults = async () => {
     if (!confirm('Reset all notification preferences to default settings?')) return
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     if (!user) return
 
     const defaults = getDefaultPreferences(user.id)

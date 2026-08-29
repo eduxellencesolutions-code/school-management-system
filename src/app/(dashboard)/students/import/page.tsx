@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { generateLearnerCSVTemplate, cn } from '@/lib/utils'
 import { Upload, Download, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { importStudents } from '../actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface CSVRow {
   first_name: string
@@ -75,7 +76,7 @@ export default function ImportStudentsPage() {
   // ✅ FIXED: Added dependency array and solo teacher branch
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const { data: profile } = await supabase

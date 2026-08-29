@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface StudentRow {
   first_name: string; last_name: string; other_names?: string
@@ -62,7 +63,7 @@ export default function UploadStudentsPage() {
     const invalid = parsed.filter(r => !r.first_name?.trim() || !r.last_name?.trim()).length
     setInvalidCount(invalid)
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getAuthenticatedUser(supabase)
     if (!user) return
     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
     if (!profile?.organization_id) return

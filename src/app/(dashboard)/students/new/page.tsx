@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/client'
 import { createStudent } from '../actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 const schema = z.object({
   first_name: z.string().min(1, 'First name is required'),
@@ -43,7 +44,7 @@ export default function NewStudentPage() {
 
   useState(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
       const { data: profile } = await supabase
         .from('users')

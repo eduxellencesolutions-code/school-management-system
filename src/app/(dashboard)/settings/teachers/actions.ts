@@ -8,11 +8,12 @@ import { hasFeature, canAddTeacher } from '@/lib/plans/gating'
 import { getPlanConfig } from '@/lib/plans/config'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // Check if user is an institution
 async function checkInstitutionAccess() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
@@ -48,7 +49,7 @@ export async function createTeacher(input: CreateTeacherInput) {
   const supabase = await createClient()
   
   // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
+  const { user: adminUser } = await getAuthenticatedUser(supabase)
   if (!adminUser) return { error: 'Not authenticated' }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before creating teacher
@@ -187,7 +188,7 @@ export async function assignTeacher(formData: FormData) {
   const supabase = await createClient()
   
   // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
+  const { user: adminUser } = await getAuthenticatedUser(supabase)
   if (!adminUser) return { error: 'Not authenticated' }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before assigning teacher
@@ -278,7 +279,7 @@ export async function removeAssignment(formData: FormData) {
   const supabase = await createClient()
   
   // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
+  const { user: adminUser } = await getAuthenticatedUser(supabase)
   if (!adminUser) return { error: 'Not authenticated' }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before removing assignment
@@ -329,7 +330,7 @@ export async function uploadTeachers(formData: FormData) {
   const orgId = profile?.organization_id
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before uploading teachers
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   const { allowed, message } = await requireActiveSubscription(supabase, user!.id)
   if (!allowed) {
     console.error('Blocked teacher upload — subscription expired:', message)
@@ -575,7 +576,7 @@ export async function deleteTeacher(formData: FormData) {
   const supabase = await createClient()
   
   // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
+  const { user: adminUser } = await getAuthenticatedUser(supabase)
   if (!adminUser) return { error: 'Not authenticated' }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before deleting teacher
@@ -619,7 +620,7 @@ export async function updateTeacherSignature(formData: FormData) {
   const supabase = await createClient()
   
   // ✅ Get authenticated user
-  const { data: { user: adminUser } } = await supabase.auth.getUser()
+  const { user: adminUser } = await getAuthenticatedUser(supabase)
   if (!adminUser) return { error: 'Not authenticated' }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before updating signature

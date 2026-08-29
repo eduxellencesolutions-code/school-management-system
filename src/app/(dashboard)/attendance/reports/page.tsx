@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { Loader2, FileDown, FileSpreadsheet, Download } from 'lucide-react'
 import { AttendanceReportPDF } from '@/components/attendance/AttendanceReportPDF'
 import { DailyRegisterPDF } from '@/components/attendance/DailyRegisterPDF'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface ClassOption { id: string; name: string }
 interface TermOption { id: string; name: string; session_name?: string }
@@ -27,7 +28,7 @@ export default function AttendanceReportsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
       const { data: profile } = await supabase.from('users').select('organization_id, role, name').eq('id', user.id).single()
       setUserName(profile?.name ?? '')

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { updateMySignature } from '@/app/(dashboard)/settings/profile/actions'
 import toast from 'react-hot-toast'
 import { Upload, X, Loader2 } from 'lucide-react'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Props {
   currentSignatureUrl?: string | null
@@ -31,7 +32,7 @@ export default function MySignatureUpload({ currentSignatureUrl }: Props) {
 
     setUploading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) throw new Error('Not logged in')
       
       // Generate unique file path

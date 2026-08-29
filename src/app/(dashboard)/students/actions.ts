@@ -6,10 +6,11 @@ import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function deleteStudent(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Subscription gate — expired accounts cannot delete students
@@ -74,7 +75,7 @@ export async function deleteStudent(formData: FormData) {
 // this is the deliberate status-change path with full context.
 export async function updateStudentStatus(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const id = formData.get('id') as string
@@ -126,7 +127,7 @@ export async function updateStudentStatus(formData: FormData) {
 // ✅ NEW: Create a single student
 export async function createStudent(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Subscription gate — expired accounts cannot create students
@@ -179,7 +180,7 @@ export async function createStudent(formData: FormData) {
 // ✅ UPDATED: Import multiple students with subscription guard
 export async function importStudents(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return { success: false, message: 'Not authenticated', imported: 0, failed: 0 }
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before importing students

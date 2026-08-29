@@ -13,12 +13,13 @@ interface Props {
 }
 
 import ClassFilter from '@/components/students/ClassFilter'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function StudentsPage({ searchParams }: Props) {
   const params = await searchParams
 
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase

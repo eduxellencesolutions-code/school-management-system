@@ -5,10 +5,11 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { checkDowngradeEligibility } from '@/lib/plans/downgrade'
 import type { PlanKey } from '@/lib/plans/config'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function requestDowngrade(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const targetPlan = formData.get('target_plan') as PlanKey

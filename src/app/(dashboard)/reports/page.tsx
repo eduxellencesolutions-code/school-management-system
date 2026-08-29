@@ -5,12 +5,13 @@ import { Plus, FileText, Download, Clock, CheckCircle, CheckCircle2, XCircle, Ar
 import DeleteReportButton from '@/components/reports/DeleteReportButton'
 import ApproveButton from '@/components/reports/ApproveButton'
 import NeedHelp from '@/components/support/NeedHelp'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const runtime = 'nodejs'
 
 export default async function ReportsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   // FIX: Added !users_organization_id_fkey to resolve ambiguous relation

@@ -7,6 +7,7 @@ import StudentScoreHistory from '@/components/students/StudentScoreHistory'
 import DeleteStudentButton from '@/components/students/DeleteStudentButton'
 import ParentGuardianCard from '@/components/students/ParentGuardianCard'
 import StudentStatusForm from '@/components/students/StudentStatusForm'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Props { 
   params: Promise<{ id: string }> 
@@ -16,7 +17,7 @@ export default async function StudentDetailPage({ params }: Props) {
   const { id } = await params
   
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   // FIX: Using correct foreign key names from the database

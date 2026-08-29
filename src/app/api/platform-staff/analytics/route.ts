@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser(supabase);
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');

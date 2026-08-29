@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 type Steps = { profile_completed: boolean; passport_uploaded: boolean; passport_approved: boolean; agreement_accepted: boolean }
 
@@ -35,7 +36,7 @@ export default function OnboardingClient() {
     setError(null)
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) throw new Error('Not authenticated')
 
       const ext = file.name.split('.').pop()

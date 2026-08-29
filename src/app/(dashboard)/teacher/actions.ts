@@ -5,11 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // Get all teachers in an organization
 export async function getTeachers() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
@@ -38,7 +39,7 @@ export async function getTeachers() {
 // Assign teacher to class/subject
 export async function assignTeacher(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // Check subscription status gate
@@ -117,7 +118,7 @@ export async function assignTeacher(formData: FormData) {
 // Remove teacher assignment
 export async function removeAssignment(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const assignmentId = formData.get('assignment_id') as string
@@ -158,7 +159,7 @@ export async function removeAssignment(formData: FormData) {
 // Bulk upload teachers via CSV
 export async function uploadTeachers(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // Check subscription status gate
@@ -383,7 +384,7 @@ Sarah Williams,sarah@school.com,subject_teacher,Primary 6,Science
 // Delete a teacher (soft delete or hard delete)
 export async function deleteTeacher(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const teacherId = formData.get('teacher_id') as string

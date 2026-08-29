@@ -1,11 +1,12 @@
 // src/app/api/platform-staff/leaderboard/[id]/detail/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser(supabase);
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const { data, error } = await supabase.rpc('get_representative_leaderboard_detail', { p_representative_id: id });

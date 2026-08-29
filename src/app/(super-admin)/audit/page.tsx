@@ -3,12 +3,13 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { ShieldAlert } from 'lucide-react'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AuditLogPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Use the shared permission helper

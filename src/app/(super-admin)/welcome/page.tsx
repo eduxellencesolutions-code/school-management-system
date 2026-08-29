@@ -4,12 +4,13 @@ import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 import { NAV_ITEMS } from '@/lib/auth/navConfig'
 import Link from 'next/link'
 import { ShieldCheck, ArrowRight } from 'lucide-react'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function WelcomePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const access = await getStaffAccess(supabase, user.id)

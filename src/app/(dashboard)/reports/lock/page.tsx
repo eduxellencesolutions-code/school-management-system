@@ -2,10 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Lock, AlertTriangle } from 'lucide-react'
 import LockResultsButton from '@/components/reports/LockResultsButton'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function LockResultsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

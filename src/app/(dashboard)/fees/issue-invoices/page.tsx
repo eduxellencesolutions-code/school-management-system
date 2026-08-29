@@ -2,10 +2,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import BulkInvoiceIssuer from '@/components/fees/BulkInvoiceIssuer'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function IssueInvoicesPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

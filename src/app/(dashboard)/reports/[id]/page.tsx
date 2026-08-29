@@ -8,6 +8,7 @@ import ReportLifecycleActions from '@/components/reports/ReportLifecycleActions'
 import RemarksEditor from '@/components/reports/RemarksEditor'
 import { hasFeature } from '@/lib/plans/gating'
 import { getPlanConfig } from '@/lib/plans/config'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Props { params: Promise<{ id: string }> }
 
@@ -58,7 +59,7 @@ interface Subject {
 export default async function ReportDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: report, error } = await supabase

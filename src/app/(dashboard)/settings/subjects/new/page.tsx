@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createSubject } from '../actions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // ✅ Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export default async function NewSubjectPage({ searchParams }: Props) {
   const success = params.success
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

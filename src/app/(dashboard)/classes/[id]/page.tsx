@@ -4,6 +4,7 @@ import Link from 'next/link'
 import SubjectManager from '@/components/dashboard/SubjectManager'
 import ClassStats from '@/components/dashboard/ClassStats'
 import { Users, BookOpen, ClipboardList, FileText, ArrowLeft } from 'lucide-react'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -19,7 +20,7 @@ export default async function ClassDetailPage({ params }: Props) {
   console.log('Class ID:', id)
   
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   
   console.log('Auth user:', authUser?.id)
   

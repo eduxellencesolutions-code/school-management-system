@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 // ✅ FIX: Changed from '@/components/admin/' to '@/components/super-admin/'
 import SoloTeacherStatusActions from '@/components/super-admin/SoloTeacherStatusActions'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,7 @@ interface Props { params: Promise<{ id: string }> }
 export default async function SoloTeacherManagePage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Use permission-based check

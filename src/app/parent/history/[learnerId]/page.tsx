@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import AcademicHistory from '@/components/parents/AcademicHistory'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ParentHistoryPage({
   params,
@@ -9,7 +10,7 @@ export default async function ParentHistoryPage({
 }) {
   const { learnerId } = await params
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: parentAccount } = await supabase

@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation'
 import { getStaffAccess, hasPermission } from '@/lib/auth/getStaffAccess'
 import AnnouncementsManager from '@/components/announcements/AnnouncementsManager'
 import SchoolAnnouncementsManager from '@/components/announcements/SchoolAnnouncementsManager'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AnnouncementsPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

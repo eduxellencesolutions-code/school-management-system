@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { canAddStudent, AccountRef } from '@/lib/plans/gating'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface CreateStudentInput {
   first_name: string
@@ -24,7 +25,7 @@ export async function createStudent(
   input: CreateStudentInput
 ): Promise<{ success: boolean; error?: string; groupId?: string }> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   if (!input.first_name || !input.last_name || !input.group_id) {

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { hasFeature } from '@/lib/plans/gating'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
@@ -23,7 +24,7 @@ export async function generateAIRemark(input: GenerateRemarkInput): Promise<{ su
   }
 
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

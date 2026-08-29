@@ -2,12 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
 import PlatformUsersDirectory from '@/components/super-admin/PlatformUsersDirectory'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PlatformUsersPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const access = await getStaffAccess(supabase, user.id)

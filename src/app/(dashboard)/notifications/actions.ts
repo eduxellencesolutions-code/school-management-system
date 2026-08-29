@@ -2,10 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function markAllNotificationsAsRead() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return { success: false, error: 'Not authenticated' }
 
   const { error } = await supabase

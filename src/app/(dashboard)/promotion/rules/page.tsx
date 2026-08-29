@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import PromotionRulesForm from '@/components/promotion/PromotionRulesForm'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function PromotionRulesPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: user } = await supabase

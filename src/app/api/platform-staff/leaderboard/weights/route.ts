@@ -1,10 +1,11 @@
 // src/app/api/platform-staff/leaderboard/weights/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser(supabase);
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const { data, error } = await supabase.from('platform_settings').select('value').eq('key', 'leaderboard.weights').maybeSingle();
@@ -14,7 +15,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser(supabase);
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const body = await request.json();

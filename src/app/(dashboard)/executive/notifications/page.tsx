@@ -2,10 +2,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NotificationSettings from '@/components/executive/NotificationSettings'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ExecutiveNotificationsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
   return (
     <div className="flex flex-col gap-6 max-w-2xl">

@@ -1,12 +1,13 @@
 // src/app/api/representatives/leaderboard/category/route.ts
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 const VALID_CATEGORIES = ['top_onboarders', 'revenue_champions', 'customer_champions'];
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user } = await getAuthenticatedUser(supabase);
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

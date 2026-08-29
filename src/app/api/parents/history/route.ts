@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 // GET /api/parents/history?learnerId=...
 // Returns this child's full academic history — every past session/class/status/average,
@@ -7,8 +8,8 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const supabase = await createClient();
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const { user } = await getAuthenticatedUser(supabase);
+  if (!user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 

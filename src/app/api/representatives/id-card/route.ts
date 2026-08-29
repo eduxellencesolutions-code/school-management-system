@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 const DESIGNATIONS: Record<string, string> = {
   growth_volunteer: 'EdTech Growth Volunteer',
@@ -10,7 +11,7 @@ const DESIGNATIONS: Record<string, string> = {
 
 export async function GET() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
   const { data: rep } = await supabase

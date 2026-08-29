@@ -4,10 +4,11 @@ import ParentDashboard from '@/components/parents/ParentDashboard'
 import ParentAnnouncements from '@/components/parents/ParentAnnouncements'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function ParentDashboardPage() {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
   const { data: parentAccount } = await supabase
     .from('parent_accounts')

@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { getStaffAccess } from './getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 /**
  * Centralized page-level guard. Redirects to /dashboard if the current user
@@ -9,7 +10,7 @@ import { getStaffAccess } from './getStaffAccess'
  *
  * Usage in a page.tsx:
  *   const supabase = await createClient()
- *   const { data: { user } } = await supabase.auth.getUser()
+ *   const { user } = await getAuthenticatedUser(supabase)
  *   if (!user) redirect('/login')
  *   await requirePermission(supabase, user.id, 'security.dashboard.view')
  */

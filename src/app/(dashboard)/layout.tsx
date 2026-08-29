@@ -10,10 +10,11 @@ import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
 import FoundingBanner from '@/components/founding-500/FoundingBanner'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
 
   if (!authUser) redirect('/login')
 

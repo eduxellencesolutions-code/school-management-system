@@ -6,10 +6,11 @@ import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function deleteGroup(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Subscription gate — expired accounts cannot delete classes
@@ -108,7 +109,7 @@ export async function deleteGroup(formData: FormData) {
 
 export async function createGroup(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   console.log('🔍 [createGroup] Starting class creation for user:', user.id)

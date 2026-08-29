@@ -5,12 +5,13 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function createTemplate(formData: FormData) {
   console.log('=== CREATE TEMPLATE STARTED ===')
   
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) {
     console.log('No user found, redirecting to login')
     redirect('/login')
@@ -129,7 +130,7 @@ export async function createTemplate(formData: FormData) {
 
 export async function updateTemplate(formData: FormData) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Subscription gate — expired accounts cannot update templates
@@ -193,7 +194,7 @@ export async function updateTemplate(formData: FormData) {
 export async function deleteTemplate(formData: FormData) {
   // FIX: Added auth check for security
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ Subscription gate — expired accounts cannot delete templates

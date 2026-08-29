@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import IdCardGenerator from '@/components/representatives/IdCardGenerator'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function IdCardPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: rep } = await supabase.from('representatives').select('id').eq('user_id', user.id).maybeSingle()

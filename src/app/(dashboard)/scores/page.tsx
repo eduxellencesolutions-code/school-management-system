@@ -5,6 +5,7 @@ import ScoreSelectors from '@/components/scores/ScoreSelectors'
 import Link from 'next/link'
 import { BookOpen, AlertTriangle } from 'lucide-react'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,7 +18,7 @@ export default async function ScoresPage({ searchParams }: Props) {
   const params = await searchParams
 
   const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { user: authUser } = await getAuthenticatedUser(supabase)
   if (!authUser) redirect('/login')
 
   const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single()

@@ -5,10 +5,11 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getStaffAccess } from '@/lib/auth/getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 async function requireSuperAdmin() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (!isSuperAdmin) redirect('/dashboard')
@@ -19,7 +20,7 @@ async function requireSuperAdmin() {
 // the button is not the security boundary, this is.
 async function requireSchoolStatusPermission() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
   const access = await getStaffAccess(supabase, user.id)
   const allowed = access.isSuperAdmin || access.permissions.has('schools.suspend')

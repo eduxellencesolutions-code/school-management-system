@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 async function requireSuperAdmin() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
   if (!isSuperAdmin) redirect('/dashboard')

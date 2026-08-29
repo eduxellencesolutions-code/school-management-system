@@ -1,6 +1,7 @@
 // src/lib/supabase/middleware.ts
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -23,7 +24,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
 
   const url = request.nextUrl.clone()
   const isAuthRoute = url.pathname.startsWith('/login') ||

@@ -7,6 +7,7 @@ import { canAddStudent, AccountRef, getUsageCounts } from '@/lib/plans/gating'
 import { getPlanConfig } from '@/lib/plans/config'
 import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
 import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface ImportRow {
   first_name: string
@@ -29,7 +30,7 @@ interface ImportResult {
 
 export async function importStudents(groupId: string, rows: ImportRow[]): Promise<ImportResult> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   // ✅ SUBSCRIPTION GATE: Check active subscription before importing

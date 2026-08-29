@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { Bell, BellOff } from 'lucide-react'
 import MarkAsReadButton from '@/components/notifications/MarkAsReadButton'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 export default async function NotificationsPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user } = await getAuthenticatedUser(supabase)
   if (!user) redirect('/login')
 
   const { data: notifications } = await supabase

@@ -6,6 +6,7 @@ import { Bell, BellOff, Check, X } from 'lucide-react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
 interface Notification {
   id: string
@@ -69,7 +70,7 @@ export default function NotificationBell() {
   async function fetchNotifications() {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const { data, error } = await supabase
@@ -92,7 +93,7 @@ export default function NotificationBell() {
 
   async function markAsRead(notificationId: string) {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const { error } = await supabase
@@ -118,7 +119,7 @@ export default function NotificationBell() {
 
   async function markAllAsRead() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getAuthenticatedUser(supabase)
       if (!user) return
 
       const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
