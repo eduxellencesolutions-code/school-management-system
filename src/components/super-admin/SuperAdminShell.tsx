@@ -54,7 +54,7 @@ export default function SuperAdminShell({
     setIsMoreOpen(true)
   }
   const handleMoreLeave = () => {
-    moreTimeoutRef.current = setTimeout(() => setIsMoreOpen(false), 300)
+    moreTimeoutRef.current = setTimeout(() => setIsMoreOpen(false), 600)
   }
 
   const handleGroupEnter = (key: string) => {
@@ -62,7 +62,7 @@ export default function SuperAdminShell({
     setOpenGroupKey(key)
   }
   const handleGroupLeave = () => {
-    groupTimeoutRef.current = setTimeout(() => setOpenGroupKey(null), 250)
+    groupTimeoutRef.current = setTimeout(() => setOpenGroupKey(null), 600)
   }
 
   useEffect(() => {
