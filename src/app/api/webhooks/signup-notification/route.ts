@@ -2,27 +2,26 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 const SUPER_ADMIN_BASE = 'https://admin.eduxellence.org';
+const MAX_ATTEMPTS = 5;
+
+function nextBackoff(attemptCount: number): string | null {
+  // attemptCount is the count AFTER this failed attempt
+  const minutes = [2, 10, 30, 60, 120][attemptCount - 1];
+  if (minutes === undefined) return null; // exhausted
+  return new Date(Date.now() + minutes * 60_000).toISOString();
+}
 
 function buildAdminLink(signupType: string, payload: Record<string, any>) {
   switch (signupType) {
-    case 'institution':
-      return `${SUPER_ADMIN_BASE}/schools/${payload.organization_id}`;
-    case 'solo_teacher':
-      return `${SUPER_ADMIN_BASE}/solo-teachers/${payload.user_id}`;
-    case 'representative':
-      return `${SUPER_ADMIN_BASE}/representatives/${payload.representative_id}`;
-    default:
-      return SUPER_ADMIN_BASE;
+    case 'institution': return `${SUPER_ADMIN_BASE}/schools/${payload.organization_id}`;
+    case 'solo_teacher': return `${SUPER_ADMIN_BASE}/solo-teachers/${payload.user_id}`;
+    case 'representative': return `${SUPER_ADMIN_BASE}/representatives/${payload.representative_id}`;
+    default: return SUPER_ADMIN_BASE;
   }
 }
 
 function labelFor(signupType: string) {
-  switch (signupType) {
-    case 'institution': return 'Institution';
-    case 'solo_teacher': return 'Solo Teacher';
-    case 'representative': return 'Representative';
-    default: return signupType;
-  }
+  return { institution: 'Institution', solo_teacher: 'Solo Teacher', representative: 'Representative' }[signupType] ?? signupType;
 }
 
 function buildEmail(signupType: string, payload: Record<string, any>) {
@@ -44,13 +43,10 @@ function buildEmail(signupType: string, payload: Record<string, any>) {
     ['Registered at', when],
   ];
 
-  const rowsHtml = rows
-    .filter(([, v]) => v)
-    .map(([k, v]) => `<tr>
-      <td style="padding:4px 16px 4px 0;color:#64748B;font-size:13px;white-space:nowrap;">${k}</td>
-      <td style="padding:4px 0;color:#0B1829;font-size:13px;font-weight:600;">${v}</td>
-    </tr>`)
-    .join('');
+  const rowsHtml = rows.filter(([, v]) => v).map(([k, v]) => `<tr>
+    <td style="padding:4px 16px 4px 0;color:#64748B;font-size:13px;white-space:nowrap;">${k}</td>
+    <td style="padding:4px 0;color:#0B1829;font-size:13px;font-weight:600;">${v}</td>
+  </tr>`).join('');
 
   return {
     subject: `New signup: ${label} — ${payload.name}`,
@@ -80,9 +76,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  if (!outboxId) {
-    return NextResponse.json({ error: 'Missing outboxId' }, { status: 400 });
-  }
+  if (!outboxId) return NextResponse.json({ error: 'Missing outboxId' }, { status: 400 });
 
   const admin = createAdminClient();
 
@@ -96,12 +90,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Outbox row not found' }, { status: 404 });
   }
 
-  // Idempotent guard against any duplicate delivery of this webhook call.
-  if (row.status === 'sent') {
-    return NextResponse.json({ success: true, alreadySent: true });
+  // Idempotent guards — never re-send a completed or permanently
+  // exhausted notification, no matter how this route got invoked.
+  if (row.status === 'sent' || row.status === 'exhausted') {
+    return NextResponse.json({ success: true, skipped: row.status });
   }
 
   const { subject, html } = buildEmail(row.signup_type, row.payload);
+  const attemptCount = (row.attempt_count ?? 0) + 1;
 
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -119,24 +115,34 @@ export async function POST(request: Request) {
 
     await admin
       .from('signup_notification_outbox')
-      .update({ status: 'sent', sent_at: new Date().toISOString() })
+      .update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        attempt_count: attemptCount,
+        last_attempt_at: new Date().toISOString(),
+      })
       .eq('id', outboxId);
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('signup-notification dispatch failed:', err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const backoff = nextBackoff(attemptCount);
+
     await admin
       .from('signup_notification_outbox')
       .update({
-        status: 'failed',
-        attempts: (row.attempts ?? 0) + 1,
-        last_error: err instanceof Error ? err.message : String(err),
+        status: backoff ? 'failed' : 'exhausted',
+        attempt_count: attemptCount,
+        last_attempt_at: new Date().toISOString(),
+        next_attempt_at: backoff,
+        last_error: errorMessage,
       })
       .eq('id', outboxId);
 
-    // Return 200: the failure is durably logged in the outbox row for
-    // investigation/retry — we don't want pg_net treating this as a
-    // transport error and retrying indefinitely.
+    // 200, not 5xx: the failure is durably recorded for retry/investigation;
+    // we don't want the caller (pg_net or the cron retry loop) treating
+    // this as a transport error and doing its own separate retries.
     return NextResponse.json({ success: false, error: 'Email send failed, logged for retry' }, { status: 200 });
   }
 }
