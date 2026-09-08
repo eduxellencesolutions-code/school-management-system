@@ -21,7 +21,7 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
   const [loading, setLoading] = useState(false)
   const [uploadingSig, setUploadingSig] = useState(false)
   const [sigPreview, setSigPreview] = useState<string | null>(null)
-  const [sigUrl, setSigUrl] = useState<string | null>(null)
+  const [sigPath, setSigPath] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
   // Default role options including principal
@@ -71,6 +71,7 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
     }))
   }
 
+  // ✅ FIX: Store path, not public URL
   const handleSignatureUpload = async (file: File) => {
     setUploadingSig(true)
     try {
@@ -78,9 +79,10 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
       const path = `signatures/${orgId}/${Date.now()}.${ext}`
       const { error } = await supabase.storage.from('signatures').upload(path, file, { upsert: true })
       if (error) throw error
+      // Store the path, not the public URL
+      setSigPath(path)
       const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
-      setSigUrl(publicUrl)
-      setSigPreview(URL.createObjectURL(file))
+      setSigPreview(publicUrl)
       toast.success('Signature uploaded')
     } catch {
       toast.error('Failed to upload signature')
@@ -128,13 +130,14 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
       // ✅ FIX: Use helper function for type-safe comparison
       const isClassTeacher = getIsClassTeacher(formData.role, formData.isClassTeacher)
 
+      // ✅ Pass the path, not the public URL
       const result = await createTeacher({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         role: formData.role,
         password: formData.password,
-        signatureUrl: sigUrl,
+        signatureUrl: sigPath, // Now passing the path
         selectedClasses: formData.selectedClasses,
         selectedSubjects: formData.selectedSubjects,
         isClassTeacher: isClassTeacher,

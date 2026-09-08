@@ -52,15 +52,16 @@ export default function MySignatureUpload({ currentSignatureUrl }: Props) {
         throw new Error(uploadError.message || 'Failed to upload image')
       }
       
-      // Get public URL
+      // ✅ Store the path in the database, not the public URL
+      // The signature URL will be generated via createSignedUrl at render time
+      await updateMySignature(path)
+      
+      // Preview uses the signed URL (or public URL for display)
       const { data: { publicUrl } } = supabase.storage
         .from('signatures')
         .getPublicUrl(path)
-      
-      // Update user profile with signature URL
-      await updateMySignature(publicUrl)
-      
       setPreview(publicUrl)
+      
       toast.success('Signature updated — it will now appear on report cards for your classes')
     } catch (error) {
       console.error('Upload error:', error)
@@ -75,7 +76,7 @@ export default function MySignatureUpload({ currentSignatureUrl }: Props) {
     
     setUploading(true)
     try {
-      // Clear the signature URL in the database
+      // Clear the signature path in the database
       await updateMySignature('')
       
       setPreview(null)

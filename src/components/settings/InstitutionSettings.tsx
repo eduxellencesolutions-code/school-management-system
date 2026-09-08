@@ -156,9 +156,14 @@ export default function InstitutionSettings({ organization, userId }: Props) {
 
       console.log('Uploading to path:', filePath)
 
+      // ✅ FIX: Store the path in the database, not the public URL
+      // For logos, we keep the public URL since logos are public
+      // For signatures, we store the path and generate signed URLs at render time
+      const isSignature = type === 'principal_sig' || type === 'teacher_sig'
+
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('institution-assets')
+        .from(isSignature ? 'signatures' : 'institution-assets')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true
@@ -173,24 +178,40 @@ export default function InstitutionSettings({ organization, userId }: Props) {
 
       console.log('Upload successful:', uploadData)
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('institution-assets')
-        .getPublicUrl(filePath)
+      // For logos: use public URL
+      // For signatures: store the path (signed URLs generated at render time)
+      let storeValue: string
+      let previewUrl: string
 
-      console.log('Public URL:', publicUrl)
+      if (isSignature) {
+        // Store the path, not the public URL
+        storeValue = filePath
+        // Preview uses a temporary object URL or public URL for display
+        const { data: { publicUrl } } = supabase.storage
+          .from('signatures')
+          .getPublicUrl(filePath)
+        previewUrl = publicUrl
+      } else {
+        const { data: { publicUrl } } = supabase.storage
+          .from('institution-assets')
+          .getPublicUrl(filePath)
+        storeValue = publicUrl
+        previewUrl = publicUrl
+      }
+
+      console.log('Store value:', storeValue)
 
       // Update organization
       const updateData: any = {}
       if (type === 'logo') {
-        updateData.logo_url = publicUrl
-        setLogoPreview(publicUrl)
+        updateData.logo_url = storeValue
+        setLogoPreview(previewUrl)
       } else if (type === 'principal_sig') {
-        updateData.principal_signature_url = publicUrl
-        setPrincipalSigPreview(publicUrl)
+        updateData.principal_signature_url = storeValue
+        setPrincipalSigPreview(previewUrl)
       } else if (type === 'teacher_sig') {
-        updateData.teacher_signature_url = publicUrl
-        setTeacherSigPreview(publicUrl)
+        updateData.teacher_signature_url = storeValue
+        setTeacherSigPreview(previewUrl)
       }
 
       const { error: updateError } = await supabase
@@ -201,7 +222,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
       if (updateError) {
         console.error('Update error:', updateError)
         toast.dismiss(loadingToast)
-        toast.error('Failed to save URL: ' + updateError.message)
+        toast.error('Failed to save: ' + updateError.message)
         return
       }
 

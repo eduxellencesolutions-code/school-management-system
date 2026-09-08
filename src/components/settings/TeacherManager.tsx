@@ -51,7 +51,7 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
     return subjects.filter(s => s.group_id === classId)
   }
 
-  // ✅ Signature upload handler
+  // ✅ FIX: Store path, not public URL
   async function handleSignatureUpload(teacherId: string, file: File) {
     const supabase = createClient()
     try {
@@ -62,12 +62,11 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
         .upload(path, file, { upsert: true })
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
-
+      // Store the path, not the public URL
       const { updateTeacherSignature } = await import('@/app/(dashboard)/settings/teachers/actions')
       const formData = new FormData()
       formData.append('teacher_id', teacherId)
-      formData.append('signature_url', publicUrl)
+      formData.append('signature_url', path) // Now storing the path
       await updateTeacherSignature(formData)
 
       toast.success('Signature updated')
@@ -400,11 +399,11 @@ export default function TeacherManager({ teachers, classes, subjects }: Props) {
                   {/* ✅ Signature display with upload overlay */}
                   <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 relative group/sig">
                     {teacher.signature_url ? (
-                      <img 
-                        src={teacher.signature_url} 
-                        alt={`${teacher.name} signature`} 
-                        className="w-full h-full object-contain bg-white border border-surface-200 rounded" 
-                      />
+                      // The signature_url now stores a path; the UI will need to use signed URLs
+                      // For now, we show a placeholder; this will be updated to use getSignedSignatureUrl
+                      <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">
+                        {teacher.name.slice(0, 2).toUpperCase()}
+                      </div>
                     ) : (
                       <div className="w-10 h-10 rounded bg-brand-100 text-brand-700 font-bold text-xs flex items-center justify-center">
                         {teacher.name.slice(0, 2).toUpperCase()}

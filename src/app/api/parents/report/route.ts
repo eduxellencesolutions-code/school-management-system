@@ -151,6 +151,24 @@ export async function GET(request: Request) {
     .eq('id', learner.organization_id)
     .single();
 
+  // ✅ FIX: Generate signed URLs for signatures
+  let teacherSignatureUrl: string | null = null;
+  let principalSignatureUrl: string | null = null;
+
+  if (org?.teacher_signature_url) {
+    const { data: signed } = await supabase.storage
+      .from('signatures')
+      .createSignedUrl(org.teacher_signature_url, 3600);
+    teacherSignatureUrl = signed?.signedUrl ?? null;
+  }
+
+  if (org?.principal_signature_url) {
+    const { data: signed } = await supabase.storage
+      .from('signatures')
+      .createSignedUrl(org.principal_signature_url, 3600);
+    principalSignatureUrl = signed?.signedUrl ?? null;
+  }
+
   const remarksMap = (report.student_remarks ?? {}) as Record<string, StudentRemarkEntry>;
   const studentRemarks = remarksMap[learnerId] ?? null;
 
@@ -195,10 +213,10 @@ export async function GET(request: Request) {
     },
     signatories: {
       teacherName: teacher?.name ?? null,
-      teacherSignatureUrl: org?.teacher_signature_url ?? null,
+      teacherSignatureUrl: teacherSignatureUrl,
       principalName: org?.principal_name ?? null,
       principalTitle: org?.principal_title ?? 'Head Teacher',
-      principalSignatureUrl: org?.principal_signature_url ?? null,
+      principalSignatureUrl: principalSignatureUrl,
     },
     reportId: report.id,
   });
