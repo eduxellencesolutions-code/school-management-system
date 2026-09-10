@@ -368,3 +368,64 @@ export interface AuditLog {
   ip_address?: string
   created_at: string
 }
+
+// ─── Tertiary Types ─────────────────────────────────────────────────────────
+
+export type TertiaryScale = '4_point' | '5_point' | '7_point'
+export type TertiaryScaleType = 'tertiary_4_point' | 'tertiary_5_point' | 'tertiary_7_point'
+
+export interface Faculty {
+  id: string
+  organization_id: string
+  name: string
+  code?: string
+  description?: string
+  is_active: boolean
+}
+
+export interface Department {
+  id: string
+  organization_id: string
+  faculty_id: string
+  name: string
+  code?: string
+  is_active: boolean
+}
+
+export interface Programme {
+  id: string
+  organization_id: string
+  department_id: string
+  name: string
+  code?: string
+  degree_type?: string
+  duration_years?: number
+  min_credit_units?: number
+  is_active: boolean
+}
+
+export interface Cohort {
+  id: string
+  organization_id: string
+  name: string
+  code?: string
+  type: 'cohort'
+  programme_id?: string
+  department_id?: string
+  level?: string
+  session_id?: string
+  term_id?: string
+}
+
+export interface TertiaryCourse {
+  id: string
+  organization_id: string
+  group_id: string
+  name: string
+  code?: string
+  credit_unit?: number
+  course_type?: string
+  prerequisite_subject_id?: string
+  description?: string
+  course_status?: string
+}

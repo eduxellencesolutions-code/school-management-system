@@ -11,7 +11,7 @@ import {
   CalendarCheck, Smile, ClipboardCheck, Wallet,
   Lock, TrendingUp, Megaphone, ShieldCheck,
   TicketIcon, LineChart, Receipt, FilePlus2, CreditCard,
-  Menu, X,
+  Menu, X, AlertCircle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -90,6 +90,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     ...(isAdmin && has('promotion_wizard') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
     ...(isAdmin && has('promotion_wizard') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ label: 'Setup Status', href: '/settings/setup-wizard', icon: AlertCircle }] : []),
     { label: 'Support', href: '/school-support', icon: TicketIcon },
     ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
     ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),

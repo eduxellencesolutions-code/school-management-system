@@ -100,8 +100,8 @@ export default async function ProfileSettingsPage() {
         </div>
       </div>
 
-      {/* Teacher Signature - Only show for teachers (not admins in institutions) */}
-      {profile.role === 'teacher' && (
+      {/* Teacher Signature - Show for teachers, lecturers, assistants, and principals */}
+      {['teacher', 'lecturer', 'assistant', 'principal'].includes(profile.role) && (
         <div className="card">
           <div className="card-header flex items-center gap-2">
             <Signature size={16} className="text-brand-500" />
@@ -116,8 +116,8 @@ export default async function ProfileSettingsPage() {
         </div>
       )}
 
-      {/* Help text for admins */}
-      {profile.role === 'admin' && (
+      {/* Help text for admins and school admins */}
+      {['admin', 'school_admin'].includes(profile.role) && (
         <div className="card bg-surface-50 border-surface-200">
           <div className="card-body">
             <p className="text-xs text-ink-muted">

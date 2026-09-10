@@ -24,6 +24,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', authUser.id)
     .single()
 
+  // NEW — a tertiary student has no `users` row at all. If this
+  // authenticated identity is actually a linked student, send them to
+  // their own portal instead of falling into staff-dashboard logic
+  // that assumes a `users` row exists.
+  if (!user) {
+    const { data: learnerId } = await supabase.rpc('get_my_learner_id')
+    if (learnerId) redirect('/student')
+  }
+
   if (!user?.organization_id) {
     // A solo teacher is identified by role, not by already owning a class —
     // a brand-new signup has zero classes and must still reach /dashboard,
