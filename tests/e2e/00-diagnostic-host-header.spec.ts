@@ -22,7 +22,7 @@ test('DIAGNOSTIC: report what Vercel/Next.js actually does with a Host header ov
   console.log(`Base URL under test: ${baseURL}`)
   console.log(`Simulated Host header sent: ${simulatedHost}`)
 
-  const response = await request.get('/api/_e2e-diagnostic/host', {
+  const response = await request.get('/api/e2e-diagnostic/host', {
     headers: { Host: simulatedHost },
   })
 
