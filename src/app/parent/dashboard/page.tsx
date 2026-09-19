@@ -5,6 +5,9 @@ import ParentAnnouncements from '@/components/parents/ParentAnnouncements'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+import { getPortalContext } from '@/lib/domains/portalContext'
+import { comparePortalToParentSession } from '@/lib/domains/parentPortalContext'
+import WrongPortalNotice from '@/components/domains/WrongPortalNotice'
 
 export default async function ParentDashboardPage() {
   const supabase = await createClient()
@@ -18,6 +21,20 @@ export default async function ParentDashboardPage() {
   if (!parentAccount) {
     redirect('/login')
   }
+
+  const portal = await getPortalContext()
+  const portalMatch = await comparePortalToParentSession(portal)
+
+  if (portalMatch === 'mismatch') {
+    return (
+      <WrongPortalNotice
+        orgId={portal.organizationId}
+        orgName={portal.orgName}
+        correctPortalHref="/access"
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-surface-50">
       <div className="max-w-4xl mx-auto px-6 py-8">

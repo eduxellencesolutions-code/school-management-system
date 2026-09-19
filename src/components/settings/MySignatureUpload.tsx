@@ -56,11 +56,11 @@ export default function MySignatureUpload({ currentSignatureUrl }: Props) {
       // The signature URL will be generated via createSignedUrl at render time
       await updateMySignature(path)
       
-      // Preview uses the signed URL (or public URL for display)
-      const { data: { publicUrl } } = supabase.storage
+      // Preview uses a signed URL — signatures bucket is private
+      const { data: signed } = await supabase.storage
         .from('signatures')
-        .getPublicUrl(path)
-      setPreview(publicUrl)
+        .createSignedUrl(path, 3600)
+      setPreview(signed?.signedUrl ?? null)
       
       toast.success('Signature updated — it will now appear on report cards for your classes')
     } catch (error) {

@@ -10,6 +10,8 @@ import OnboardingBanner from '@/components/dashboard/OnboardingBanner'
 import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
 import { getRequiredPlanMap } from '@/lib/plans/getRequiredPlanMap'
 import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+import TrainingCentreDashboard from '@/components/dashboard/TrainingCentreDashboard'
+import UniversityDashboard from '@/components/dashboard/UniversityDashboard'
 
 // Real feature_key values used by FeatureCards, kept here so the required-plan
 // lookup only fetches what it needs. Must match the keys used in FeatureCards.tsx.
@@ -25,8 +27,37 @@ export default async function DashboardPage() {
     .from('users').select('*, organization:organizations!users_organization_id_fkey(*)').eq('id', authUser.id).single()
 
   const orgId = user?.organization_id
+  const orgType = user?.organization?.type ?? 'school'
   const userRole = user?.role || 'teacher'
   const currentPlanKey = user?.subscription_plan ?? 'free'
+
+  // Centre orgs get a dedicated dashboard — short-circuit before any
+  // school-specific queries run.
+  if (orgType === 'centre' && orgId) {
+    const isTrainingAdmin = userRole === 'admin' ||
+      (await supabase.rpc('has_permission', { p_user_id: authUser.id, p_permission_key: 'training.confirm_completion' })).data === true
+    return (
+      <TrainingCentreDashboard
+        organizationId={orgId}
+        userId={authUser.id}
+        isTrainingAdmin={isTrainingAdmin}
+        userName={user?.name ?? authUser.email ?? 'User'}
+      />
+    )
+  }
+
+  // University orgs get a dedicated dashboard — short-circuit before any
+  // school-specific queries run.
+  if (orgType === 'university' && orgId) {
+    return (
+      <UniversityDashboard
+        organizationId={orgId}
+        userId={authUser.id}
+        isAdmin={userRole === 'admin'}
+        userName={user?.name ?? authUser.email ?? 'User'}
+      />
+    )
+  }
 
   // Use helper for plan features
   const orgPlanKey = user?.organization?.subscription_plan ?? 'free'

@@ -1,0 +1,775 @@
+﻿
+================================================================
+FILE: src\middleware.ts
+================================================================
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { NAV_ITEMS } from '@/lib/auth/navConfig'
+
+export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get('host') || ''
+  const { pathname } = request.nextUrl
+  const isAdminHost = hostname.startsWith('admin.')
+
+  let response = NextResponse.next({ request })
+
+  // Skip session-refresh logic entirely for Next.js Link prefetch requests.
+  // These fire silently in the background for every visible link and can
+  // race against a real navigation's refresh token, causing spurious
+  // "refresh_token_not_found" sign-outs. Prefetch requests don't need
+  // to run auth checks — the actual navigation request will.
+  const isPrefetch =
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch' ||
+    request.headers.get('sec-purpose')?.includes('prefetch')
+
+  if (isPrefetch) {
+    return response
+  }
+
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/parent') ||
+    pathname.startsWith('/access') ||
+    pathname === '/' ||
+    pathname.includes('.')
+  ) {
+    return response
+  }
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return request.cookies.getAll() },
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // Use getClaims() instead of getUser() to avoid refresh token issues
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+
+  if (claimsError || !claimsData?.claims) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  const userId = claimsData.claims.sub
+
+  if (isAdminHost) {
+    const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+    const { data: staffRow } = isSuperAdmin
+      ? { data: null }
+      : await supabase
+          .from('platform_staff')
+          .select('id, status')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .maybeSingle()
+
+    if (!isSuperAdmin && !staffRow) {
+      const redirectUrl = new URL('/dashboard', request.url)
+      redirectUrl.hostname = 'results.eduxellence.org'
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    const ADMIN_PATHS = NAV_ITEMS.map(i => i.href)
+    const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+    if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/welcome'
+      return NextResponse.rewrite(url)
+    }
+
+    if (!isSuperAdmin) {
+      const matchedItem = NAV_ITEMS.find(
+        item => pathname === item.href || pathname.startsWith(item.href + '/')
+      )
+
+      if (matchedItem?.superAdminOnly) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/welcome'
+        return NextResponse.rewrite(url)
+      }
+
+      if (matchedItem?.requiredPermission) {
+        const { data: hasPermission } = await supabase.rpc('has_platform_permission', {
+          p_user_id: userId,
+          p_permission_key: matchedItem.requiredPermission,
+        })
+        if (!hasPermission) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/welcome'
+          return NextResponse.rewrite(url)
+        }
+      }
+    }
+
+    return response
+  }
+
+  return response
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth).*)',
+  ],
+}
+
+
+================================================================
+FILE: vercel.json
+================================================================
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-expirations",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/check-expirations/subscription-check",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/clean-trash",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/rep-alerts",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/leaderboard-snapshot",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/leaderboard-recognitions",
+      "schedule": "0 3 1 * *"
+    },
+    {
+      "path": "/api/cron/weekly-brief",
+      "schedule": "0 22 * * 0"
+    }
+  ]
+}
+
+
+================================================================
+FILE: src\lib\auth\getSchoolPermissions.ts
+================================================================
+import { SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * Resolves a school-level user's full permission set, mirroring the
+ * has_permission() SQL function's exact logic (admin = universal bypass,
+ * everyone else = union of permissions granted via their active role
+ * assignments). Used to drive sidebar visibility -- NOT a substitute for
+ * the per-request has_permission() RPC check that every API route and page
+ * must still perform. The sidebar is a navigation aid; the real security
+ * boundary stays server-side on each route/page.
+ */
+export async function getSchoolPermissions(
+  supabase: SupabaseClient,
+  userId: string,
+  role: string | null | undefined
+): Promise<{ isAdmin: boolean; permissions: string[] }> {
+  if (role === 'admin') {
+    return { isAdmin: true, permissions: [] }
+  }
+
+  // Two-step query â€” PostgREST cannot resolve a direct relationship between
+  // staff_role_assignments and role_permissions (the FK path goes through
+  // school_roles), so the previous embedded-resource query always returned
+  // an error and silently yielded an empty permission set.
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from('staff_role_assignments')
+    .select('role_id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+
+  if (assignmentsError || !assignments || assignments.length === 0) {
+    return { isAdmin: false, permissions: [] }
+  }
+
+  const roleIds = assignments.map((a: any) => a.role_id)
+
+  const { data: permissionRows, error: permError } = await supabase
+    .from('role_permissions')
+    .select('permission_key')
+    .in('role_id', roleIds)
+
+  if (permError || !permissionRows) {
+    return { isAdmin: false, permissions: [] }
+  }
+
+  const keys = new Set<string>()
+  for (const p of permissionRows) {
+    if (p.permission_key) keys.add(p.permission_key)
+  }
+
+  return { isAdmin: false, permissions: [...keys] }
+}
+
+
+================================================================
+FILE: src\lib\auth\getStaffAccess.ts
+================================================================
+import { SupabaseClient } from '@supabase/supabase-js'
+
+export interface StaffAccess {
+  isSuperAdmin: boolean
+  isStaff: boolean
+  roleName: string | null
+  permissions: Set<string>
+}
+
+// âœ… Updated to match your actual platform role names from the database
+const ROLE_LANDING: Record<string, string> = {
+  'Super Admin': '/overview',
+  'Finance Officer': '/commissions',
+  'Operations Manager': '/support',
+  'Representative Manager': '/representatives',
+  'Security Administrator': '/audit',
+  'Support Agent': '/support',
+}
+
+export async function getStaffAccess(supabase: SupabaseClient, userId: string): Promise<StaffAccess> {
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  if (isSuperAdmin) {
+    return { isSuperAdmin: true, isStaff: false, roleName: 'Super Admin', permissions: new Set() }
+  }
+
+  const { data: staffRow } = await supabase
+    .from('platform_staff')
+    .select('status, role_id, platform_roles(name)')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  if (!staffRow) {
+    return { isSuperAdmin: false, isStaff: false, roleName: null, permissions: new Set() }
+  }
+
+  const roleName = (staffRow as unknown as { platform_roles?: { name?: string } }).platform_roles?.name ?? null
+
+  const { data: perms } = await supabase
+    .from('platform_role_permissions')
+    .select('permission_key')
+    .eq('role_id', staffRow.role_id)
+
+  return {
+    isSuperAdmin: false,
+    isStaff: true,
+    roleName,
+    permissions: new Set((perms ?? []).map(p => p.permission_key)),
+  }
+}
+
+export function hasPermission(access: StaffAccess, key: string): boolean {
+  return access.isSuperAdmin || access.permissions.has(key)
+}
+
+// âœ… UPDATED: Universal landing page is /welcome
+export function getStaffLandingPath(access: StaffAccess): string {
+  return '/welcome'
+}
+
+
+================================================================
+FILE: src\lib\auth\isAdminAllowed.ts
+================================================================
+import { SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * Returns true if the user is either a super admin or an active platform_staff member.
+ * Use this anywhere a page under (super-admin) currently checks is_super_admin alone.
+ */
+export async function isAdminAllowed(supabase: SupabaseClient, userId: string): Promise<boolean> {
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  if (isSuperAdmin) return true
+
+  const { data: staffRow } = await supabase
+    .from('platform_staff')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  return !!staffRow
+}
+
+
+================================================================
+FILE: src\lib\auth\navConfig.ts
+================================================================
+export interface NavItem {
+  key: string
+  href: string
+  label: string
+  section: 'primary' | 'more'
+  requiredPermission?: string
+  superAdminOnly?: boolean
+  group?: string
+}
+
+export interface NavGroup {
+  key: string
+  label: string
+}
+
+export const NAV_GROUPS: NavGroup[] = [
+  { key: 'representatives', label: 'Representatives' },
+]
+
+export const NAV_ITEMS: NavItem[] = [
+  { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },
+  { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
+  { key: 'schools', href: '/schools', label: 'Schools', section: 'primary', requiredPermission: 'schools.view' },
+  { key: 'solo-teachers', href: '/solo-teachers', label: 'Solo Teachers', section: 'primary', requiredPermission: 'schools.view' },
+  { key: 'analytics', href: '/analytics', label: 'Analytics', section: 'primary', requiredPermission: 'analytics.view' },
+  { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
+  { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
+  { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },
+  { key: 'representatives', href: '/representatives', label: 'All Representatives', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-performance', href: '/representatives/performance', label: 'Performance', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'school-portfolios', href: '/representatives/school-portfolios', label: 'School Portfolios', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-followups', href: '/representatives/follow-ups', label: 'Follow-ups', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-feedback', href: '/representatives/feedback', label: 'Feedback', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-escalations', href: '/representatives/escalations', label: 'Escalations', section: 'more', requiredPermission: 'support.view', group: 'representatives' },
+  { key: 'resources', href: '/resources', label: 'Rep Resources', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'rep-leaderboard', href: '/representatives/leaderboard', label: 'Leaderboard', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
+  { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
+  { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
+  { key: 'platform-announcements', href: '/platform-announcements', label: 'Announcements', section: 'more', requiredPermission: 'announcements.manage' },
+  { key: 'team', href: '/team', label: 'Team', section: 'more', superAdminOnly: true },
+  { key: 'settings', href: '/platform-settings', label: 'Settings', section: 'more', superAdminOnly: true },
+]
+
+export interface NavAccess {
+  isSuperAdmin: boolean
+  permissions: string[]
+}
+
+export function canAccessNavItem(item: NavItem, access: NavAccess): boolean {
+  if (access.isSuperAdmin) return true
+  if (item.superAdminOnly) return false
+  if (!item.requiredPermission) return true
+  return access.permissions.includes(item.requiredPermission)
+}
+
+export function getVisibleNavItems(access: NavAccess): NavItem[] {
+  return NAV_ITEMS.filter(item => canAccessNavItem(item, access))
+}
+
+
+================================================================
+FILE: src\lib\auth\requirePermission.ts
+================================================================
+import { SupabaseClient } from '@supabase/supabase-js'
+import { redirect } from 'next/navigation'
+import { getStaffAccess } from './getStaffAccess'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+
+/**
+ * Centralized page-level guard. Redirects to /dashboard if the current user
+ * doesn't have the given permission and isn't a super admin (super admins
+ * bypass every permission check automatically).
+ *
+ * Usage in a page.tsx:
+ *   const supabase = await createClient()
+ *   const { user } = await getAuthenticatedUser(supabase)
+ *   if (!user) redirect('/login')
+ *   await requirePermission(supabase, user.id, 'security.dashboard.view')
+ */
+export async function requirePermission(
+  supabase: SupabaseClient,
+  userId: string,
+  permissionKey: string
+): Promise<void> {
+  const access = await getStaffAccess(supabase, userId)
+  const allowed = access.isSuperAdmin || access.permissions.has(permissionKey)
+  if (!allowed) redirect('/dashboard')
+}
+
+/**
+ * Non-redirecting variant for conditional UI (e.g. "only show this button
+ * if the user can do X"), rather than gating an entire page.
+ */
+export async function checkPermission(
+  supabase: SupabaseClient,
+  userId: string,
+  permissionKey: string
+): Promise<boolean> {
+  const access = await getStaffAccess(supabase, userId)
+  return access.isSuperAdmin || access.permissions.has(permissionKey)
+}
+
+
+================================================================
+FILE: src\lib\supabase\authHelpers.ts
+================================================================
+import type { SupabaseClient, User } from '@supabase/supabase-js'
+
+/**
+ * Supabase refresh tokens are single-use. When two requests share the same
+ * expiring session cookie and both attempt to refresh at nearly the same
+ * moment, the second one always fails with this error -- it's an expected,
+ * transient race under Supabase's model, not evidence of a real auth
+ * problem. Treat it as "try again shortly," never as "user is logged out."
+ */
+export function isTransientRefreshTokenError(
+  error: { message?: string | null; code?: string | null } | null | undefined
+): boolean {
+  if (!error) return false
+  return (
+    error.code === 'refresh_token_already_used' ||
+    error.code === 'refresh_token_not_found' ||
+    !!error.message?.includes('Already Used') ||
+    !!error.message?.includes('Refresh Token Not Found')
+  )
+}
+
+export type AuthResult =
+  | { user: User; transient: false }
+  | { user: null; transient: true }
+  | { user: null; transient: false }
+
+/**
+ * Drop-in replacement for `supabase.auth.getUser()` in API routes and
+ * server components. Distinguishes a genuine "not logged in" from a
+ * transient refresh-token race, so callers can respond appropriately
+ * instead of hard-failing on a benign timing collision.
+ */
+export async function getAuthenticatedUser(supabase: SupabaseClient): Promise<AuthResult> {
+  try {
+    const { data, error } = await supabase.auth.getUser()
+
+    if (error) {
+      if (isTransientRefreshTokenError(error)) {
+        return { user: null, transient: true }
+      }
+      return { user: null, transient: false }
+    }
+
+    if (!data.user) {
+      return { user: null, transient: false }
+    }
+
+    return { user: data.user, transient: false }
+  } catch (err: any) {
+    if (isTransientRefreshTokenError(err)) {
+      return { user: null, transient: true }
+    }
+    throw err
+  }
+}
+
+
+================================================================
+FILE: src\lib\supabase\getCachedUser.ts
+================================================================
+// src/lib/supabase/getCachedUser.ts
+//
+// WHY THIS FILE EXISTS:
+// Server Components (page.tsx, layout.tsx) cannot set cookies â€” only
+// Middleware, Route Handlers, and Server Actions can. Your middleware
+// already refreshes the session on every request. If a Server Component
+// independently calls supabase.auth.getUser() and the token happens to be
+// expired, Supabase rotates the refresh token server-side but the new one
+// can NEVER be written back to the browser (the write is silently caught
+// and dropped). The browser is left holding a dead refresh token, and every
+// future request â€” including middleware â€” fails with
+// "Invalid Refresh Token: Refresh Token Not Found" until the user logs in
+// again. This is almost certainly what's poisoning your sessions.
+//
+// THE FIX: never call supabase.auth.getUser() directly inside page.tsx or
+// layout.tsx. Use this cached helper instead. React's cache() ensures that
+// no matter how many Server Components in a single request tree ask "who is
+// the user", the actual Supabase call only happens ONCE per request â€” and
+// that single call reads the token middleware already refreshed, so it's
+// safe.
+//
+// Route Handlers (route.ts) and Server Actions (actions.ts) are fine to
+// leave using supabase.auth.getUser() directly â€” they CAN persist a
+// refreshed session safely, so they aren't part of this specific bug.
+
+import { cache } from 'react'
+import { createClient } from './server'
+
+export const getCachedUser = cache(async () => {
+  const supabase = await createClient()
+  return supabase.auth.getUser()
+})
+
+
+================================================================
+FILE: src\app\auth\callback\route.ts
+================================================================
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+// Permanent fix: this route used to build its own inline Supabase client,
+// which meant it was the ONE place in the codebase that didn't apply the
+// shared getCookieDomain() logic from lib/supabase/server.ts. That caused
+// every session created through this route (all parent magic-link logins,
+// password resets) to be written as a host-only cookie
+// (Domain=results.eduxellence.org) instead of the shared
+// Domain=.eduxellence.org cookie every other login path uses -- so a parent
+// session and a staff session with the same cookie name could silently
+// collide in the same browser.
+//
+// Fix: use the same createClient() everyone else uses, so there is exactly
+// ONE place in the whole app that ever decides cookie domain. This class of
+// bug can't recur without touching that single shared file.
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const code = searchParams.get('code')
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type')
+
+  const supabase = await createClient()
+
+  if (token_hash && type === 'recovery') {
+    const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
+    if (!error) {
+      return NextResponse.redirect(new URL('/auth/reset-password', request.url))
+    }
+    return NextResponse.redirect(new URL('/auth/reset-password?error=invalid_token', request.url))
+  }
+
+  if (token_hash && type === 'magiclink') {
+    const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
+    if (!error) {
+      const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+      const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+      return NextResponse.redirect(new URL(destination, request.url))
+    }
+    return NextResponse.redirect(new URL('/access?error=invalid_code', request.url))
+  }
+
+  if (code) {
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+      const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+      return NextResponse.redirect(new URL(destination, request.url))
+    }
+  }
+
+  return NextResponse.redirect(new URL('/login?error=auth_failed', request.url))
+}
+
+
+================================================================
+FILE: src\app\api\auth\logout\route.ts
+================================================================
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+
+export async function POST() {
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  return NextResponse.json({ success: true })
+}
+
+
+================================================================
+FILE: src\app\api\auth\record-login\route.ts
+================================================================
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { email, userId, success } = await request.json()
+
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      request.headers.get('x-real-ip') ??
+      null
+    const userAgent = request.headers.get('user-agent') ?? null
+
+    const admin = createAdminClient()
+
+    let resolvedUserId = userId ?? null
+
+    // On failed logins we won't have a session yet, so resolve the id from
+    // Supabase Auth directly rather than assuming public.users has an email column.
+    if (!resolvedUserId && email) {
+      const normalizedEmail = email.trim().toLowerCase()
+
+      // listUsers doesn't support filtering by email server-side in all SDK
+      // versions, so we page through and match. Fine at low-to-moderate user
+      // counts; if this project grows large, switch to a public.users lookup
+      // or a dedicated email->id index instead.
+      let page = 1
+      const perPage = 200
+      while (!resolvedUserId) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+        if (error || !data?.users?.length) break
+
+        const match = data.users.find(
+          u => u.email?.toLowerCase() === normalizedEmail
+        )
+        if (match) {
+          resolvedUserId = match.id
+          break
+        }
+
+        if (data.users.length < perPage) break // last page
+        page += 1
+      }
+    }
+
+    // If we can't resolve a user (e.g. email doesn't exist), there's nothing
+    // to log against â€” login_history.user_id is not-null by design. Silently
+    // no-op rather than leaking "this email doesn't exist" via a different code path.
+    if (!resolvedUserId) {
+      return NextResponse.json({ ok: true })
+    }
+
+    const { error } = await admin.rpc('record_login_attempt', {
+      p_user_id: resolvedUserId,
+      p_success: success,
+      p_ip: ip,
+      p_user_agent: userAgent,
+    })
+
+    if (error) console.error('record_login_attempt error:', error.message)
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('record-login route error:', err)
+    // Never fail the login flow because logging failed.
+    return NextResponse.json({ ok: true })
+  }
+}
+
+
+================================================================
+FILE: src\components\auth\MFAChallenge.tsx
+================================================================
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
+
+export default function MFAChallenge({
+  factorId,
+  onVerified,
+}: {
+  factorId: string
+  onVerified: () => void
+}) {
+  const supabase = createClient()
+  const [code, setCode] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function verify() {
+    if (code.length !== 6) return
+    setSubmitting(true)
+    try {
+      const { data: challenge, error: challengeError } =
+        await supabase.auth.mfa.challenge({ factorId })
+      if (challengeError) throw challengeError
+
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challenge.id,
+        code,
+      })
+      if (verifyError) throw verifyError
+
+      onVerified()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Invalid code. Try again.')
+      setCode('')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="card p-8 max-w-md mx-auto flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold text-ink mb-1">Enter your 2FA code</h2>
+        <p className="text-sm text-ink-muted">
+          Open your authenticator app and enter the 6-digit code.
+        </p>
+      </div>
+      <input
+        type="text"
+        inputMode="numeric"
+        maxLength={6}
+        placeholder="6-digit code"
+        autoFocus
+        className="input text-center tracking-widest text-lg"
+        value={code}
+        onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+        onKeyDown={e => e.key === 'Enter' && verify()}
+      />
+      <button
+        className="btn-primary btn"
+        onClick={verify}
+        disabled={submitting || code.length !== 6}
+      >
+        {submitting ? 'Verifyingâ€¦' : 'Verify'}
+      </button>
+    </div>
+  )
+}
+
+
+================================================================
+FILE: src\components\auth\WorkspaceLogoutButton.tsx
+================================================================
+'use client'
+
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
+import { useState } from 'react'
+
+export default function WorkspaceLogoutButton() {
+  const supabase = createClient()
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  async function handleLogout() {
+    setLoading(true)
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
+
+  return (
+    <button
+      onClick={handleLogout}
+      disabled={loading}
+      className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition-colors mx-auto"
+    >
+      <LogOut size={13} />
+      {loading ? 'Signing outâ€¦' : 'Sign out'}
+    </button>
+  )
+}
+

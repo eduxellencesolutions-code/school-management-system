@@ -9,7 +9,8 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "db:generate": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/database.ts",
-    "check-auth-pattern": "grep -rn \"await supabase.auth.getUser()\" src/app src/lib --include=*.ts --include=*.tsx || echo 'Clean — no raw getUser() calls found'"
+    "check-auth-pattern": "grep -rn \"await supabase.auth.getUser()\" src/app src/lib --include=*.ts --include=*.tsx || echo 'Clean — no raw getUser() calls found'",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -25,6 +26,7 @@
     "chart.js": "^4.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "dotenv": "^18.0.1",
     "file-saver": "^2.0.5",
     "flutterwave-node-v3": "^1.0.0",
     "jspdf": "^2.5.1",
@@ -45,6 +47,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20.14.11",
     "@types/papaparse": "^5.3.14",

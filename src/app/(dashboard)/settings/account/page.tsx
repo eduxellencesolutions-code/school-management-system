@@ -118,15 +118,19 @@ export default function AccountPage() {
         .upload(path, file, { upsert: true })
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
-
+      // Store the path in the DB — signing happens at render time
       const { error: updateError } = await supabase
         .from('users')
-        .update({ signature_url: publicUrl })
+        .update({ signature_url: path })
         .eq('id', user.id)
       if (updateError) throw updateError
 
-      setSignatureUrl(publicUrl)
+      // Signed URL only for the immediate local preview
+      const { data: signed } = await supabase.storage
+        .from('signatures')
+        .createSignedUrl(path, 3600)
+      setSignatureUrl(signed?.signedUrl ?? null)
+
       toast.success('Signature updated — this will appear on your generated report cards')
     } catch (err) {
       console.error('Signature upload error:', err)

@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { 
-  User, Building, Users, BookOpen, FileText, 
-  CreditCard, LogOut, Bell, Shield, MessageSquare, Calendar
+import {
+  User, Building, Users, BookOpen, FileText,
+  CreditCard, LogOut, Bell, Shield, MessageSquare, Calendar, Globe
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -18,33 +18,27 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
   const router = useRouter()
   const supabase = createClient()
 
-  console.log('🔍 Sidebar Props:', { isInstitution, isAdmin })
-
-  // ✅ Base items for ALL users
   const items = [
     { label: 'Profile', href: '/settings', icon: User },
     { label: 'Account', href: '/settings/account', icon: Shield },
     { label: 'Notifications', href: '/settings/notifications', icon: Bell },
   ]
 
-  // ✅ Institution-admin-ONLY features (includes Remarks)
   if (isInstitution && isAdmin) {
     items.push(
       { label: 'Institution', href: '/settings/institution', icon: Building },
+      { label: 'Domains', href: '/settings/domains', icon: Globe },
       { label: 'Teachers', href: '/settings/teachers', icon: Users },
       { label: 'Remarks', href: '/settings/remarks', icon: MessageSquare },
     )
   }
 
-  // ✅ Features for BOTH solo teachers AND institution admins
   items.push(
     { label: 'Templates', href: '/settings/templates', icon: FileText },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
     { label: 'Academic Periods', href: '/settings/academic', icon: Calendar },
     { label: 'Billing', href: '/settings#billing', icon: CreditCard },
   )
-
-  console.log('🔍 Sidebar Items:', items.map(i => i.label))
 
   const handleLogout = async () => {
     try {
@@ -75,10 +69,10 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
       <div className="card p-2">
         <nav className="flex flex-col gap-0.5">
           {items.map((item) => {
-            const isActive = item.href === '/settings' 
-              ? pathname === '/settings' 
+            const isActive = item.href === '/settings'
+              ? pathname === '/settings'
               : pathname?.startsWith(item.href.split('#')[0] + '/') || pathname === item.href.split('#')[0]
-            
+
             return (
               <Link
                 key={item.href}
@@ -94,7 +88,7 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
               </Link>
             )
           })}
-          
+
           <div className="border-t border-surface-200 mt-2 pt-2">
             <button
               onClick={handleLogout}

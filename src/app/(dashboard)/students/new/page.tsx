@@ -52,10 +52,15 @@ export default function NewStudentPage() {
         .eq('id', user.id)
         .single()
 
+      // Exclude batch-type groups from the class picker — batches belong
+      // to the training centre flow (see /training/enrolments), not the
+      // generic student-creation path. Leaves class/course/department/
+      // cohort groups untouched for school and tertiary orgs.
       let query = supabase
         .from('groups')
         .select('id, name')
         .eq('is_active', true)
+        .neq('type', 'batch')
         .order('name')
       
       query = profile?.organization_id

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -88,6 +88,29 @@ export default function InstitutionSettings({ organization, userId }: Props) {
   const [principalSigPreview, setPrincipalSigPreview] = useState<string | null>(organization?.principal_signature_url || null)
   const [teacherSigPreview, setTeacherSigPreview] = useState<string | null>(organization?.teacher_signature_url || null)
 
+  // ✅ NEW: Signed URL state for signatures
+  const [principalSigSignedUrl, setPrincipalSigSignedUrl] = useState<string | null>(null)
+  const [teacherSigSignedUrl, setTeacherSigSignedUrl] = useState<string | null>(null)
+
+  // ✅ NEW: Resolve signed URLs whenever the stored path changes
+  useEffect(() => {
+    async function resolveSignedUrls() {
+      if (organization?.principal_signature_url) {
+        const { data } = await supabase.storage
+          .from('signatures')
+          .createSignedUrl(organization.principal_signature_url, 300)
+        setPrincipalSigSignedUrl(data?.signedUrl ?? null)
+      }
+      if (organization?.teacher_signature_url) {
+        const { data } = await supabase.storage
+          .from('signatures')
+          .createSignedUrl(organization.teacher_signature_url, 300)
+        setTeacherSigSignedUrl(data?.signedUrl ?? null)
+      }
+    }
+    resolveSignedUrls()
+  }, [organization?.principal_signature_url, organization?.teacher_signature_url])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     setFormData(prev => ({
@@ -136,8 +159,14 @@ export default function InstitutionSettings({ organization, userId }: Props) {
     }
 
     if (type === 'logo') setLogoPreview(null)
-    if (type === 'principal_sig') setPrincipalSigPreview(null)
-    if (type === 'teacher_sig') setTeacherSigPreview(null)
+    if (type === 'principal_sig') {
+      setPrincipalSigPreview(null)
+      setPrincipalSigSignedUrl(null)
+    }
+    if (type === 'teacher_sig') {
+      setTeacherSigPreview(null)
+      setTeacherSigSignedUrl(null)
+    }
 
     toast.success('Image removed')
     router.refresh()
@@ -156,9 +185,6 @@ export default function InstitutionSettings({ organization, userId }: Props) {
 
       console.log('Uploading to path:', filePath)
 
-      // ✅ FIX: Store the path in the database, not the public URL
-      // For logos, we keep the public URL since logos are public
-      // For signatures, we store the path and generate signed URLs at render time
       const isSignature = type === 'principal_sig' || type === 'teacher_sig'
 
       // Upload to Supabase Storage
@@ -184,13 +210,11 @@ export default function InstitutionSettings({ organization, userId }: Props) {
       let previewUrl: string
 
       if (isSignature) {
-        // Store the path, not the public URL
         storeValue = filePath
-        // Preview uses a temporary object URL or public URL for display
-        const { data: { publicUrl } } = supabase.storage
-          .from('signatures')
-          .getPublicUrl(filePath)
-        previewUrl = publicUrl
+        // Generate an actual working signed URL for the immediate preview,
+        // instead of a public URL against a private bucket
+        const { data: signedData } = await supabase.storage.from('signatures').createSignedUrl(filePath, 300)
+        previewUrl = signedData?.signedUrl ?? ''
       } else {
         const { data: { publicUrl } } = supabase.storage
           .from('institution-assets')
@@ -209,9 +233,11 @@ export default function InstitutionSettings({ organization, userId }: Props) {
       } else if (type === 'principal_sig') {
         updateData.principal_signature_url = storeValue
         setPrincipalSigPreview(previewUrl)
+        setPrincipalSigSignedUrl(previewUrl)
       } else if (type === 'teacher_sig') {
         updateData.teacher_signature_url = storeValue
         setTeacherSigPreview(previewUrl)
+        setTeacherSigSignedUrl(previewUrl)
       }
 
       const { error: updateError } = await supabase
@@ -456,7 +482,6 @@ export default function InstitutionSettings({ organization, userId }: Props) {
                   onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (file) {
-                      // Show preview immediately
                       const previewUrl = URL.createObjectURL(file)
                       setLogoPreview(previewUrl)
                       handleFileUpload(file, 'logo')
@@ -494,9 +519,15 @@ export default function InstitutionSettings({ organization, userId }: Props) {
             <label className="block text-xs font-medium text-ink mb-2">Principal's Signature</label>
             <div className="flex items-center gap-4">
               <div className="w-24 h-16 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-white">
-                {principalSigPreview ? (
+                {principalSigPreview?.startsWith('blob:') || principalSigPreview?.startsWith('http') ? (
                   <img
                     src={principalSigPreview}
+                    alt="Principal Signature"
+                    className="w-full h-full object-contain"
+                  />
+                ) : principalSigSignedUrl ? (
+                  <img
+                    src={principalSigSignedUrl}
                     alt="Principal Signature"
                     className="w-full h-full object-contain"
                   />
@@ -546,9 +577,15 @@ export default function InstitutionSettings({ organization, userId }: Props) {
             <label className="block text-xs font-medium text-ink mb-2">Teacher's Signature (Default)</label>
             <div className="flex items-center gap-4">
               <div className="w-24 h-16 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-white">
-                {teacherSigPreview ? (
+                {teacherSigPreview?.startsWith('blob:') || teacherSigPreview?.startsWith('http') ? (
                   <img
                     src={teacherSigPreview}
+                    alt="Teacher Signature"
+                    className="w-full h-full object-contain"
+                  />
+                ) : teacherSigSignedUrl ? (
+                  <img
+                    src={teacherSigSignedUrl}
                     alt="Teacher Signature"
                     className="w-full h-full object-contain"
                   />
@@ -594,7 +631,7 @@ export default function InstitutionSettings({ organization, userId }: Props) {
           </div>
         </div>
 
-        {/* ✅ Updated: Two-column row for Principal's Name + Title with custom title support */}
+        {/* Principal's Name + Title */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
@@ -704,7 +741,6 @@ export default function InstitutionSettings({ organization, userId }: Props) {
               />
               <span className="text-sm text-ink">Show Class Teacher Comment</span>
             </label>
-            {/* ✅ New: Show Signatory Comment */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

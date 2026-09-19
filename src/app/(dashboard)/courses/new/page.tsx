@@ -16,6 +16,7 @@ const schema = z.object({
   code: z.string().optional(),
   credit_unit: z.string().min(1, 'Credit unit is required'),
   course_type: z.enum(['core', 'elective', 'compulsory']),
+  instructor_id: z.string().optional(),
   prerequisite_subject_id: z.string().optional(),
   description: z.string().optional(),
 })
@@ -28,6 +29,7 @@ export default function NewCoursePage() {
   const preselectedGroup = searchParams.get('group_id') || ''
 
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([])
+  const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
   const [existingCourses, setExistingCourses] = useState<{ id: string; name: string; code: string | null }[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -44,6 +46,12 @@ export default function NewCoursePage() {
       const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
       const { data: groups } = await supabase.from('groups').select('id, name').eq('organization_id', profile?.organization_id).eq('type', 'cohort').order('name')
       setCohorts(groups ?? [])
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('organization_id', profile?.organization_id)
+        .order('name')
+      setStaff(users ?? [])
     }
     load()
   }, [])
@@ -65,6 +73,7 @@ export default function NewCoursePage() {
     if (data.code) fd.set('code', data.code)
     fd.set('credit_unit', data.credit_unit)
     fd.set('course_type', data.course_type)
+    if (data.instructor_id) fd.set('instructor_id', data.instructor_id)
     if (data.prerequisite_subject_id) fd.set('prerequisite_subject_id', data.prerequisite_subject_id)
     if (data.description) fd.set('description', data.description)
     await createCourse(fd)
@@ -115,6 +124,13 @@ export default function NewCoursePage() {
               <option value="core">Core</option>
               <option value="compulsory">Compulsory</option>
               <option value="elective">Elective</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">Instructor</label>
+            <select className="input" {...register('instructor_id')}>
+              <option value="">Unassigned</option>
+              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>

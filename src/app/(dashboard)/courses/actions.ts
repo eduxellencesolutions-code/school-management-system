@@ -17,6 +17,7 @@ export async function createCourse(formData: FormData) {
   const code = (formData.get('code') as string) || null
   const creditUnit = Number(formData.get('credit_unit'))
   const courseType = (formData.get('course_type') as string) || 'core'
+  const instructorId = (formData.get('instructor_id') as string) || null
   const prerequisiteSubjectId = (formData.get('prerequisite_subject_id') as string) || null
   const description = (formData.get('description') as string) || null
 
@@ -42,6 +43,7 @@ export async function createCourse(formData: FormData) {
     credit_unit: creditUnit, course_type: courseType,
     prerequisite_subject_id: prerequisiteSubjectId, description,
     template_id: template!.id,
+    instructor_id: instructorId,
   })
 
   if (error) redirect('/courses/new?error=' + encodeURIComponent(error.message))

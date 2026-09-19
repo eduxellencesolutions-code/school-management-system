@@ -71,7 +71,8 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
     }))
   }
 
-  // ✅ FIX: Store path, not public URL
+  // ✅ FIX: Store path, not public URL. Preview uses a signed URL so it
+  // keeps working after the `signatures` bucket is made private.
   const handleSignatureUpload = async (file: File) => {
     setUploadingSig(true)
     try {
@@ -81,8 +82,9 @@ export default function TeacherForm({ classes, subjects, orgId, roleOptions }: P
       if (error) throw error
       // Store the path, not the public URL
       setSigPath(path)
-      const { data: { publicUrl } } = supabase.storage.from('signatures').getPublicUrl(path)
-      setSigPreview(publicUrl)
+      // Signed URL only for the immediate local preview
+      const { data: signed } = await supabase.storage.from('signatures').createSignedUrl(path, 3600)
+      setSigPreview(signed?.signedUrl ?? null)
       toast.success('Signature uploaded')
     } catch {
       toast.error('Failed to upload signature')

@@ -15,8 +15,8 @@ const schema = z.object({
   code: z.string().optional(),
   programme_id: z.string().min(1, 'Select a programme'),
   level: z.string().optional(),
-  session_id: z.string().optional(),
-  term_id: z.string().optional(),
+  session_id: z.string().min(1, 'Select a session'),
+  term_id: z.string().min(1, 'Select a term'),
 })
 type FormData = z.infer<typeof schema>
 
@@ -116,18 +116,20 @@ export default function NewCohortPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Session</label>
+              <label className="block text-sm font-medium text-ink mb-1">Session <span className="text-red-500">*</span></label>
               <select className="input" {...register('session_id')}>
                 <option value="">Select session</option>
                 {sessions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              {errors.session_id && <p className="text-xs text-red-500 mt-1">{errors.session_id.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Term / Semester</label>
+              <label className="block text-sm font-medium text-ink mb-1">Term / Semester <span className="text-red-500">*</span></label>
               <select className="input" {...register('term_id')} disabled={!selectedSessionId}>
                 <option value="">{selectedSessionId ? 'Select term' : 'Select session first'}</option>
                 {availableTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+              {errors.term_id && <p className="text-xs text-red-500 mt-1">{errors.term_id.message}</p>}
             </div>
           </div>
           <div className="flex gap-3 pt-2">

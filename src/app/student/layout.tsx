@@ -2,6 +2,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import StudentPortalShell from '@/components/student/StudentPortalShell'
+import { getPortalContext, comparePortalToSession } from '@/lib/domains/portalContext'
+import WrongPortalNotice from '@/components/domains/WrongPortalNotice'
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -9,15 +11,29 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   if (!authUser) redirect('/login')
 
-  // Students are NOT rows in `users` (that table is staff-only) — their
-  // identity is resolved via learners.auth_user_id, the same mechanism
-  // parent_accounts.auth_user_id already uses, but reached through a
-  // real Supabase Auth session rather than the K-12 PIN flow. This is
-  // deliberately a separate authentication model from /parent.
   const { data: learnerId } = await supabase.rpc('get_my_learner_id')
 
   if (!learnerId) {
     redirect('/login?error=' + encodeURIComponent('This login is not linked to a student portal account.'))
+  }
+
+  const { data: learner } = await supabase
+    .from('learners')
+    .select('organization_id')
+    .eq('id', learnerId)
+    .single()
+
+  const portal = await getPortalContext()
+  const portalMatch = comparePortalToSession(portal, learner?.organization_id ?? null)
+
+  if (portalMatch === 'mismatch') {
+    return (
+      <WrongPortalNotice
+        orgId={portal.organizationId}
+        orgName={portal.orgName}
+        correctPortalHref="/student"
+      />
+    )
   }
 
   return (

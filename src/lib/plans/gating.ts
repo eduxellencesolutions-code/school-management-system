@@ -94,11 +94,22 @@ export interface GateResult {
   reason?: string
 }
 
-export async function canAddStudent(plan: string, ref: AccountRef): Promise<GateResult> {
+export async function canAddStudent(
+  plan: string,
+  orgType: string | null,
+  ref: AccountRef
+): Promise<GateResult> {
+  // Tertiary: max_students is a pricing-tier boundary, not an admission
+  // ceiling. No existing function treats it as a hard cap, so this must
+  // not either. Always allowed — billing separately reflects true headcount.
+  if (orgType === 'university') {
+    return { allowed: true }
+  }
+
+  // ── UNCHANGED existing school logic ──
   const config = getPlanConfig(plan)
   const usage = await getUsageCounts(ref)
 
-  // Solo teachers on the free plan get a lower cap (10) than institutions on the same plan (30)
   const maxStudents = (plan === 'free' && ref.type === 'solo') ? 10 : config.limits.maxStudents
 
   const allowed = checkLimit(usage.students, maxStudents)

@@ -63,6 +63,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     success: true,
     actionLink: confirmUrl,
+    token_hash: linkData.properties.hashed_token, // NEW — mobile uses this directly, web app ignores it
     parentName: parent.full_name,
   });
 }

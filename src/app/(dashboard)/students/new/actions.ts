@@ -38,17 +38,21 @@ export async function createStudent(
     .eq('id', user.id)
     .single()
 
-  // Determine the acting plan and the correct usage-tracking ref —
-  // institutions are gated at the org level, solo teachers at the user level.
+  // Determine the acting plan, org type, and the correct usage-tracking
+  // ref — institutions are gated at the org level, solo teachers at the
+  // user level. orgType comes from the org row itself, never from any
+  // client-supplied input, so it cannot be spoofed by the caller.
   let plan: string
+  let orgType: string | null = null
   let ref: AccountRef
   if (profile?.organization_id) {
     const { data: org } = await supabase
       .from('organizations')
-      .select('subscription_plan')
+      .select('subscription_plan, type')
       .eq('id', profile.organization_id)
       .single()
     plan = org?.subscription_plan ?? 'free'
+    orgType = org?.type ?? null
     ref = { type: 'org', orgId: profile.organization_id }
   } else {
     plan = profile?.subscription_plan ?? 'free'
@@ -56,7 +60,7 @@ export async function createStudent(
   }
 
   // Check subscription status gate
-  const gate = await canAddStudent(plan, ref)
+  const gate = await canAddStudent(plan, orgType, ref)
   if (!gate.allowed) {
     return { success: false, error: gate.reason }
   }

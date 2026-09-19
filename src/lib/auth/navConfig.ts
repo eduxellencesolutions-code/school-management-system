@@ -36,6 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'rep-leaderboard', href: '/representatives/leaderboard', label: 'Leaderboard', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
+  { key: 'domains-ssl', href: '/domains-ssl', label: 'Domain SSL', section: 'more', superAdminOnly: true },
   { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
   { key: 'platform-announcements', href: '/platform-announcements', label: 'Announcements', section: 'more', requiredPermission: 'announcements.manage' },
   { key: 'team', href: '/team', label: 'Team', section: 'more', superAdminOnly: true },

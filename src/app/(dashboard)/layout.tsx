@@ -11,6 +11,8 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
 import FoundingBanner from '@/components/founding-500/FoundingBanner'
 import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+import { getPortalContext, comparePortalToSession } from '@/lib/domains/portalContext'
+import WrongPortalNotice from '@/components/domains/WrongPortalNotice'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -24,20 +26,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', authUser.id)
     .single()
 
-  // NEW — a tertiary student has no `users` row at all. If this
-  // authenticated identity is actually a linked student, send them to
-  // their own portal instead of falling into staff-dashboard logic
-  // that assumes a `users` row exists.
   if (!user) {
     const { data: learnerId } = await supabase.rpc('get_my_learner_id')
     if (learnerId) redirect('/student')
   }
 
   if (!user?.organization_id) {
-    // A solo teacher is identified by role, not by already owning a class —
-    // a brand-new signup has zero classes and must still reach /dashboard,
-    // which already handles the zero-groups case in its own solo-teacher
-    // branch. Only redirect away for roles with no personal workspace.
     if (user?.role !== 'teacher') {
       const { data: rep } = await supabase
         .from('representatives')
@@ -57,15 +51,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
         .single()
     : { data: null }
 
-  const subState = await getSubscriptionState(supabase, authUser.id)
+  // ---- Custom-domain portal context ---------------------------------------
+  const portal = await getPortalContext()
+  const portalMatch = comparePortalToSession(portal, user?.organization_id ?? null)
 
-  // Real plan-feature lookup (backend-driven)
-  // Pass org.id so feature_overrides are merged correctly
+  if (portalMatch === 'mismatch') {
+    return (
+      <WrongPortalNotice
+        orgId={portal.organizationId}
+        orgName={portal.orgName}
+        correctPortalHref="https://results.eduxellence.org/dashboard"
+      />
+    )
+  }
+
+  const subState = await getSubscriptionState(supabase, authUser.id)
   const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan, org?.id)
 
-  // Real permission set, computed once, mirroring has_permission() exactly.
-  // Sidebar uses this only for what to SHOW -- every route/page still enforces
-  // its own has_permission() check server-side regardless of what's rendered here.
   const { isAdmin, permissions } = user?.organization_id
     ? await getSchoolPermissions(supabase, authUser.id, user.role)
     : { isAdmin: false, permissions: [] as string[] }
@@ -100,9 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {subState.isGracePeriod && subState.daysRemaining !== null && (
                 <GracePeriodBanner daysRemaining={subState.daysRemaining} />
               )}
-              {subState.isExpired && (
-                <ExpiredBanner />
-              )}
+              {subState.isExpired && <ExpiredBanner />}
               {subState.isExpiringSoon && subState.daysUntilExpiry !== null && (
                 <ExpiringSoonBanner daysUntilExpiry={subState.daysUntilExpiry} />
               )}
@@ -111,7 +111,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <NotificationBell />
             </div>
           </div>
-
           {children}
         </div>
       </main>
