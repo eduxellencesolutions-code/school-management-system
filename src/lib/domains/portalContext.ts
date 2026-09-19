@@ -71,11 +71,21 @@ export const getPortalContext = cache(async (): Promise<PortalContext> => {
 
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
+
+    const { data: rawData, error } = await supabase
       .rpc('resolve_organization_by_hostname', { p_hostname: hostname })
       .maybeSingle()
 
-    if (error || !data) return empty
+    if (error || !rawData) return empty
+
+    const data = rawData as {
+      organization_id: string
+      org_name: string
+      org_type: 'school' | 'university' | 'centre'
+      logo_url: string | null
+      colors: { primary?: string; secondary?: string } | null
+      is_primary: boolean
+    }
 
     return {
       hostname,
