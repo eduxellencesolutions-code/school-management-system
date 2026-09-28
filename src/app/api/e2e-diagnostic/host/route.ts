@@ -1,24 +1,31 @@
 // src/app/api/e2e-diagnostic/host/route.ts
-//
-// TEMPORARY diagnostic route (path: /api/e2e-diagnostic/host — moved out
-// of an underscore-prefixed folder, which Next.js excludes from routing
-// entirely). Exists solely to answer: does a client-supplied Host header
-// override survive Vercel's edge/proxy layer and reach this Next.js route
-// unmodified? Returns the raw header value seen by the application —
-// nothing else, no application logic touched.
-//
-// Not a security concern to leave running (returns no sensitive data,
-// doesn't affect routing or auth), but it's test scaffolding, not a real
-// product route — remove once the E2E hostname-testing approach is
-// confirmed working, or once Step "close this out" is reached.
+// TEMPORARY test scaffolding. Returns 404 in production so it can never
+// expose request headers on the live site.
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getPortalContext } from '@/lib/domains/portalContext'
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return new NextResponse('Not found', { status: 404 })
+  }
+
+  const portal = await getPortalContext()
+
   return NextResponse.json({
     hostHeader: request.headers.get('host'),
     xForwardedHost: request.headers.get('x-forwarded-host'),
     allHeaders: Object.fromEntries(request.headers.entries()),
+    portalContext: {
+      hostname: portal.hostname,
+      isPlatformHost: portal.isPlatformHost,
+      organizationId: portal.organizationId,
+      orgName: portal.orgName,
+      orgType: portal.orgType,
+      logoUrl: portal.logoUrl,
+      colors: portal.colors,
+      isPrimaryDomain: portal.isPrimaryDomain,
+    },
   })
 }
