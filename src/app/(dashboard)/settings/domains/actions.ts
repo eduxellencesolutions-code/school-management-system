@@ -67,3 +67,18 @@ export async function setPrimaryDomain(formData: FormData) {
   if (error) redirect(encodeParam('error', error.message))
   redirect(encodeParam('success', 'Primary domain updated.'))
 }
+
+export async function deleteDomain(formData: FormData) {
+  const supabase = await createClient()
+  const domainId = String(formData.get('domain_id') ?? '')
+
+  const { error } = await supabase.rpc('delete_organization_domain', {
+    p_domain_id: domainId,
+  })
+
+  if (error) {
+    redirect(encodeParam('error', error.message))
+  }
+
+  redirect(encodeParam('success', 'Domain removed.'))
+}

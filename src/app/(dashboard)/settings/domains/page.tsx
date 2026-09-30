@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { addDomain, activateDomain, deactivateDomain, setPrimaryDomain } from './actions'
+import { addDomain, activateDomain, deactivateDomain, setPrimaryDomain, deleteDomain } from './actions'
 
 interface DomainRow {
   id: string
@@ -236,6 +236,18 @@ export default function DomainsSettingsPage() {
                   <button type="submit" className="btn-secondary btn-sm btn text-red-600">Deactivate</button>
                 </form>
               )}
+
+              <form
+                action={deleteDomain}
+                onSubmit={(e) => {
+                  if (!confirm(`Permanently remove ${d.hostname}? This cannot be undone.`)) {
+                    e.preventDefault()
+                  }
+                }}
+              >
+                <input type="hidden" name="domain_id" value={d.id} />
+                <button type="submit" className="btn-secondary btn-sm btn text-red-600">Delete</button>
+              </form>
             </div>
           </div>
         ))}
