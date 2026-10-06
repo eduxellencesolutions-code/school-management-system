@@ -5,7 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
 import { initiatePaystackCheckout } from '@/lib/payments/paystack'
 import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
-import { TertiaryCheckoutMetadata } from '@/lib/payments/types'
+import { TertiaryCheckoutMetadata, Currency } from '@/lib/payments/types'
 
 export async function POST(req: NextRequest) {
   const { provider } = await req.json() as { provider: 'flutterwave' | 'paystack' }
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   const reference = quote.reference as string
   const amount = quote.amount_due as number
-  const currency = quote.currency as string
+  const currency = quote.currency as Currency
 
   const metadata: TertiaryCheckoutMetadata = {
     type: 'tertiary_subscription',
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     email: profile.email ?? user.email!,
     name: profile.name ?? 'Institution Admin',
     amount,
-    currency: currency as any,
+    currency,
     reference,
     redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`,
     metadata,

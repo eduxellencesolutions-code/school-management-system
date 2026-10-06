@@ -10,6 +10,7 @@ type Campaign = {
   eligibility_criteria: { criteria?: string[]; note?: string }
   terms_and_notes: string | null
   pilot_duration_days: number | null
+  max_institutions: number | null
 } | null
 
 export default function ApplyClient({ campaign }: { campaign: Campaign }) {

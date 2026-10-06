@@ -1,5 +1,7 @@
 import { BillingCycle, Currency, PaidPlan } from './pricing'
 
+export type { Currency } from './pricing'
+
 export type AccountType = 'org' | 'solo'
 
 export interface CheckoutMetadata {
@@ -24,8 +26,6 @@ export interface FoundingCheckoutMetadata {
   expected_currency: Currency
   referral_code?: string   // Founding 500 only
 }
-
-// Addition to src/lib/payments/types.ts
 
 export interface TertiaryCheckoutMetadata {
   type: 'tertiary_subscription'
