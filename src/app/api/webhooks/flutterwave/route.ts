@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
 import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
 
 export async function POST(req: NextRequest) {
   const signature = req.headers.get('verif-hash')
@@ -17,14 +18,20 @@ export async function POST(req: NextRequest) {
 
     // ✅ Require reference AND amount before applying subscription
     if (verification.success && verification.status === 'successful' && verification.metadata && verification.reference && verification.amount !== undefined) {
-      const result = verification.metadata.type === 'founding_500'
-        ? await applyFounding500Payment(
-            verification.metadata, 'flutterwave', verification.reference, verification.amount,
-            verification.currency ?? 'NGN'
-          )
-        : await applySuccessfulSubscription(
-            verification.metadata, 'flutterwave', verification.reference, verification.amount
-          )
+      const result =
+        verification.metadata.type === 'founding_500'
+          ? await applyFounding500Payment(
+              verification.metadata, 'flutterwave', verification.reference, verification.amount,
+              verification.currency ?? 'NGN'
+            )
+          : verification.metadata.type === 'tertiary_subscription'
+          ? await applySuccessfulTertiarySubscription(
+              verification.metadata, 'flutterwave', verification.reference, verification.amount,
+              verification.currency ?? 'NGN'
+            )
+          : await applySuccessfulSubscription(
+              verification.metadata, 'flutterwave', verification.reference, verification.amount
+            )
       if (!result.success) console.error('Failed to apply payment:', result.error)
     } else if (verification.success && verification.status === 'successful' && !verification.reference) {
       console.error('Flutterwave verification succeeded but returned no reference — refusing to apply subscription')

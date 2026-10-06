@@ -25,7 +25,19 @@ export interface FoundingCheckoutMetadata {
   referral_code?: string   // Founding 500 only
 }
 
-export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata
+// Addition to src/lib/payments/types.ts
+
+export interface TertiaryCheckoutMetadata {
+  type: 'tertiary_subscription'
+  organizationId: string
+  tierKey: string
+  billingCycle: 'termly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata
 
 export interface InitiateCheckoutInput {
   email: string

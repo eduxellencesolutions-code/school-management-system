@@ -34,6 +34,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/parent') ||
     pathname.startsWith('/access') ||
+    pathname.startsWith('/founding-institutions') ||
+    pathname.startsWith('/pricing') ||
     pathname === '/' ||
     pathname.includes('.')
   ) {
@@ -123,6 +125,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth|founding-institutions|pricing).*)',
   ],
 }

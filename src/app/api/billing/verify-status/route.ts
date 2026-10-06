@@ -4,6 +4,7 @@ import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
 import { verifyPaystackTransaction } from '@/lib/payments/paystack'
 import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
 import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
 
 export async function GET(req: NextRequest) {
   const provider = req.nextUrl.searchParams.get('provider')
@@ -58,6 +59,14 @@ export async function GET(req: NextRequest) {
           verification.amount,
           verification.currency ?? 'NGN'
         )
+      : verification.metadata.type === 'tertiary_subscription'
+      ? await applySuccessfulTertiarySubscription(
+          verification.metadata,
+          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+          verification.reference,
+          verification.amount,
+          verification.currency ?? 'NGN'
+        )
       : await applySuccessfulSubscription(
           verification.metadata,
           provider === 'flutterwave' ? 'flutterwave' : 'paystack',
@@ -70,7 +79,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       status: 'successful',
-      plan: verification.metadata.type === 'founding_500' ? 'founding_500' : verification.metadata.plan,
+      plan: verification.metadata.type === 'founding_500'
+        ? 'founding_500'
+        : verification.metadata.type === 'tertiary_subscription'
+        ? verification.metadata.tierKey
+        : verification.metadata.plan,
     })
   } catch (err: any) {
     console.error('Verify status error:', err)
