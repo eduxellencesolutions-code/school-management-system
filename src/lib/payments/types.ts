@@ -30,6 +30,7 @@ export interface FoundingCheckoutMetadata {
 export interface TertiaryCheckoutMetadata {
   type: 'tertiary_subscription'
   organizationId: string
+  quoteReference: string   // our own edux-tertiary-... reference; the key to the locked quote row
   tierKey: string
   billingCycle: 'termly' | 'annual'
   platform_key: string

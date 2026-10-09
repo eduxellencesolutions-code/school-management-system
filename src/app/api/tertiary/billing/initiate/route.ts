@@ -8,6 +8,10 @@ import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 import { TertiaryCheckoutMetadata, Currency } from '@/lib/payments/types'
 
 export async function POST(req: NextRequest) {
+  if (process.env.TERTIARY_BILLING_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'Tertiary billing checkout is not yet available.' }, { status: 503 })
+  }
+
   const { provider } = await req.json() as { provider: 'flutterwave' | 'paystack' }
   if (!['flutterwave', 'paystack'].includes(provider)) {
     return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
@@ -49,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   const tentativeReference = `edux-tertiary-${orgId}-${Date.now()}`
 
-  const { data: quote, error: quoteError } = await admin.rpc('create_tertiary_payment_quote', {
+  const { data: quote, error: quoteError } = await supabase.rpc('create_tertiary_payment_quote', {
     p_org_id: orgId,
     p_reference: tentativeReference,
   })
@@ -58,13 +62,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: quoteError.message }, { status: 400 })
   }
 
-  const reference = quote.reference as string
+  const quoteReference = quote.reference as string
+  // Each checkout attempt needs its own gateway reference; the stable quote reference rides in metadata.
+  const reference = `${quoteReference}-${Date.now().toString(36)}`
   const amount = quote.amount_due as number
   const currency = quote.currency as Currency
 
   const metadata: TertiaryCheckoutMetadata = {
     type: 'tertiary_subscription',
     organizationId: orgId,
+    quoteReference,
     tierKey: quote.tier_key,
     billingCycle: quote.billing_cycle,
     platform_key: 'results',

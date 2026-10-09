@@ -42,12 +42,12 @@ export async function applySuccessfulTertiarySubscription(
   const { data: quote, error: quoteError } = await admin
     .from('tertiary_payment_quotes')
     .select('*')
-    .eq('reference', reference)
+    .eq('reference', metadata.quoteReference)
     .eq('organization_id', metadata.organizationId)
     .maybeSingle()
 
   if (quoteError || !quote) {
-    console.error('No matching tertiary payment quote found for reference:', reference, quoteError)
+    console.error('No matching tertiary payment quote found for quote reference:', metadata.quoteReference, quoteError)
     return { success: false, error: 'No matching billing quote found for this payment' }
   }
 

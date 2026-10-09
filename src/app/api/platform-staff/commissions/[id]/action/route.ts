@@ -79,10 +79,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { error } = await supabase.from('commissions').update(updates).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (action === 'mark_paid') {
-    await supabase.rpc('increment_rep_paid_commission', { p_rep_id: commission.representative_id, p_amount: commission.amount });
-  }
-
   await supabase.rpc('log_platform_action', {
     p_actor_id: user.id,
     p_action: `commission_${action}`,
