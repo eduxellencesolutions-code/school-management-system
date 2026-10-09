@@ -1,4 +1,3 @@
-// src/app/founding-institutions/apply/ApplyClient.tsx
 'use client'
 import { useState } from 'react'
 
@@ -13,13 +12,14 @@ type Campaign = {
   max_institutions: number | null
 } | null
 
-export default function ApplyClient({ campaign }: { campaign: Campaign }) {
+export default function ApplyClient({ campaign, initialReferralCode }: { campaign: Campaign; initialReferralCode: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [form, setForm] = useState({
     institutionName: '', institutionType: 'university', contactName: '', contactEmail: '',
     contactPhone: '', estimatedStudentCount: '', programmesOffered: '', applicationNotes: '',
+    referralCode: initialReferralCode,
   })
 
   if (!campaign) {
@@ -111,6 +111,12 @@ export default function ApplyClient({ campaign }: { campaign: Campaign }) {
         <textarea placeholder="Anything else we should know? (optional)" value={form.applicationNotes}
           onChange={e => setForm({ ...form, applicationNotes: e.target.value })}
           className="w-full border rounded-lg px-3 py-2" rows={3} />
+        <div>
+          <input placeholder="Referral code (optional)" value={form.referralCode} maxLength={40}
+            onChange={e => setForm({ ...form, referralCode: e.target.value })}
+            className="w-full border rounded-lg px-3 py-2" />
+          <p className="text-xs text-ink-faint mt-1">Referred by an Eduxellence representative? Enter their code.</p>
+        </div>
         <button disabled={submitting} className="w-full bg-brand-600 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
           {submitting ? 'Submitting…' : 'Apply'}
         </button>

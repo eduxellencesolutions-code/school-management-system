@@ -29,10 +29,11 @@ export interface FoundingCheckoutMetadata {
 
 export interface TertiaryCheckoutMetadata {
   type: 'tertiary_subscription'
+  quoteKind: 'period' | 'founding_conversion'
   organizationId: string
-  quoteReference: string   // our own edux-tertiary-... reference; the key to the locked quote row
-  tierKey: string
-  billingCycle: 'termly' | 'annual'
+  quoteReference: string
+  tierKey?: string
+  billingCycle?: 'termly' | 'annual'
   platform_key: string
   expected_amount: number
   expected_currency: Currency

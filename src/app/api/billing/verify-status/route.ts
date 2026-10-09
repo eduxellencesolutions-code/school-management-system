@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
       plan: verification.metadata.type === 'founding_500'
         ? 'founding_500'
         : verification.metadata.type === 'tertiary_subscription'
-        ? verification.metadata.tierKey
+        ? (verification.metadata.tierKey ?? 'founding_conversion')
         : verification.metadata.plan,
     })
   } catch (err: any) {
