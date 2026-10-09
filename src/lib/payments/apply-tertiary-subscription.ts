@@ -7,7 +7,7 @@ export async function applySuccessfulTertiarySubscription(
   reference: string,
   amountPaid: number,
   currencyPaid: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; needsReview?: boolean }> {
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -27,7 +27,7 @@ export async function applySuccessfulTertiarySubscription(
   }
   if (data?.status === 'needs_review') {
     console.error('Tertiary payment needs review:', data.reason, reference)
-    return { success: false, error: 'Your payment was received but needs review before it can be applied. Our team has been notified. Please do not pay again.' }
+    return { success: false, needsReview: true, error: 'Your payment was received but needs review before it can be applied. Our team has been notified. Please do not pay again.' }
   }
   return { success: true }
 }

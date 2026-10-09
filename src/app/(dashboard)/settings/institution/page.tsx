@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { setInstitutionType, setGradingScale, setTertiaryPlan } from './actions'
 import { useSearchParams, useRouter } from 'next/navigation'
+import TertiaryPaymentPanel, { formatCurrency, Entitlement, PendingQuote } from '@/components/billing/TertiaryPaymentPanel'
 
 interface Tier {
   tier_key: string
@@ -28,6 +29,7 @@ interface BillingEstimate {
   annual_discounted_amount?: number
   amount_due?: number
   note?: string
+  currency?: string
 }
 
 export default function InstitutionSettingsPage() {
@@ -49,6 +51,11 @@ export default function InstitutionSettingsPage() {
   const [billingLoading, setBillingLoading] = useState(true)
   const [selectedTierKey, setSelectedTierKey] = useState<string>('')
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<string>('termly')
+
+  const [orgCurrency, setOrgCurrency] = useState<string>('NGN')
+  const [tierPrices, setTierPrices] = useState<{ tier_key: string; currency: string; price_per_student_per_term: number }[]>([])
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null)
+  const [pendingQuote, setPendingQuote] = useState<PendingQuote | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -73,12 +80,13 @@ export default function InstitutionSettingsPage() {
 
       const { data: org } = await supabase
         .from('organizations')
-        .select('type, tertiary_plan, tertiary_billing_cycle')
+        .select('type, tertiary_plan, tertiary_billing_cycle, tertiary_billing_currency')
         .eq('id', profile.organization_id)
         .single()
       if (org) {
         setOrgType(org.type)
         setCurrentTierKey(org.tertiary_plan)
+        setOrgCurrency(org.tertiary_billing_currency ?? 'NGN')
         setCurrentBillingCycle(org.tertiary_billing_cycle ?? 'termly')
         setSelectedTierKey(org.tertiary_plan ?? '')
         setSelectedBillingCycle(org.tertiary_billing_cycle ?? 'termly')
@@ -95,6 +103,13 @@ export default function InstitutionSettingsPage() {
           .eq('is_active', true)
           .order('min_students')
         setTiers(tierRows ?? [])
+
+        const { data: priceRows } = await supabase.from('tertiary_tier_prices').select('tier_key, currency, price_per_student_per_term')
+        setTierPrices(priceRows ?? [])
+        const { data: ent } = await supabase.rpc('get_tertiary_entitlement', { p_org_id: profile.organization_id })
+        setEntitlement(ent ?? null)
+        const { data: pq } = await supabase.rpc('get_pending_tertiary_quote', { p_org_id: profile.organization_id })
+        setPendingQuote(pq ?? null)
 
         if (org.tertiary_plan) {
           const { data: capRows } = await supabase
@@ -118,8 +133,8 @@ export default function InstitutionSettingsPage() {
   }, [])
 
   const isTertiary = orgType === 'university'
-  const naira = (n: number | null | undefined) =>
-    n == null ? '—' : `₦${n.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`
+  const money = (n: number | null | undefined, currency: string = billingEstimate?.currency ?? orgCurrency) => formatCurrency(n, currency)
+  const priceFor = (t: Tier) => tierPrices.find(p => p.tier_key === t.tier_key && p.currency === orgCurrency)?.price_per_student_per_term ?? null
 
   return (
     <div className="max-w-lg">
@@ -192,14 +207,14 @@ export default function InstitutionSettingsPage() {
                 </p>
                 {billingEstimate && !billingEstimate.note && (
                   <div className="text-xs text-ink-muted bg-surface-50 rounded p-3 mt-1 flex flex-col gap-1">
-                    <span>{billingEstimate.student_count} active student{billingEstimate.student_count !== 1 ? 's' : ''} × {naira(billingEstimate.price_per_student_per_term)}/term</span>
-                    <span>Termly amount: {naira(billingEstimate.termly_amount)}</span>
+                    <span>{billingEstimate.student_count} active student{billingEstimate.student_count !== 1 ? 's' : ''} × {money(billingEstimate.price_per_student_per_term)}/term</span>
+                    <span>Termly amount: {money(billingEstimate.termly_amount)}</span>
                     {billingEstimate.billing_cycle === 'annual' && (
                       <span>
-                        Annual (prepaid, {Math.round((billingEstimate.annual_discount_rate ?? 0) * 100)}% discount vs paying termly): {naira(billingEstimate.annual_discounted_amount)}
+                        Annual (prepaid, {Math.round((billingEstimate.annual_discount_rate ?? 0) * 100)}% discount vs paying termly): {money(billingEstimate.annual_discounted_amount)}
                       </span>
                     )}
-                    <span className="font-medium text-ink">Amount due this cycle: {naira(billingEstimate.amount_due)}</span>
+                    <span className="font-medium text-ink">Amount due this cycle: {money(billingEstimate.amount_due)}</span>
                   </div>
                 )}
                 {billingEstimate?.note && (
@@ -217,6 +232,15 @@ export default function InstitutionSettingsPage() {
               <p className="text-xs text-ink-faint">No billing plan set yet.</p>
             )}
           </div>
+
+          {currentTierKey && billingEstimate && !billingEstimate.note && billingEstimate.amount_due != null && (
+            <TertiaryPaymentPanel
+              estimate={{ amount_due: billingEstimate.amount_due, currency: billingEstimate.currency ?? orgCurrency,
+                          student_count: billingEstimate.student_count, billing_cycle: billingEstimate.billing_cycle }}
+              entitlement={entitlement}
+              pendingQuote={pendingQuote}
+            />
+          )}
 
           <form action={setTertiaryPlan} className="flex flex-col gap-3">
             <label className="block text-sm font-medium text-ink mb-1">Select plan</label>
@@ -236,7 +260,7 @@ export default function InstitutionSettingsPage() {
                     <span className="text-xs text-ink-muted">
                       {t.max_students ? `${t.min_students.toLocaleString()}–${t.max_students.toLocaleString()} students` : `${t.min_students.toLocaleString()}+ students`}
                       {' · '}
-                      {t.is_custom ? 'Custom pricing — contact us' : `${naira(t.price_per_student_per_term)} / student / term`}
+                      {t.is_custom ? 'Custom pricing — contact us' : `${money(priceFor(t))} / student / term`}
                     </span>
                   </span>
                 </label>

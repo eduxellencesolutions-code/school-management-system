@@ -74,6 +74,10 @@ export async function GET(req: NextRequest) {
           verification.amount
         )
     if (!applied.success) {
+      if ('needsReview' in applied && applied.needsReview) {
+        return NextResponse.json({ status: 'needs_review', message: applied.error })
+      }
+
       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
     }
 

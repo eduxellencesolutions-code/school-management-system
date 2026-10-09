@@ -7,7 +7,7 @@ import Link from 'next/link'
 export default function VerifyClient() {
   const params = useSearchParams()
   const router = useRouter()
-  const [state, setState] = useState<'checking' | 'successful' | 'pending' | 'failed' | 'error'>('checking')
+  const [state, setState] = useState<'checking' | 'successful' | 'pending' | 'failed' | 'error' | 'needs_review'>('checking')
   const [message, setMessage] = useState<string | null>(null)
   const [plan, setPlan] = useState<string | null>(null)
 
@@ -42,12 +42,17 @@ export default function VerifyClient() {
           setTimeout(poll, 2000)
           return
         }
+        if (data.status === 'needs_review') {
+          setState('needs_review')
+          setMessage(data.message ?? null)
+          return
+        }
         if (data.status === 'error') {
           setState('error')
           setMessage(data.message ?? 'Something went wrong verifying your payment.')
           return
         }
-        setState('failed')
+        setState(data.status === 'pending' ? 'pending' : 'failed')
       } catch {
         setState('error')
         setMessage('Could not reach the server to verify your payment.')
@@ -80,6 +85,15 @@ export default function VerifyClient() {
             <h1 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>Payment still processing</h1>
             <p style={{ color: '#666', marginBottom: '1.5rem' }}>
               This can take a minute. You'll be notified once it's confirmed — no need to pay again.
+            </p>
+            <Link href="/dashboard" style={{ color: '#2563eb' }}>Return to dashboard →</Link>
+          </>
+        )}
+        {state === 'needs_review' && (
+          <>
+            <h1 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>Payment received, under review</h1>
+            <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+              {message ?? 'Your payment was received but needs a quick review before it can be applied.'}
             </p>
             <Link href="/dashboard" style={{ color: '#2563eb' }}>Return to dashboard →</Link>
           </>
