@@ -37,6 +37,13 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase
     .from('users').select('organization_id, name, email').eq('id', user.id).single()
 
+  if (profile?.organization_id) {
+    const { data: orgRow } = await supabase.from('organizations').select('type').eq('id', profile.organization_id).single()
+    if (orgRow?.type === 'university') {
+      return NextResponse.json({ error: 'University institutions are billed through Institution Settings.' }, { status: 403 })
+    }
+  }
+
   const accountType = profile?.organization_id ? 'org' : 'solo'
   const accountId = profile?.organization_id ?? user.id
 

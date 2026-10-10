@@ -129,8 +129,8 @@ export default function CommissionQueue({
                   <button onClick={() => act(c.id, 'reject')} className="btn-sm btn bg-red-50 text-red-600">Reject</button>
                 )}
 
-                {c.status === 'payable' && canApprove && (
-                  <button onClick={() => act(c.id, 'mark_paid')} className="btn-primary btn-sm btn">Mark Paid</button>
+                {c.status === 'payable' && (
+                  <span className="text-xs text-ink-faint">Paid through a withdrawal</span>
                 )}
               </div>
             </div>

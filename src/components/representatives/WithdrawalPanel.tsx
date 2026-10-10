@@ -86,6 +86,7 @@ export default function WithdrawalPanel({
     under_review: 'badge-gray',
     rejected: 'badge-red',
     cancelled: 'badge-gray',
+    failed: 'badge-red',
   }
 
   return (
@@ -176,8 +177,11 @@ export default function WithdrawalPanel({
       {/* Withdrawal request */}
       <div className="card p-4">
         <p className="text-sm font-medium text-ink mb-2">Request Withdrawal</p>
-        <p className="text-xs text-ink-faint mb-3">
+        <p className="text-xs text-ink-faint mb-1">
           Minimum ₦{MIN_WITHDRAWAL.toLocaleString()}. Available balance: ₦{wallet.available.toLocaleString()}
+        </p>
+        <p className="text-xs text-ink-faint mb-3">
+          Commissions are paid out whole, so the amount paid can be slightly higher than the amount you request. The payout amount is shown on your request once it is made.
         </p>
         <div className="flex gap-2">
           <input
@@ -213,7 +217,12 @@ export default function WithdrawalPanel({
           ) : withdrawals.map((w: any) => (
             <div key={w.id} className="p-3 flex justify-between items-center text-sm">
               <div>
-                <p>₦{Number(w.amount_requested).toLocaleString()}</p>
+                <p>
+                  ₦{Number(w.amount_claimed ?? w.amount_requested).toLocaleString()}
+                  {w.amount_claimed != null && Number(w.amount_claimed) !== Number(w.amount_requested) && (
+                    <span className="text-xs text-ink-faint ml-1">(requested ₦{Number(w.amount_requested).toLocaleString()})</span>
+                  )}
+                </p>
                 <p className="text-xs text-ink-faint">
                   {new Date(w.date_requested).toLocaleDateString('en-NG')}
                   {w.rejection_reason && ` · ${w.rejection_reason}`}

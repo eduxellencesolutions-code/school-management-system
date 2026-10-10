@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Only a school admin can activate Founding 500' }, { status: 403 })
   }
   const orgId = profile.organization_id
+  const { data: orgTypeRow } = await admin.from('organizations').select('type').eq('id', orgId).single()
+  if (orgTypeRow?.type === 'university') {
+    return NextResponse.json({ error: 'Founding 500 is for schools. Higher institutions use the Founding 50 programme.' }, { status: 403 })
+  }
 
   // Referral is resolved server-side from signup-time data — never
   // re-entered or trusted from the client at payment time.

@@ -24,6 +24,25 @@ export default async function SettingsPage() {
   const org = profile?.organization
   const isInstitution = !!org
   const isSolo = !isInstitution
+  const isTertiary = org?.type === 'university'
+
+  let tertiaryTierName: string | null = null
+  let tertiaryStatusLine = ''
+  if (isTertiary) {
+    const fmt = (s?: string | null) =>
+      s ? new Date(s.length === 10 ? `${s}T00:00:00` : s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+    if (org.tertiary_plan) {
+      const { data: tier } = await supabase.from('tertiary_pricing_tiers').select('name').eq('tier_key', org.tertiary_plan).maybeSingle()
+      tertiaryTierName = tier?.name ?? org.tertiary_plan
+    }
+    const { data: e } = await supabase.rpc('get_tertiary_entitlement', { p_org_id: org.id })
+    tertiaryStatusLine = !e ? 'Status unavailable'
+      : e.status === 'pilot' ? `Founding pilot until ${fmt(e.pilot?.pilot_ends_at)}`
+      : e.status === 'paid' ? (e.between_periods ? `Paid through ${fmt(e.paid_until)}` : `Active until ${fmt(e.paid_until)}`)
+      : e.status === 'grace' ? `Payment overdue. Grace period ends ${fmt(e.grace_ends_at)}`
+      : e.status === 'expired' ? `Expired on ${fmt(e.paid_until)}`
+      : 'No payment received yet'
+  }
 
   // ✅ FIX 1: isAdmin now correctly includes school_admin
   const isAdmin = profile?.role === 'admin' || profile?.role === 'school_admin'
@@ -176,7 +195,7 @@ export default async function SettingsPage() {
                 <Crown size={16} className="text-ink-faint" />
                 <div>
                   <p className="text-xs text-ink-faint">Plan</p>
-                  <p className="text-sm text-ink font-medium capitalize">{config.label}</p>
+                  <p className="text-sm text-ink font-medium capitalize">{isTertiary ? (tertiaryTierName ?? 'No plan selected') : config.label}</p>
                 </div>
               </div>
               {org.motto && (
@@ -256,8 +275,26 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* ✅ FIX 2: Billing Section - Only admins and solo teachers */}
-      {canSeeBilling && (
+      {isTertiary && isAdmin && (
+        <div id="billing" className="card scroll-mt-20">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
+              <Crown size={16} className="text-brand-500" />
+              Subscription & Billing
+            </h2>
+            <span className="badge badge-blue">{tertiaryTierName ?? 'No plan selected'}</span>
+          </div>
+          <div className="card-body flex flex-col gap-3">
+            <p className="text-sm text-ink">{tertiaryStatusLine}</p>
+            <p className="text-xs text-ink-muted">
+              Higher-institution plans are billed per student per term. Choose your plan and pay in Institution Settings.
+            </p>
+            <Link href="/settings/institution" className="btn-primary btn-sm btn w-fit">Manage plan and payment</Link>
+          </div>
+        </div>
+      )}
+
+      {canSeeBilling && !isTertiary && (
         <div id="billing" className="card scroll-mt-20">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">

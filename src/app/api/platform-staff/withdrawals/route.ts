@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('withdrawals')
-    .select('id, representative_id, amount_requested, amount_claimed, status, requires_finance_approval, date_requested, payment_reference, rejection_reason')
+    .select('id, representative_id, amount_requested, amount_claimed, status, requires_finance_approval, date_requested, payment_reference, rejection_reason, payout_verified_at, bank_name_snapshot, bank_account_number_snapshot, bank_account_name_snapshot')
     .order('date_requested', { ascending: false })
 
   if (status) query = query.eq('status', status)

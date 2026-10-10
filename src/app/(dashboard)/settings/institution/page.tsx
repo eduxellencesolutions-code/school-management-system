@@ -54,6 +54,9 @@ export default function InstitutionSettingsPage() {
 
   const [orgCurrency, setOrgCurrency] = useState<string>('NGN')
   const [tierPrices, setTierPrices] = useState<{ tier_key: string; currency: string; price_per_student_per_term: number }[]>([])
+  const [discountRate, setDiscountRate] = useState<number>(0)
+  const [termsPerYear, setTermsPerYear] = useState<number>(2)
+  const [usdEnabled, setUsdEnabled] = useState<boolean>(false)
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null)
   const [pendingQuote, setPendingQuote] = useState<PendingQuote | null>(null)
 
@@ -106,6 +109,12 @@ export default function InstitutionSettingsPage() {
 
         const { data: priceRows } = await supabase.from('tertiary_tier_prices').select('tier_key, currency, price_per_student_per_term')
         setTierPrices(priceRows ?? [])
+        const { data: pub } = await supabase.rpc('get_public_tertiary_pricing')
+        if (pub) {
+          setDiscountRate(Number(pub.annual_discount_rate ?? 0))
+          setTermsPerYear(Number(pub.terms_per_year ?? 2))
+          setUsdEnabled((pub.prices ?? []).some((p: any) => p.currency === 'USD'))
+        }
         const { data: ent } = await supabase.rpc('get_tertiary_entitlement', { p_org_id: profile.organization_id })
         setEntitlement(ent ?? null)
         const { data: pq } = await supabase.rpc('get_pending_tertiary_quote', { p_org_id: profile.organization_id })
@@ -135,6 +144,10 @@ export default function InstitutionSettingsPage() {
   const isTertiary = orgType === 'university'
   const money = (n: number | null | undefined, currency: string = billingEstimate?.currency ?? orgCurrency) => formatCurrency(n, currency)
   const priceFor = (t: Tier) => tierPrices.find(p => p.tier_key === t.tier_key && p.currency === orgCurrency)?.price_per_student_per_term ?? null
+  const usdPriceFor = (t: Tier) => tierPrices.find(p => p.tier_key === t.tier_key && p.currency === 'USD')?.price_per_student_per_term ?? null
+  const shownRate = (base: number | null) =>
+    base == null ? null
+      : selectedBillingCycle === 'annual' ? (base * termsPerYear * (1 - discountRate)) : base
 
   return (
     <div className="max-w-lg">
@@ -260,7 +273,17 @@ export default function InstitutionSettingsPage() {
                     <span className="text-xs text-ink-muted">
                       {t.max_students ? `${t.min_students.toLocaleString()}–${t.max_students.toLocaleString()} students` : `${t.min_students.toLocaleString()}+ students`}
                       {' · '}
-                      {t.is_custom ? 'Custom pricing — contact us' : `${money(priceFor(t))} / student / term`}
+                      {t.is_custom ? 'Custom pricing, contact us'
+                        : selectedBillingCycle === 'annual'
+                          ? `${money(shownRate(priceFor(t)))} / student / year (${Math.round(discountRate * 100)}% off ${termsPerYear} terms)`
+                          : `${money(priceFor(t))} / student / term`}
+                      {!t.is_custom && usdPriceFor(t) != null && (
+                        <span className="block text-[11px] text-ink-faint">
+                          {selectedBillingCycle === 'annual'
+                            ? `${money(shownRate(usdPriceFor(t)), 'USD')} / student / year`
+                            : `${money(usdPriceFor(t), 'USD')} / student / term`} for international institutions
+                        </span>
+                      )}
                     </span>
                   </span>
                 </label>
@@ -286,6 +309,10 @@ export default function InstitutionSettingsPage() {
                 Annual (prepaid, discounted)
               </label>
             </div>
+
+            <p className="text-xs text-ink-faint">
+              {usdEnabled ? 'Online payment in US dollars is available.' : 'Online payment is currently in Nigerian naira. US dollar prices are shown for reference. Contact us to pay in USD.'}
+            </p>
 
             <button type="submit" className="btn-primary btn w-fit mt-2" disabled={!selectedTierKey}>
               {currentTierKey ? 'Update billing plan' : 'Set billing plan'}
