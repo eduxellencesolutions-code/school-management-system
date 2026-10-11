@@ -7,6 +7,17 @@ import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 import { Currency } from '@/lib/payments/pricing'
 import { TertiaryCheckoutMetadata } from '@/lib/payments/types'
 
+// Payment providers reject reserved test TLDs (.invalid, .test, .example).
+// In non-production, swap those for a real address so the test flow can proceed.
+const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+function paymentEmail(profileEmail: string | null, userEmail: string | null): string {
+  const raw = profileEmail ?? userEmail ?? ''
+  if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) {
+    return PROVIDER_SAFE_EMAIL
+  }
+  return raw
+}
+
 export async function POST(req: NextRequest) {
   if (process.env.TERTIARY_BILLING_ENABLED !== 'true') {
     return NextResponse.json({ error: 'Tertiary billing checkout is not yet available.' }, { status: 503 })
@@ -48,7 +59,8 @@ export async function POST(req: NextRequest) {
     platform_key: 'results', expected_amount: amount, expected_currency: currency,
   }
   const commonInput = {
-    email: profile.email ?? user.email!, name: profile.name ?? 'Institution Admin', amount, currency, reference,
+    email: paymentEmail(profile.email, user.email ?? null),
+    name: profile.name ?? 'Institution Admin', amount, currency, reference,
     redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
   }
   const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(commonInput) : await initiatePaystackCheckout(commonInput)

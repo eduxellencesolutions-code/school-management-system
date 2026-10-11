@@ -1,0 +1,215 @@
+﻿
+WRITE \src\app\(dashboard)\classes\actions.ts:61: .from('subjects') .update({ is_active: false }) .eq('group_id', id) 
+WRITE \src\app\(dashboard)\courses\actions.ts:40: const { error } = await supabase.from('subjects').insert({ organization_id: profile!.organization_id, group_id: groupId, name, code, credit_unit: creditUnit, course_type: courseType,
+WRITE \src\app\(dashboard)\settings\academic\actions.ts:224: .from('organizations') .update({ current_term_id: termId || null }) .eq('id', orgId) 
+WRITE \src\app\(dashboard)\settings\academic\actions.ts:234: .from('users') .update({ current_term_id: termId || null }) .eq('id', user.id) 
+WRITE \src\app\(dashboard)\settings\account\page.tsx:123: .from('users') .update({ signature_url: path }) .eq('id', user.id) if (updateError) throw updateError
+WRITE \src\app\(dashboard)\settings\branding\actions.ts:135: .from('organizations') .update(updatePayload) .eq('id', profile.organization_id) 
+WRITE \src\app\(dashboard)\settings\profile\actions.ts:13: .from('users') .update({ signature_url: signatureUrl }) .eq('id', user.id) 
+WRITE \src\app\(dashboard)\settings\subjects\actions.ts:57: const { error } = await supabase.from('subjects').insert({ organization_id: profile?.organization_id ?? null, group_id:        groupId, name,
+WRITE \src\app\(dashboard)\settings\subjects\actions.ts:160: .from('subjects') .update({ name, code: code || null,
+WRITE \src\app\(dashboard)\settings\subjects\actions.ts:224: .from('subjects') .update({ is_active: false }) .eq('id', subjectId) 
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:107: .from('users') .update({ name: input.name.trim(), phone: input.phone || null,
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:269: .from('subjects') .update({ teacher_id: teacherId }) .eq('id', subjectId) }
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:318: .from('subjects') .update({ teacher_id: null }) .eq('id', assignment.subject_id) }
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:464: .from('users') .update({ name: teacher.name, role: teacher.role,
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:519: .from('subjects') .insert({ name: teacher.subjectName, group_id: classId, organization_id: orgId, is_active: true }) .select('id') .single()
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:605: .from('subjects') .update({ teacher_id: null }) .eq('teacher_id', teacherId) 
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:611: .from('users') .delete() .eq('id', teacherId) 
+WRITE \src\app\(dashboard)\settings\teachers\actions.ts:638: .from('users') .update({ signature_url: signatureUrl }) .eq('id', teacherId) 
+WRITE \src\app\(dashboard)\students\import\actions.ts:140: const { error, data } = await supabase.from('learners').insert(inserts).select()  if (error) { console.error('Bulk import batch insert error:', error)
+WRITE \src\app\(dashboard)\students\new\actions.ts:74: const { error } = await supabase.from('learners').insert({ organization_id: profile?.organization_id ?? null, group_id: input.group_id, first_name: input.first_name,
+WRITE \src\app\(dashboard)\students\actions.ts:37: .from('learners') .update({ status: 'archived', is_active: false,
+WRITE \src\app\(dashboard)\students\actions.ts:97: .from('learners') .update({ status, is_active: status === 'active',
+WRITE \src\app\(dashboard)\students\actions.ts:153: const { error } = await supabase.from('learners').insert({ organization_id: profile?.organization_id ?? null, group_id: groupId, first_name: firstName.trim(),
+WRITE \src\app\(dashboard)\students\actions.ts:262: const { data, error } = await supabase.from('learners').insert(inserts).select() if (error) { console.error('Batch import error:', error) failed += batch.length
+WRITE \src\app\(dashboard)\teacher\actions.ts:110: .from('subjects') .update({ teacher_id: teacherId }) .eq('id', subjectId) }
+WRITE \src\app\(dashboard)\teacher\actions.ts:151: .from('subjects') .update({ teacher_id: null }) .eq('id', assignment.subject_id) }
+WRITE \src\app\(dashboard)\teacher\actions.ts:259: .from('users') .insert({ name: teacher.name, email: teacher.email,
+WRITE \src\app\(dashboard)\teacher\actions.ts:324: .from('subjects') .insert({ name: teacher.subjectName, group_id: classId,
+WRITE \src\app\(dashboard)\teacher\actions.ts:407: .from('subjects') .update({ teacher_id: null }) .eq('teacher_id', teacherId) 
+WRITE \src\app\(dashboard)\teacher\actions.ts:413: .from('users') .delete() .eq('id', teacherId) 
+WRITE \src\app\(dashboard)\training\batches\new\page.tsx:41: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()  const { error } = await supabase.from('groups').insert({ organization_id: profile?.organization_id,
+WRITE \src\app\(dashboard)\training\enrolments\new\page.tsx:58: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()  const { error } = await supabase.from('training_enrolments').insert({ organization_id: profile?.organization_id,
+WRITE \src\app\(dashboard)\training\learners\new\page.tsx:67: .from('learners') .insert({ organization_id: profile?.organization_id, group_id: batchId,
+WRITE \src\app\(dashboard)\training\modules\new\page.tsx:71: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()  const { error } = await supabase.from('training_modules').insert({ organization_id: profile?.organization_id,
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:78: .from('organizations') .update(updates) .eq('id', orgId) 
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:107: .from('organizations') .update({ subscription_expires_at: newExpiry, subscription_status: 'active',
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:142: .from('users') .update({ role: 'teacher' }) .eq('organization_id', orgId) .eq('role', 'admin')
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:153: .from('users') .update({ role: 'admin' }) .eq('id', newAdminUserId) .eq('organization_id', orgId)
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:189: const { error } = await admin.from('organizations').delete().eq('id', orgId)  if (error) { console.error('Error deleting school:', error)
+WRITE \src\app\(super-admin)\schools\[id]\actions.ts:215: .from('organizations') .update({ subscription_plan: plan }) .eq('id', orgId) 
+WRITE \src\app\(super-admin)\security\actions.ts:69: .from('users') .update({ account_status: 'locked', locked_at: new Date().toISOString(),
+WRITE \src\app\(super-admin)\security\actions.ts:107: .from('users') .update({ account_status: 'active', unlocked_at: new Date().toISOString(),
+WRITE \src\app\(super-admin)\solo-teachers\[id]\actions.ts:52: .from('users') .update(updates) .eq('id', userId) .is('organization_id', null) // safety: this action must never touch institution staff
+WRITE \src\app\(super-admin)\solo-teachers\[id]\actions.ts:75: .from('users') .update({ subscription_expires_at: newExpiry, subscription_status: 'active',
+WRITE \src\app\(super-admin)\solo-teachers\[id]\actions.ts:102: .from('users') .update({ subscription_plan: plan }) .eq('id', userId) .is('organization_id', null)
+WRITE \src\app\api\attendance\route.ts:105: .from('attendance_records') .upsert(rows, { onConflict: 'learner_id,date' }); if (insertError) { return NextResponse.json({ error: insertError.message }, { status: 500 });
+WRITE \src\app\api\cron\check-expirations\subscription-check\route.ts:34: await admin.from('organizations') .update({ subscription_status: 'grace_period', grace_period_ends_at: graceEnd.toISOString() }) .eq('id', org.id) results.orgsMovedToGrace++
+WRITE \src\app\api\cron\check-expirations\subscription-check\route.ts:49: await admin.from('organizations') .update({ subscription_status: 'expired' }) .eq('id', org.id) results.orgsMovedToExpired++
+WRITE \src\app\api\cron\check-expirations\subscription-check\route.ts:66: await admin.from('users') .update({ subscription_status: 'grace_period', grace_period_ends_at: graceEnd.toISOString() }) .eq('id', u.id) results.soloMovedToGrace++
+WRITE \src\app\api\cron\check-expirations\subscription-check\route.ts:81: await admin.from('users') .update({ subscription_status: 'expired' }) .eq('id', u.id) results.soloMovedToExpired++
+WRITE \src\app\api\staff\create-teacher-account\route.ts:62: .from('users') .update({ name: name.trim(), phone: phone || null, organization_id: orgId, role }) .eq('id', teacherId) if (updateError) {
+WRITE \src\app\api\students\create-portal-account\route.ts:48: .from('learners') .update({ auth_user_id: authUser.user.id, portal_status: 'active', portal_activated_at: new Date().toISOString(),
+WRITE \src\app\api\tertiary\students\create-portal-account\route.ts:65: .from('learners') .update({ auth_user_id: authUser.user.id, portal_status: 'active', portal_activated_at: new Date().toISOString(),
+WRITE \src\components\dashboard\SubjectManager.tsx:40: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()  const { error } = await supabase.from('subjects').insert({ organization_id: profile?.organization_id ?? null,
+WRITE \src\components\dashboard\SubjectManager.tsx:42: const { error } = await supabase.from('subjects').insert({ organization_id: profile?.organization_id ?? null, group_id: groupId, name: name.trim(),
+WRITE \src\components\dashboard\SubjectManager.tsx:68: .from('subjects') .update({ is_active: false }) .eq('id', id) 
+WRITE \src\components\settings\InstitutionSettings.tsx:152: .from('organizations') .update({ [column]: null }) .eq('id', organization.id) 
+WRITE \src\components\settings\InstitutionSettings.tsx:244: .from('organizations') .update(updateData) .eq('id', organization.id) 
+WRITE \src\components\settings\InstitutionSettings.tsx:299: .from('organizations') .update(updateData) .eq('id', organization.id) 
+WRITE \src\components\students\StudentEditForm.tsx:72: .from('learners') .update({ first_name:       data.first_name, last_name:        data.last_name,
+SVC \src\app\(dashboard)\settings\branding\actions.ts:6
+SVC \src\app\(dashboard)\settings\branding\actions.ts:121
+SVC \src\app\(dashboard)\settings\teachers\actions.ts:4
+SVC \src\app\(dashboard)\settings\teachers\actions.ts:87
+SVC \src\app\(dashboard)\settings\teachers\actions.ts:89
+SVC \src\app\(dashboard)\settings\teachers\actions.ts:357
+SVC \src\app\(dashboard)\settings\teachers\actions.ts:359
+SVC \src\app\(super-admin)\audit\page.tsx:2
+SVC \src\app\(super-admin)\audit\page.tsx:20
+SVC \src\app\(super-admin)\audit\page.tsx:22
+SVC \src\app\(super-admin)\overview\page.tsx:2
+SVC \src\app\(super-admin)\overview\page.tsx:21
+SVC \src\app\(super-admin)\overview\page.tsx:23
+SVC \src\app\(super-admin)\schools\[id]\actions.ts:4
+SVC \src\app\(super-admin)\schools\[id]\actions.ts:30
+SVC \src\app\(super-admin)\schools\[id]\actions.ts:32
+SVC \src\app\(super-admin)\schools\[id]\page.tsx:2
+SVC \src\app\(super-admin)\schools\[id]\page.tsx:29
+SVC \src\app\(super-admin)\schools\[id]\page.tsx:31
+SVC \src\app\(super-admin)\schools\page.tsx:21
+SVC \src\app\(super-admin)\schools\page.tsx:22
+SVC \src\app\(super-admin)\schools\page.tsx:24
+SVC \src\app\(super-admin)\security\actions.ts:4
+SVC \src\app\(super-admin)\security\actions.ts:23
+SVC \src\app\(super-admin)\security\actions.ts:25
+SVC \src\app\(super-admin)\security\actions.ts:162
+SVC \src\app\(super-admin)\solo-teachers\[id]\actions.ts:4
+SVC \src\app\(super-admin)\solo-teachers\[id]\actions.ts:19
+SVC \src\app\(super-admin)\solo-teachers\[id]\actions.ts:21
+SVC \src\app\(super-admin)\solo-teachers\[id]\page.tsx:2
+SVC \src\app\(super-admin)\solo-teachers\[id]\page.tsx:26
+SVC \src\app\(super-admin)\solo-teachers\[id]\page.tsx:28
+SVC \src\app\(super-admin)\solo-teachers\page.tsx:2
+SVC \src\app\(super-admin)\solo-teachers\page.tsx:21
+SVC \src\app\(super-admin)\solo-teachers\page.tsx:23
+SVC \src\app\api\admin\announcements\route.ts:84
+SVC \src\app\api\admin\announcements\route.ts:85
+SVC \src\app\api\admin\announcements\route.ts:87
+SVC \src\app\api\admin\parents\[parentId]\regenerate\route.ts:2
+SVC \src\app\api\admin\parents\[parentId]\regenerate\route.ts:32
+SVC \src\app\api\admin\parents\[parentId]\toggle-active\route.ts:2
+SVC \src\app\api\admin\parents\[parentId]\toggle-active\route.ts:35
+SVC \src\app\api\auth\record-login\route.ts:2
+SVC \src\app\api\auth\record-login\route.ts:14
+SVC \src\app\api\cron\check-expirations\subscription-check\route.ts:17
+SVC \src\app\api\cron\check-expirations\route.ts:8
+SVC \src\app\api\cron\clean-trash\route.ts:15
+SVC \src\app\api\cron\leaderboard-recognitions\route.ts:8
+SVC \src\app\api\cron\leaderboard-snapshot\route.ts:8
+SVC \src\app\api\cron\release-commissions\route.ts:7
+SVC \src\app\api\cron\rep-alerts\route.ts:9
+SVC \src\app\api\cron\weekly-brief\route.ts:8
+SVC \src\app\api\domains\[id]\verify\route.ts:27
+SVC \src\app\api\domains\[id]\verify\route.ts:121
+SVC \src\app\api\founding-500\initiate\route.ts:4
+SVC \src\app\api\founding-500\initiate\route.ts:19
+SVC \src\app\api\founding-500\initiate\route.ts:21
+SVC \src\app\api\founding-500\status\route.ts:4
+SVC \src\app\api\founding-500\status\route.ts:20
+SVC \src\app\api\founding-500\status\route.ts:22
+SVC \src\app\api\parents\access\route.ts:1
+SVC \src\app\api\parents\access\route.ts:9
+SVC \src\app\api\parents\link\route.ts:2
+SVC \src\app\api\parents\link\route.ts:69
+SVC \src\app\api\platform-announcements\route.ts:63
+SVC \src\app\api\platform-announcements\route.ts:64
+SVC \src\app\api\platform-announcements\route.ts:66
+SVC \src\app\api\platform-staff\analytics\route.ts:2
+SVC \src\app\api\platform-staff\analytics\route.ts:20
+SVC \src\app\api\platform-staff\needs-attention\route.ts:2
+SVC \src\app\api\platform-staff\needs-attention\route.ts:14
+SVC \src\app\api\platform-staff\representatives\[id]\photo\review\route.ts:23
+SVC \src\app\api\platform-staff\representatives\[id]\photo\review\route.ts:24
+SVC \src\app\api\platform-staff\representatives\[id]\photo\review\route.ts:26
+SVC \src\app\api\platform-staff\resources\[id]\route.ts:34
+SVC \src\app\api\platform-staff\resources\[id]\route.ts:35
+SVC \src\app\api\platform-staff\resources\[id]\route.ts:37
+SVC \src\app\api\platform-staff\route.ts:2
+SVC \src\app\api\platform-staff\route.ts:45
+SVC \src\app\api\platform-users\search\route.ts:2
+SVC \src\app\api\platform-users\search\route.ts:8
+SVC \src\app\api\platform-users\search\route.ts:10
+SVC \src\app\api\platform-users\[id]\route.ts:2
+SVC \src\app\api\platform-users\[id]\route.ts:8
+SVC \src\app\api\platform-users\[id]\route.ts:10
+SVC \src\app\api\representatives\apply\route.ts:1
+SVC \src\app\api\representatives\apply\route.ts:13
+SVC \src\app\api\representatives\record-referral\route.ts:1
+SVC \src\app\api\representatives\record-referral\route.ts:5
+SVC \src\app\api\staff\create-teacher-account\route.ts:1
+SVC \src\app\api\staff\create-teacher-account\route.ts:45
+SVC \src\app\api\staff\create-teacher-account\route.ts:46
+SVC \src\app\api\staff\create-teacher-account\route.ts:48
+SVC \src\app\api\students\create-portal-account\route.ts:1
+SVC \src\app\api\students\create-portal-account\route.ts:33
+SVC \src\app\api\students\create-portal-account\route.ts:34
+SVC \src\app\api\students\create-portal-account\route.ts:37
+SVC \src\app\api\tertiary\students\create-portal-account\route.ts:2
+SVC \src\app\api\tertiary\students\create-portal-account\route.ts:48
+SVC \src\app\api\tertiary\students\create-portal-account\route.ts:49
+SVC \src\app\api\tertiary\students\create-portal-account\route.ts:54
+SVC \src\app\api\webhooks\new-signup\route.ts:2
+SVC \src\app\api\webhooks\new-signup\route.ts:8
+SVC \src\app\api\webhooks\new-signup\route.ts:21
+SVC \src\app\api\webhooks\signup-notification\route.ts:1
+SVC \src\app\api\webhooks\signup-notification\route.ts:81
+SVC \src\lib\payments\apply-founding500.ts:7
+SVC \src\lib\payments\apply-subscription.ts:8
+SVC \src\lib\payments\apply-tertiary-subscription.ts:13
+SVC \src\lib\plans\gating.ts:7
+SVC \src\lib\supabase\admin.ts:3
+SVC \src\lib\supabase\admin.ts:6
+SVC \src\lib\supabase\admin.ts:9
+--- tracked env/secret-looking files
+
+.env.local.example
+
+
+--- .gitignore
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+
+# env files â€” NEVER commit secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# playwright
+test-results/
+playwright-report/
+tests/e2e/.fixtures.json

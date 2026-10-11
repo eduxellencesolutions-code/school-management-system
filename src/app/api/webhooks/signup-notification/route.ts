@@ -11,17 +11,33 @@ function nextBackoff(attemptCount: number): string | null {
   return new Date(Date.now() + minutes * 60_000).toISOString();
 }
 
+// Applicants type free text that ends up in a staff email: escape everything.
+function esc(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function oneLine(value: unknown): string {
+  return String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
+}
+
 function buildAdminLink(signupType: string, payload: Record<string, any>) {
   switch (signupType) {
-    case 'institution': return `${SUPER_ADMIN_BASE}/schools/${payload.organization_id}`;
-    case 'solo_teacher': return `${SUPER_ADMIN_BASE}/solo-teachers/${payload.user_id}`;
-    case 'representative': return `${SUPER_ADMIN_BASE}/representatives/${payload.representative_id}`;
+    case 'institution': return `${SUPER_ADMIN_BASE}/schools/${encodeURIComponent(String(payload.organization_id ?? ''))}`;
+    case 'solo_teacher': return `${SUPER_ADMIN_BASE}/solo-teachers/${encodeURIComponent(String(payload.user_id ?? ''))}`;
+    case 'representative': return `${SUPER_ADMIN_BASE}/representatives/${encodeURIComponent(String(payload.representative_id ?? ''))}`;
+    case 'founding_application': return `${SUPER_ADMIN_BASE}/founding-institutions`;
     default: return SUPER_ADMIN_BASE;
   }
 }
 
 function labelFor(signupType: string) {
-  return { institution: 'Institution', solo_teacher: 'Solo Teacher', representative: 'Representative' }[signupType] ?? signupType;
+  return {
+    institution: 'Institution',
+    solo_teacher: 'Solo Teacher',
+    representative: 'Representative',
+    founding_application: 'Founding 50 application',
+  }[signupType] ?? signupType;
 }
 
 function buildEmail(signupType: string, payload: Record<string, any>) {
@@ -39,23 +55,25 @@ function buildEmail(signupType: string, payload: Record<string, any>) {
     ['Institution type', payload.organization_type],
     ['State / territory', payload.territory_state],
     ['Phone', payload.phone],
+    ['Estimated students', payload.estimated_students != null ? String(payload.estimated_students) : undefined],
+    ['Programmes', payload.programmes],
     ['Referral / representative code', payload.referral_code],
     ['Registered at', when],
   ];
 
   const rowsHtml = rows.filter(([, v]) => v).map(([k, v]) => `<tr>
-    <td style="padding:4px 16px 4px 0;color:#64748B;font-size:13px;white-space:nowrap;">${k}</td>
-    <td style="padding:4px 0;color:#0B1829;font-size:13px;font-weight:600;">${v}</td>
+    <td style="padding:4px 16px 4px 0;color:#64748B;font-size:13px;white-space:nowrap;">${esc(k)}</td>
+    <td style="padding:4px 0;color:#0B1829;font-size:13px;font-weight:600;">${esc(v)}</td>
   </tr>`).join('');
 
   return {
-    subject: `New signup: ${label} — ${payload.name}`,
+    subject: `New signup: ${label} — ${oneLine(payload.name)}`,
     html: `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;border:1px solid #E2E8F0;border-radius:8px;">
-        <h2 style="color:#0B1829;margin-top:0;">New ${label} signup</h2>
+        <h2 style="color:#0B1829;margin-top:0;">New ${esc(label)}</h2>
         <table style="border-collapse:collapse;">${rowsHtml}</table>
         <div style="margin-top:24px;">
-          <a href="${link}" style="background:#1E6BFF;color:#FFFFFF;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">
+          <a href="${esc(link)}" style="background:#1E6BFF;color:#FFFFFF;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">
             View in Super Admin →
           </a>
         </div>

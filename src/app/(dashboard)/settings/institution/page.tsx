@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { setInstitutionType, setGradingScale, setTertiaryPlan } from './actions'
 import { useSearchParams, useRouter } from 'next/navigation'
 import TertiaryPaymentPanel, { formatCurrency, Entitlement, PendingQuote } from '@/components/billing/TertiaryPaymentPanel'
+import FoundingProgrammeCard from '@/components/billing/FoundingProgrammeCard'
 
 interface Tier {
   tier_key: string
@@ -247,12 +248,15 @@ export default function InstitutionSettingsPage() {
           </div>
 
           {currentTierKey && billingEstimate && !billingEstimate.note && billingEstimate.amount_due != null && (
-            <TertiaryPaymentPanel
-              estimate={{ amount_due: billingEstimate.amount_due, currency: billingEstimate.currency ?? orgCurrency,
-                          student_count: billingEstimate.student_count, billing_cycle: billingEstimate.billing_cycle }}
-              entitlement={entitlement}
-              pendingQuote={pendingQuote}
-            />
+            <>
+              <FoundingProgrammeCard />
+              <TertiaryPaymentPanel
+                estimate={{ amount_due: billingEstimate.amount_due, currency: billingEstimate.currency ?? orgCurrency,
+                            student_count: billingEstimate.student_count, billing_cycle: billingEstimate.billing_cycle }}
+                entitlement={entitlement}
+                pendingQuote={pendingQuote}
+              />
+            </>
           )}
 
           <form action={setTertiaryPlan} className="flex flex-col gap-3">

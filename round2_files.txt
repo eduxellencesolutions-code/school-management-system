@@ -1,0 +1,4034 @@
+﻿
+MISSING: middleware.ts
+
+######## src\middleware.ts ########
+   1: import { createServerClient } from '@supabase/ssr'
+   2: import { NextResponse } from 'next/server'
+   3: import type { NextRequest } from 'next/server'
+   4: import { NAV_ITEMS } from '@/lib/auth/navConfig'
+   5: 
+   6: export async function middleware(request: NextRequest) {
+   7:   const hostname = request.headers.get('host') || ''
+   8:   const { pathname } = request.nextUrl
+   9:   const isAdminHost = hostname.startsWith('admin.')
+  10: 
+  11:   let response = NextResponse.next({ request })
+  12: 
+  13:   // Skip session-refresh logic entirely for Next.js Link prefetch requests.
+  14:   // These fire silently in the background for every visible link and can
+  15:   // race against a real navigation's refresh token, causing spurious
+  16:   // "refresh_token_not_found" sign-outs. Prefetch requests don't need
+  17:   // to run auth checks — the actual navigation request will.
+  18:   const isPrefetch =
+  19:     request.headers.get('next-router-prefetch') === '1' ||
+  20:     request.headers.get('purpose') === 'prefetch' ||
+  21:     request.headers.get('sec-purpose')?.includes('prefetch')
+  22: 
+  23:   if (isPrefetch) {
+  24:     return response
+  25:   }
+  26: 
+  27:   if (
+  28:     pathname.startsWith('/_next') ||
+  29:     pathname.startsWith('/api') ||
+  30:     pathname.startsWith('/auth') ||
+  31:     pathname.startsWith('/login') ||
+  32:     pathname.startsWith('/signup') ||
+  33:     pathname.startsWith('/forgot-password') ||
+  34:     pathname.startsWith('/reset-password') ||
+  35:     pathname.startsWith('/parent') ||
+  36:     pathname.startsWith('/access') ||
+  37:     pathname.startsWith('/founding-institutions') ||
+  38:     pathname.startsWith('/pricing') ||
+  39:     pathname === '/' ||
+  40:     pathname.includes('.')
+  41:   ) {
+  42:     return response
+  43:   }
+  44: 
+  45:   const supabase = createServerClient(
+  46:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  47:     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  48:     {
+  49:       cookies: {
+  50:         getAll() { return request.cookies.getAll() },
+  51:         setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+  52:           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+  53:           response = NextResponse.next({ request })
+  54:           cookiesToSet.forEach(({ name, value, options }) =>
+  55:             response.cookies.set(name, value, options)
+  56:           )
+  57:         },
+  58:       },
+  59:     }
+  60:   )
+  61: 
+  62:   // Use getClaims() instead of getUser() to avoid refresh token issues
+  63:   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+  64: 
+  65:   if (claimsError || !claimsData?.claims) {
+  66:     return NextResponse.redirect(new URL('/login', request.url))
+  67:   }
+  68:   const userId = claimsData.claims.sub
+  69: 
+  70:   if (isAdminHost) {
+  71:     const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  72:     const { data: staffRow } = isSuperAdmin
+  73:       ? { data: null }
+  74:       : await supabase
+  75:           .from('platform_staff')
+  76:           .select('id, status')
+  77:           .eq('user_id', userId)
+  78:           .eq('status', 'active')
+  79:           .maybeSingle()
+  80: 
+  81:     if (!isSuperAdmin && !staffRow) {
+  82:       const redirectUrl = new URL('/dashboard', request.url)
+  83:       redirectUrl.hostname = 'results.eduxellence.org'
+  84:       return NextResponse.redirect(redirectUrl)
+  85:     }
+  86: 
+  87:     const ADMIN_PATHS = NAV_ITEMS.map(i => i.href)
+  88:     const isAdminPath = ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
+  89: 
+  90:     if (pathname === '/dashboard' || pathname === '/workspaces' || !isAdminPath) {
+  91:       const url = request.nextUrl.clone()
+  92:       url.pathname = '/welcome'
+  93:       return NextResponse.rewrite(url)
+  94:     }
+  95: 
+  96:     if (!isSuperAdmin) {
+  97:       const matchedItem = NAV_ITEMS.find(
+  98:         item => pathname === item.href || pathname.startsWith(item.href + '/')
+  99:       )
+ 100: 
+ 101:       if (matchedItem?.superAdminOnly) {
+ 102:         const url = request.nextUrl.clone()
+ 103:         url.pathname = '/welcome'
+ 104:         return NextResponse.rewrite(url)
+ 105:       }
+ 106: 
+ 107:       if (matchedItem?.requiredPermission) {
+ 108:         const { data: hasPermission } = await supabase.rpc('has_platform_permission', {
+ 109:           p_user_id: userId,
+ 110:           p_permission_key: matchedItem.requiredPermission,
+ 111:         })
+ 112:         if (!hasPermission) {
+ 113:           const url = request.nextUrl.clone()
+ 114:           url.pathname = '/welcome'
+ 115:           return NextResponse.rewrite(url)
+ 116:         }
+ 117:       }
+ 118:     }
+ 119: 
+ 120:     return response
+ 121:   }
+ 122: 
+ 123:   return response
+ 124: }
+ 125: 
+ 126: export const config = {
+ 127:   matcher: [
+ 128:     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth|founding-institutions|pricing).*)',
+ 129:   ],
+ 130: }
+
+######## src\lib\auth\navConfig.ts ########
+   1: export interface NavItem {
+   2:   key: string
+   3:   href: string
+   4:   label: string
+   5:   section: 'primary' | 'more'
+   6:   requiredPermission?: string
+   7:   superAdminOnly?: boolean
+   8:   group?: string
+   9: }
+  10: 
+  11: export interface NavGroup {
+  12:   key: string
+  13:   label: string
+  14: }
+  15: 
+  16: export const NAV_GROUPS: NavGroup[] = [
+  17:   { key: 'representatives', label: 'Representatives' },
+  18: ]
+  19: 
+  20: export const NAV_ITEMS: NavItem[] = [
+  21:   { key: 'welcome', href: '/welcome', label: 'Welcome', section: 'primary' },
+  22:   { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
+  23:   { key: 'schools', href: '/schools', label: 'Schools', section: 'primary', requiredPermission: 'schools.view' },
+  24:   { key: 'solo-teachers', href: '/solo-teachers', label: 'Solo Teachers', section: 'primary', requiredPermission: 'schools.view' },
+  25:   { key: 'analytics', href: '/analytics', label: 'Analytics', section: 'primary', requiredPermission: 'analytics.view' },
+  26:   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
+  27:   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },
+  28:   { key: 'withdrawals', href: '/withdrawals', label: 'Withdrawals', section: 'more', requiredPermission: 'commissions.approve' },
+  29:   { key: 'representatives', href: '/representatives', label: 'All Representatives', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  30:   { key: 'rep-performance', href: '/representatives/performance', label: 'Performance', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  31:   { key: 'school-portfolios', href: '/representatives/school-portfolios', label: 'School Portfolios', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  32:   { key: 'rep-followups', href: '/representatives/follow-ups', label: 'Follow-ups', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  33:   { key: 'rep-feedback', href: '/representatives/feedback', label: 'Feedback', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  34:   { key: 'rep-escalations', href: '/representatives/escalations', label: 'Escalations', section: 'more', requiredPermission: 'support.view', group: 'representatives' },
+  35:   { key: 'resources', href: '/resources', label: 'Rep Resources', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  36:   { key: 'rep-leaderboard', href: '/representatives/leaderboard', label: 'Leaderboard', section: 'more', requiredPermission: 'representatives.view', group: 'representatives' },
+  37:   { key: 'platform-users', href: '/platform-users', label: 'Platform Users', section: 'more', requiredPermission: 'platform_users.view' },
+  38:   { key: 'security', href: '/security', label: 'Security', section: 'more', requiredPermission: 'security.dashboard.view' },
+  39:   { key: 'domains-ssl', href: '/domains-ssl', label: 'Domain SSL', section: 'more', superAdminOnly: true },
+  40:   { key: 'audit', href: '/audit', label: 'Audit Log', section: 'more', requiredPermission: 'security.audit' },
+  41:   { key: 'platform-announcements', href: '/platform-announcements', label: 'Announcements', section: 'more', requiredPermission: 'announcements.manage' },
+  42:   { key: 'team', href: '/team', label: 'Team', section: 'more', superAdminOnly: true },
+  43:   { key: 'settings', href: '/platform-settings', label: 'Settings', section: 'more', superAdminOnly: true },
+  44: ]
+  45: 
+  46: export interface NavAccess {
+  47:   isSuperAdmin: boolean
+  48:   permissions: string[]
+  49: }
+  50: 
+  51: export function canAccessNavItem(item: NavItem, access: NavAccess): boolean {
+  52:   if (access.isSuperAdmin) return true
+  53:   if (item.superAdminOnly) return false
+  54:   if (!item.requiredPermission) return true
+  55:   return access.permissions.includes(item.requiredPermission)
+  56: }
+  57: 
+  58: export function getVisibleNavItems(access: NavAccess): NavItem[] {
+  59:   return NAV_ITEMS.filter(item => canAccessNavItem(item, access))
+  60: }
+
+######## src\lib\auth\getStaffAccess.ts ########
+   1: import { SupabaseClient } from '@supabase/supabase-js'
+   2: 
+   3: export interface StaffAccess {
+   4:   isSuperAdmin: boolean
+   5:   isStaff: boolean
+   6:   roleName: string | null
+   7:   permissions: Set<string>
+   8: }
+   9: 
+  10: // âœ… Updated to match your actual platform role names from the database
+  11: const ROLE_LANDING: Record<string, string> = {
+  12:   'Super Admin': '/overview',
+  13:   'Finance Officer': '/commissions',
+  14:   'Operations Manager': '/support',
+  15:   'Representative Manager': '/representatives',
+  16:   'Security Administrator': '/audit',
+  17:   'Support Agent': '/support',
+  18: }
+  19: 
+  20: export async function getStaffAccess(supabase: SupabaseClient, userId: string): Promise<StaffAccess> {
+  21:   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  22:   if (isSuperAdmin) {
+  23:     return { isSuperAdmin: true, isStaff: false, roleName: 'Super Admin', permissions: new Set() }
+  24:   }
+  25: 
+  26:   const { data: staffRow } = await supabase
+  27:     .from('platform_staff')
+  28:     .select('status, role_id, platform_roles(name)')
+  29:     .eq('user_id', userId)
+  30:     .eq('status', 'active')
+  31:     .maybeSingle()
+  32: 
+  33:   if (!staffRow) {
+  34:     return { isSuperAdmin: false, isStaff: false, roleName: null, permissions: new Set() }
+  35:   }
+  36: 
+  37:   const roleName = (staffRow as unknown as { platform_roles?: { name?: string } }).platform_roles?.name ?? null
+  38: 
+  39:   const { data: perms } = await supabase
+  40:     .from('platform_role_permissions')
+  41:     .select('permission_key')
+  42:     .eq('role_id', staffRow.role_id)
+  43: 
+  44:   return {
+  45:     isSuperAdmin: false,
+  46:     isStaff: true,
+  47:     roleName,
+  48:     permissions: new Set((perms ?? []).map(p => p.permission_key)),
+  49:   }
+  50: }
+  51: 
+  52: export function hasPermission(access: StaffAccess, key: string): boolean {
+  53:   return access.isSuperAdmin || access.permissions.has(key)
+  54: }
+  55: 
+  56: // âœ… UPDATED: Universal landing page is /welcome
+  57: export function getStaffLandingPath(access: StaffAccess): string {
+  58:   return '/welcome'
+  59: }
+
+######## src\lib\workspaces\getUserWorkspaces.ts ########
+   1: import { SupabaseClient } from '@supabase/supabase-js'
+   2: 
+   3: export type Workspace = {
+   4:   type: 'school' | 'solo_teacher' | 'representative' | 'super_admin' | 'staff'
+   5:   label: string
+   6:   sublabel: string
+   7:   href: string
+   8: }
+   9: 
+  10: export async function getUserWorkspaces(
+  11:   supabase: SupabaseClient,
+  12:   userId: string
+  13: ): Promise<Workspace[]> {
+  14:   const workspaces: Workspace[] = []
+  15: 
+  16:   const { data: profile } = await supabase
+  17:     .from('users')
+  18:     .select('id, role, organization_id')
+  19:     .eq('id', userId)
+  20:     .maybeSingle()
+  21: 
+  22:   // Super admin check first â€” independent of role/org.
+  23:   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+  24:   if (isSuperAdmin) {
+  25:     workspaces.push({
+  26:       type: 'super_admin',
+  27:       label: 'Platform Administration',
+  28:       sublabel: 'Super Admin',
+  29:       href: 'https://admin.eduxellence.org/welcome',
+  30:     })
+  31:   }
+  32: 
+  33:   // Platform staff workspace â€” active platform_staff row is the source of truth.
+  34:   // A person can legitimately hold this alongside a school/rep role (e.g. a
+  35:   // teacher who is also an Operations Manager on the platform side).
+  36:   if (!isSuperAdmin) {
+  37:     const { data: staffRow } = await supabase
+  38:       .from('platform_staff')
+  39:       .select('id, status, platform_roles(name)')
+  40:       .eq('user_id', userId)
+  41:       .eq('status', 'active')
+  42:       .maybeSingle()
+  43: 
+  44:     if (staffRow) {
+  45:       const roleName = (staffRow as { platform_roles?: { name?: string } }).platform_roles?.name
+  46:       workspaces.push({
+  47:         type: 'staff',
+  48:         label: 'Platform Administration',
+  49:         sublabel: roleName ?? 'Platform Staff',
+  50:         href: 'https://admin.eduxellence.org/welcome',
+  51:       })
+  52:     }
+  53:   }
+  54: 
+  55:   // Representative workspace â€” presence of a representatives row is the source of truth,
+  56:   // not the users.role value (role is just a hint used at signup time).
+  57:   // Retained even after staff promotion so commission history stays viewable.
+  58:   const { data: rep } = await supabase
+  59:     .from('representatives')
+  60:     .select('id, territory_state')
+  61:     .eq('user_id', userId)
+  62:     .maybeSingle()
+  63:   if (rep) {
+  64:     workspaces.push({
+  65:       type: 'representative',
+  66:       label: 'Representative Portal',
+  67:       sublabel: rep.territory_state ? `${rep.territory_state} territory` : 'Representative',
+  68:       href: '/rep',
+  69:     })
+  70:   }
+  71: 
+  72:   // School/Teacher workspace â€” legitimate only if there's real org context,
+  73:   // or the user owns at least one class directly (solo teacher pattern).
+  74:   // Split into two distinct workspace types so the selector can be explicit
+  75:   // about which dashboard a person is entering.
+  76:   if (profile?.organization_id) {
+  77:     const { data: org } = await supabase
+  78:       .from('organizations')
+  79:       .select('name')
+  80:       .eq('id', profile.organization_id)
+  81:       .maybeSingle()
+  82:     workspaces.push({
+  83:       type: 'school',
+  84:       label: org?.name ?? 'Institution Dashboard',
+  85:       sublabel: 'Institution Dashboard',
+  86:       href: '/dashboard',
+  87:     })
+  88:   } else if (profile && profile.role !== 'representative') {
+  89:     // Role alone identifies this workspace â€” zero classes doesn't disqualify
+  90:     // a brand-new solo teacher from owning it.
+  91:     if (profile.role === 'teacher') {
+  92:       workspaces.push({
+  93:         type: 'solo_teacher',
+  94:         label: 'My Teaching Workspace',
+  95:         sublabel: 'Solo Teacher Dashboard',
+  96:         href: '/dashboard',
+  97:       })
+  98:     }
+  99:   }
+ 100: 
+ 101:   return workspaces
+ 102: }
+
+######## src\components\layout\Sidebar.tsx ########
+   1: 'use client'
+   2: // FILE: src/components/layout/Sidebar.tsx
+   3: 
+   4: import Link from 'next/link'
+   5: import { usePathname, useRouter } from 'next/navigation'
+   6: import { useState, useEffect } from 'react'
+   7: import { cn, getInitials } from '@/lib/utils'
+   8: import type { User, Organization } from '@/types'
+   9: import {
+  10:   LayoutDashboard, Users, BookOpen, ClipboardList,
+  11:   FileText, Settings, LogOut, ChevronRight,
+  12:   CalendarCheck, Smile, ClipboardCheck, Wallet,
+  13:   Lock, TrendingUp, Megaphone, ShieldCheck,
+  14:   TicketIcon, LineChart, Receipt, FilePlus2, CreditCard,
+  15:   Menu, X, AlertCircle,
+  16:   Building2, Building, GraduationCap, Layers, BookMarked,
+  17:   UserCog, CheckSquare, Workflow, Award,
+  18: } from 'lucide-react'
+  19: import { createClient } from '@/lib/supabase/client'
+  20: 
+  21: interface Props {
+  22:   user: User
+  23:   org?: Organization | null
+  24:   features: string[]
+  25:   isSchoolAdmin: boolean
+  26:   permissions: string[]
+  27: }
+  28: 
+  29: export default function Sidebar({ user, org, features, isSchoolAdmin, permissions }: Props) {
+  30:   const pathname = usePathname()
+  31:   const router = useRouter()
+  32:   const supabase = createClient()
+  33: 
+  34:   // Mobile drawer state â€” closed by default. On desktop this is irrelevant
+  35:   // because CSS (md:translate-x-0, md:static) overrides it regardless.
+  36:   const [isOpen, setIsOpen] = useState(false)
+  37: 
+  38:   // Close the drawer automatically whenever the route changes, so tapping
+  39:   // a nav link on mobile doesn't leave the drawer open over the new page.
+  40:   useEffect(() => {
+  41:     setIsOpen(false)
+  42:   }, [pathname])
+  43: 
+  44:   async function signOut() {
+  45:     await supabase.auth.signOut()
+  46:     router.push('/login')
+  47:     router.refresh()
+  48:   }
+  49: 
+  50:   const plan = org?.subscription_plan ?? 'free'
+  51:   const isSoloTeacher = !org
+  52:   const isAdmin = user?.role === 'admin'
+  53: 
+  54:   // Institution-type awareness. A solo teacher (org === null) has no
+  55:   // institution type at all, so they always fall through to the
+  56:   // school-style nav, matching existing behavior everywhere else `org`
+  57:   // is checked in this file.
+  58:   const orgType = org?.type ?? 'school'
+  59:   const isTertiary = orgType === 'university'
+  60:   const isCentre = orgType === 'centre'
+  61: 
+  62:   const planLabel: Record<string, string> = {
+  63:     free: 'Free',
+  64:     teacher: 'Teacher',
+  65:     solo_teacher_pro: 'Solo Teacher Pro',
+  66:     small_school: 'Small School',
+  67:     standard_school: 'Standard School',
+  68:     premium_school: 'Premium',
+  69:     founding_500: 'Founding 500 Promo',
+  70:   }
+  71: 
+  72:   const has = (key: string) => !isSoloTeacher && features.includes(key)
+  73:   const canDo = (permissionKey: string) => isSchoolAdmin || permissions.includes(permissionKey)
+  74: 
+  75:   // School-specific items (Classes, Scores) excluded for BOTH universities
+  76:   // and training centres â€” neither concept applies to either institution
+  77:   // type's actual workflow.
+  78:   const coreNav = [
+  79:     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  80:     ...(!isTertiary && !isCentre ? [{ label: 'Classes', href: '/classes', icon: BookOpen }] : []),
+  81:     { label: 'Students', href: '/students', icon: Users },
+  82:     ...(!isTertiary && !isCentre ? [{ label: 'Scores', href: '/scores', icon: ClipboardList }] : []),
+  83:     { label: 'Reports', href: '/reports', icon: FileText },
+  84:     ...(isAdmin ? [{ label: 'Announcements', href: '/announcements', icon: Megaphone }] : []),
+  85:   ]
+  86: 
+  87:   // Tertiary-only nav group. Not shown to school or centre orgs.
+  88:   const tertiaryNav = isTertiary ? [
+  89:     { label: 'Faculties', href: '/faculties', icon: Building2 },
+  90:     { label: 'Departments', href: '/departments', icon: Building },
+  91:     { label: 'Programmes', href: '/programmes', icon: GraduationCap },
+  92:     { label: 'Cohorts', href: '/cohorts', icon: Layers },
+  93:     { label: 'Courses', href: '/courses', icon: BookMarked },
+  94:     { label: 'My Courses', href: '/lecturer/courses', icon: UserCog },
+  95:     { label: 'Result Review', href: '/results/review', icon: CheckSquare },
+  96:   ] : []
+  97: 
+  98:   // Training Centre nav group. Only shown for orgType='centre'. Admin-only
+  99:   // items (programme/module/batch/enrolment management) are gated on
+ 100:   // training.manage_programmes / training.manage_enrolments. "My Modules"
+ 101:   // is shown to everyone in a centre org â€” RLS on training_modules
+ 102:   // (trainer_id = auth.uid()) does the real scoping, same principle as
+ 103:   // "My Courses" in tertiaryNav above.
+ 104:   const trainingCentreNav = isCentre ? [
+ 105:     ...(canDo('training.manage_programmes') ? [{ label: 'Programmes', href: '/training/programmes', icon: Workflow }] : []),
+ 106:     ...(canDo('training.manage_programmes') ? [{ label: 'Modules', href: '/training/modules', icon: BookMarked }] : []),
+ 107:     ...(canDo('training.manage_programmes') ? [{ label: 'Batches', href: '/training/batches', icon: Layers }] : []),
+ 108:     ...(canDo('training.manage_enrolments') ? [{ label: 'Learners', href: '/training/learners/new', icon: Users }] : []),
+ 109:     ...(canDo('training.manage_enrolments') ? [{ label: 'Enrolments', href: '/training/enrolments', icon: Users }] : []),
+ 110:     { label: 'My Modules', href: '/training/my-modules', icon: UserCog },
+ 111:     ...(canDo('training.confirm_completion') ? [{ label: 'Completions Review', href: '/training/completions', icon: Award }] : []),
+ 112:   ] : []
+ 113: 
+ 114:   const studentLifeNav = [
+ 115:     ...(has('basic_attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
+ 116:     ...(has('basic_attendance') ? [{ label: 'Attendance Reports', href: '/attendance/reports', icon: FileText }] : []),
+ 117:     ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
+ 118:     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
+ 119:     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
+ 120:     ...(has('fees') && canDo('fees.manage_structures') ? [{ label: 'Fee Structures', href: '/fees/structures', icon: Receipt }] : []),
+ 121:     ...(has('fees') && canDo('finance.issue_invoices') ? [{ label: 'Issue Invoices', href: '/fees/issue-invoices', icon: FilePlus2 }] : []),
+ 122:     ...(has('fees') && canDo('fees.record_payment') ? [{ label: 'Record Payments', href: '/fees/payments', icon: CreditCard }] : []),
+ 123:     ...(isAdmin && has('advanced_finance_analytics') ? [{ label: 'Financial Analytics', href: '/finance-analytics', icon: LineChart }] : []),
+ 124:   ]
+ 125: 
+ 126:   // School-specific governance items (Lock Results, Promotion) hidden for
+ 127:   // both tertiary and centre â€” school-year concepts that don't apply to
+ 128:   // either, consistent with coreNav's treatment.
+ 129:   const governanceNav = [
+ 130:     ...(isAdmin || canDo('executive.view_overview') ? [{ label: 'Executive Dashboard', href: '/executive', icon: TrendingUp }] : []),
+ 131:     ...(isAdmin || canDo('executive.view_overview') ? [{ label: 'Executive Notifications', href: '/executive/notifications', icon: Megaphone }] : []),
+ 132:     ...(isAdmin && !isTertiary && !isCentre ? [{ label: 'Lock Results', href: '/reports/lock', icon: Lock }] : []),
+ 133:     ...(isAdmin ? [{ label: 'Parent Management', href: '/parents', icon: Users }] : []),
+ 134:     ...(isAdmin && !isTertiary && !isCentre && has('promotion_wizard') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
+ 135:     ...(isAdmin && !isTertiary && !isCentre && has('promotion_wizard') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
+ 136:     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
+ 137:     ...(isAdmin ? [{ label: 'Setup Status', href: '/settings/setup-wizard', icon: AlertCircle }] : []),
+ 138:     { label: 'Support', href: '/school-support', icon: TicketIcon },
+ 139:     ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
+ 140:     ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),
+ 141:     ...(isAdmin ? [{ label: 'Withdrawals', href: '/withdrawals', icon: Wallet }] : []),
+ 142:   ]
+ 143: 
+ 144:   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
+ 145:     const active = pathname === href || pathname.startsWith(href + '/')
+ 146:     return (
+ 147:       <Link
+ 148:         key={href}
+ 149:         href={href}
+ 150:         prefetch={false}
+ 151:         className={cn(
+ 152:           'flex items-center gap-2.5 px-3 py-2 rounded text-sm font-medium transition-colors',
+ 153:           active
+ 154:             ? 'bg-brand-50 text-brand-700'
+ 155:             : 'text-ink-muted hover:bg-surface-50 hover:text-ink'
+ 156:         )}
+ 157:       >
+ 158:         <Icon size={15} className="shrink-0" />
+ 159:         {label}
+ 160:         {active && <ChevronRight size={12} className="ml-auto text-brand-400" />}
+ 161:       </Link>
+ 162:     )
+ 163:   }
+ 164: 
+ 165:   return (
+ 166:     <>
+ 167:       {/* Mobile top bar with hamburger â€” only visible below md breakpoint. */}
+ 168:       <div className="md:hidden w-full shrink-0 flex items-center justify-between px-4 h-12 border-b border-surface-200 bg-white sticky top-0 z-30">
+ 169:         <span className="font-bold text-sm text-ink">
+ 170:           Eduxellence <span className="text-brand-500">Results</span>
+ 171:         </span>
+ 172:         <button
+ 173:           onClick={() => setIsOpen(true)}
+ 174:           aria-label="Open menu"
+ 175:           className="p-2 -mr-2 text-ink-muted"
+ 176:         >
+ 177:           <Menu size={20} />
+ 178:         </button>
+ 179:       </div>
+ 180: 
+ 181:       {/* Backdrop â€” only rendered/visible on mobile when drawer is open */}
+ 182:       {isOpen && (
+ 183:         <div
+ 184:           className="fixed inset-0 bg-black/40 z-40 md:hidden"
+ 185:           onClick={() => setIsOpen(false)}
+ 186:           aria-hidden="true"
+ 187:         />
+ 188:       )}
+ 189: 
+ 190:       <aside
+ 191:         className={cn(
+ 192:           'fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-white',
+ 193:           'transition-transform duration-200 ease-in-out',
+ 194:           isOpen ? 'translate-x-0' : '-translate-x-full',
+ 195:           'md:static md:translate-x-0 md:w-56 md:shrink-0 md:h-screen md:sticky md:top-0',
+ 196:           'border-r border-surface-200'
+ 197:         )}
+ 198:       >
+ 199:         <div className="hidden md:flex px-4 py-4 border-b border-surface-200 items-center justify-between">
+ 200:           <span className="font-bold text-sm text-ink">
+ 201:             Eduxellence <span className="text-brand-500">Results</span>
+ 202:           </span>
+ 203:         </div>
+ 204: 
+ 205:         <div className="md:hidden flex justify-end px-3 pt-3">
+ 206:           <button
+ 207:             onClick={() => setIsOpen(false)}
+ 208:             aria-label="Close menu"
+ 209:             className="p-2 text-ink-muted"
+ 210:           >
+ 211:             <X size={20} />
+ 212:           </button>
+ 213:         </div>
+ 214: 
+ 215:         {org && (
+ 216:           <div className="px-4 py-3 border-b border-surface-200">
+ 217:             <div className="flex items-center gap-2">
+ 218:               <div className="w-7 h-7 rounded bg-brand-100 text-brand-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+ 219:                 {getInitials(org.name)}
+ 220:               </div>
+ 221:               <div className="min-w-0">
+ 222:                 <p className="text-xs font-semibold text-ink truncate">{org.name}</p>
+ 223:                 <span className="badge badge-blue text-[10px]">{planLabel[plan]}</span>
+ 224:               </div>
+ 225:             </div>
+ 226:           </div>
+ 227:         )}
+ 228: 
+ 229:         <nav className="flex-1 px-2 py-3 flex flex-col gap-3 overflow-y-auto">
+ 230:           <div className="flex flex-col gap-0.5">
+ 231:             {coreNav.map(renderLink)}
+ 232:           </div>
+ 233: 
+ 234:           {tertiaryNav.length > 0 && (
+ 235:             <div className="flex flex-col gap-0.5">
+ 236:               <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+ 237:                 Tertiary Academic
+ 238:               </p>
+ 239:               {tertiaryNav.map(renderLink)}
+ 240:             </div>
+ 241:           )}
+ 242: 
+ 243:           {trainingCentreNav.length > 0 && (
+ 244:             <div className="flex flex-col gap-0.5">
+ 245:               <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+ 246:                 Training Centre
+ 247:               </p>
+ 248:               {trainingCentreNav.map(renderLink)}
+ 249:             </div>
+ 250:           )}
+ 251: 
+ 252:           {studentLifeNav.length > 0 && (
+ 253:             <div className="flex flex-col gap-0.5">
+ 254:               <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+ 255:                 Student Life
+ 256:               </p>
+ 257:               {studentLifeNav.map(renderLink)}
+ 258:             </div>
+ 259:           )}
+ 260: 
+ 261:           {governanceNav.length > 0 && (
+ 262:             <div className="flex flex-col gap-0.5">
+ 263:               <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-ink-faint uppercase tracking-wider">
+ 264:                 Academic Governance
+ 265:               </p>
+ 266:               {governanceNav.map(renderLink)}
+ 267:             </div>
+ 268:           )}
+ 269: 
+ 270:           <div className="flex flex-col gap-0.5 mt-auto">
+ 271:             {renderLink({ label: 'Settings', href: '/settings', icon: Settings })}
+ 272:           </div>
+ 273:         </nav>
+ 274: 
+ 275:         <div className="border-t border-surface-200 p-3 flex flex-col gap-1">
+ 276:           <div className="flex items-center gap-2 px-2 py-1.5">
+ 277:             <div className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+ 278:               {getInitials(user?.name ?? user?.email ?? 'User')}
+ 279:             </div>
+ 280:             <div className="min-w-0">
+ 281:               <p className="text-xs font-semibold text-ink truncate">{user?.name ?? user?.email ?? 'User'}</p>
+ 282:               <p className="text-[10px] text-ink-faint truncate capitalize">{user?.role ?? 'teacher'}</p>
+ 283:             </div>
+ 284:           </div>
+ 285:           <button
+ 286:             onClick={signOut}
+ 287:             className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium text-ink-muted hover:bg-red-50 hover:text-red-600 transition-colors w-full"
+ 288:           >
+ 289:             <LogOut size={13} />
+ 290:             Sign out
+ 291:           </button>
+ 292:         </div>
+ 293:       </aside>
+ 294:     </>
+ 295:   )
+ 296: }
+
+######## src\app\(dashboard)\layout.tsx ########
+   1: import { redirect } from 'next/navigation'
+   2: import { createClient } from '@/lib/supabase/server'
+   3: import Sidebar from '@/components/layout/Sidebar'
+   4: import { getSubscriptionState } from '@/lib/subscription/getSubscriptionState'
+   5: import { getPlanFeatures } from '@/lib/subscription/getPlanFeatures'
+   6: import { getSchoolPermissions } from '@/lib/auth/getSchoolPermissions'
+   7: import GracePeriodBanner from '@/components/billing/GracePeriodBanner'
+   8: import ExpiredBanner from '@/components/billing/ExpiredBanner'
+   9: import ExpiringSoonBanner from '@/components/billing/ExpiringSoonBanner'
+  10: import NotificationBell from '@/components/notifications/NotificationBell'
+  11: import RepresentativeBanner from '@/components/dashboard/RepresentativeBanner'
+  12: import FoundingBanner from '@/components/founding-500/FoundingBanner'
+  13: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+  14: import { getPortalContext, comparePortalToSession } from '@/lib/domains/portalContext'
+  15: import WrongPortalNotice from '@/components/domains/WrongPortalNotice'
+  16: 
+  17: export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  18:   const supabase = await createClient()
+  19:   const { user: authUser } = await getAuthenticatedUser(supabase)
+  20: 
+  21:   if (!authUser) redirect('/login')
+  22: 
+  23:   const { data: user } = await supabase
+  24:     .from('users')
+  25:     .select('*')
+  26:     .eq('id', authUser.id)
+  27:     .single()
+  28: 
+  29:   if (!user) {
+  30:     const { data: learnerId } = await supabase.rpc('get_my_learner_id')
+  31:     if (learnerId) redirect('/student')
+  32:   }
+  33: 
+  34:   if (!user?.organization_id) {
+  35:     if (user?.role !== 'teacher') {
+  36:       const { data: rep } = await supabase
+  37:         .from('representatives')
+  38:         .select('id')
+  39:         .eq('user_id', authUser.id)
+  40:         .maybeSingle()
+  41: 
+  42:       redirect(rep ? '/rep' : '/workspaces')
+  43:     }
+  44:   }
+  45: 
+  46:   const { data: org } = user?.organization_id
+  47:     ? await supabase
+  48:         .from('organizations')
+  49:         .select('*')
+  50:         .eq('id', user.organization_id)
+  51:         .single()
+  52:     : { data: null }
+  53: 
+  54:   // ---- Custom-domain portal context ---------------------------------------
+  55:   const portal = await getPortalContext()
+  56:   const portalMatch = comparePortalToSession(portal, user?.organization_id ?? null)
+  57: 
+  58:   if (portalMatch === 'mismatch') {
+  59:     return (
+  60:       <WrongPortalNotice
+  61:         orgId={portal.organizationId}
+  62:         orgName={portal.orgName}
+  63:         correctPortalHref="https://results.eduxellence.org/dashboard"
+  64:       />
+  65:     )
+  66:   }
+  67: 
+  68:   const subState = await getSubscriptionState(supabase, authUser.id)
+  69:   const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan, org?.id)
+  70: 
+  71:   const { isAdmin, permissions } = user?.organization_id
+  72:     ? await getSchoolPermissions(supabase, authUser.id, user.role)
+  73:     : { isAdmin: false, permissions: [] as string[] }
+  74: 
+  75:   const { data: existingRep } = await supabase
+  76:     .from('representatives')
+  77:     .select('id')
+  78:     .eq('user_id', authUser.id)
+  79:     .maybeSingle()
+  80: 
+  81:   return (
+  82:     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-surface-50">
+  83:       <Sidebar
+  84:         user={user ?? {
+  85:           id: authUser.id,
+  86:           name: authUser.email ?? 'User',
+  87:           email: authUser.email ?? '',
+  88:           role: 'teacher',
+  89:           organization_id: null
+  90:         }}
+  91:         org={org}
+  92:         features={planFeatures}
+  93:         isSchoolAdmin={isAdmin}
+  94:         permissions={permissions}
+  95:       />
+  96:       <main className="flex-1 overflow-y-auto">
+  97:         <div className="max-w-7xl mx-auto px-6 py-6">
+  98:           <div className="flex items-center justify-between mb-4">
+  99:             <div className="flex-1">
+ 100:               {!existingRep && <RepresentativeBanner />}
+ 101:               <FoundingBanner />
+ 102:               {subState.isGracePeriod && subState.daysRemaining !== null && (
+ 103:                 <GracePeriodBanner daysRemaining={subState.daysRemaining} />
+ 104:               )}
+ 105:               {subState.isExpired && <ExpiredBanner />}
+ 106:               {subState.isExpiringSoon && subState.daysUntilExpiry !== null && (
+ 107:                 <ExpiringSoonBanner daysUntilExpiry={subState.daysUntilExpiry} />
+ 108:               )}
+ 109:             </div>
+ 110:             <div className="ml-4 shrink-0">
+ 111:               <NotificationBell />
+ 112:             </div>
+ 113:           </div>
+ 114:           {children}
+ 115:         </div>
+ 116:       </main>
+ 117:     </div>
+ 118:   )
+ 119: }
+
+######## src\components\dashboard\RepresentativeBanner.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect } from 'react'
+   4: import Link from 'next/link'
+   5: import { Handshake, X } from 'lucide-react'
+   6: 
+   7: const DISMISS_KEY = 'rep_banner_dismissed'
+   8: 
+   9: export default function RepresentativeBanner() {
+  10:   const [dismissed, setDismissed] = useState(true) // default hidden until we check localStorage, avoids flash
+  11: 
+  12:   useEffect(() => {
+  13:     setDismissed(localStorage.getItem(DISMISS_KEY) === 'true')
+  14:   }, [])
+  15: 
+  16:   if (dismissed) return null
+  17: 
+  18:   return (
+  19:     <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 mb-4 flex items-center gap-3">
+  20:       <Handshake size={18} className="text-brand-600 shrink-0" />
+  21:       <p className="text-sm text-brand-700 flex-1">
+  22:         Know a school or teacher who&apos;d love Eduxellence?{' '}
+  23:         <Link href="/representative-program" className="font-semibold hover:underline">
+  24:           Become a Representative and earn commission
+  25:         </Link>
+  26:       </p>
+  27:       <button
+  28:         onClick={() => {
+  29:           localStorage.setItem(DISMISS_KEY, 'true')
+  30:           setDismissed(true)
+  31:         }}
+  32:         className="text-brand-400 hover:text-brand-700 shrink-0"
+  33:         aria-label="Dismiss"
+  34:       >
+  35:         <X size={16} />
+  36:       </button>
+  37:     </div>
+  38:   )
+  39: }
+
+######## src\app\api\attendance\route.ts ########
+   1: import { createClient } from '@/lib/supabase/server';
+   2: import { NextResponse } from 'next/server';
+   3: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   4: 
+   5: // POST /api/attendance
+   6: // Body: { groupId, termId, sessionId, date, records: [{ learnerId, status }] }
+   7: export async function POST(request: Request) {
+   8:   const supabase = await createClient();
+   9: 
+  10:   const { user } = await getAuthenticatedUser(supabase);
+  11:   if (!user) {
+  12:     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  13:   }
+  14: 
+  15:   // âœ… FIX: Check permission instead of hard role check
+  16:   const { data: userRow } = await supabase
+  17:     .from('users')
+  18:     .select('organization_id, role')
+  19:     .eq('id', user.id)
+  20:     .single();
+  21: 
+  22:   const { data: hasPerm } = await supabase.rpc('has_permission', { 
+  23:     p_user_id: user.id, 
+  24:     p_permission_key: 'attendance.mark' 
+  25:   });
+  26:   if (userRow?.role !== 'admin' && !hasPerm) {
+  27:     return NextResponse.json({ error: 'You do not have permission to mark attendance' }, { status: 403 });
+  28:   }
+  29: 
+  30:   const body = await request.json();
+  31:   const { groupId, termId, sessionId, date, records } = body;
+  32: 
+  33:   if (!groupId || !termId || !sessionId || !date || !Array.isArray(records) || records.length === 0) {
+  34:     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  35:   }
+  36: 
+  37:   // Resolve the caller's org (null org = solo teacher, always allowed)
+  38:   const { data: userRowOrg, error: userError } = await supabase
+  39:     .from('users')
+  40:     .select('organization_id')
+  41:     .eq('id', user.id)
+  42:     .single();
+  43: 
+  44:   if (userError) {
+  45:     return NextResponse.json({ error: 'Could not resolve user profile' }, { status: 500 });
+  46:   }
+  47: 
+  48:   const isSolo = userRowOrg.organization_id === null;
+  49: 
+  50:   // Explicit app-layer gate check, in addition to RLS â€” belt and braces.
+  51:   if (!isSolo) {
+  52:     const { data: hasFeature, error: featureError } = await supabase
+  53:       .rpc('org_has_feature', {
+  54:         p_org_id: userRowOrg.organization_id,
+  55:         p_feature_key: 'basic_attendance',
+  56:       });
+  57: 
+  58:     if (featureError) {
+  59:       return NextResponse.json({ error: 'Could not verify plan entitlement' }, { status: 500 });
+  60:     }
+  61: 
+  62:     if (!hasFeature) {
+  63:       return NextResponse.json(
+  64:         { error: 'Attendance is not available on your current plan' },
+  65:         { status: 403 }
+  66:       );
+  67:     }
+  68:   }
+  69: 
+  70:   // A withdrawn/transferred/graduated/suspended/archived student must
+  71:   // not accumulate new attendance records â€” this is the exact contamination
+  72:   // risk called out for attendance specifically. Filter the incoming
+  73:   // learner IDs down to currently active ones before writing anything.
+  74:   const learnerIds = [...new Set(records.map((r: { learnerId: string }) => r.learnerId))];
+  75:   const { data: activeLearners, error: activeLearnersError } = await supabase
+  76:     .from('learners')
+  77:     .select('id')
+  78:     .in('id', learnerIds)
+  79:     .eq('is_active', true);
+  80:   if (activeLearnersError) {
+  81:     return NextResponse.json({ error: activeLearnersError.message }, { status: 500 });
+  82:   }
+  83:   const activeLearnerIds = new Set((activeLearners ?? []).map((l) => l.id));
+  84:   const skippedLearnerIds = learnerIds.filter((id) => !activeLearnerIds.has(id));
+  85: 
+  86:   // organization_id is stamped from resolved user context, never trusted from client input
+  87:   const rows = records
+  88:     .filter((r: { learnerId: string; status: string }) => activeLearnerIds.has(r.learnerId))
+  89:     .map((r: { learnerId: string; status: string }) => ({
+  90:       organization_id: userRowOrg.organization_id,
+  91:       group_id: groupId,
+  92:       learner_id: r.learnerId,
+  93:       term_id: termId,
+  94:       session_id: sessionId,
+  95:       date,
+  96:       status: r.status,
+  97:       recorded_by: user.id,
+  98:     }));
+  99: 
+ 100:   if (rows.length === 0) {
+ 101:     return NextResponse.json({ error: 'No active students among the submitted records' }, { status: 400 });
+ 102:   }
+ 103: 
+ 104:   const { error: insertError } = await supabase
+ 105:     .from('attendance_records')
+ 106:     .upsert(rows, { onConflict: 'learner_id,date' });
+ 107:   if (insertError) {
+ 108:     return NextResponse.json({ error: insertError.message }, { status: 500 });
+ 109:   }
+ 110: 
+ 111:   return NextResponse.json({ success: true, count: rows.length, skipped: skippedLearnerIds });
+ 112: }
+ 113: 
+ 114: // GET /api/attendance?groupId=...&date=...
+ 115: export async function GET(request: Request) {
+ 116:   const supabase = await createClient();
+ 117:   const { searchParams } = new URL(request.url);
+ 118:   const groupId = searchParams.get('groupId');
+ 119:   const date = searchParams.get('date');
+ 120: 
+ 121:   if (!groupId || !date) {
+ 122:     return NextResponse.json({ error: 'Missing groupId or date' }, { status: 400 });
+ 123:   }
+ 124: 
+ 125:   const { data, error } = await supabase
+ 126:     .from('attendance_records')
+ 127:     .select('learner_id, status')
+ 128:     .eq('group_id', groupId)
+ 129:     .eq('date', date);
+ 130: 
+ 131:   if (error) {
+ 132:     return NextResponse.json({ error: error.message }, { status: 500 });
+ 133:   }
+ 134: 
+ 135:   return NextResponse.json({ records: data });
+ 136: }
+
+######## src\app\api\tertiary\billing\initiate\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+   5: import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+   6: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   7: import { Currency } from '@/lib/payments/pricing'
+   8: import { TertiaryCheckoutMetadata } from '@/lib/payments/types'
+   9: 
+  10: // Payment providers reject reserved test TLDs (.invalid, .test, .example).
+  11: // In non-production, swap those for a real address so the test flow can proceed.
+  12: const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+  13: function paymentEmail(profileEmail: string | null, userEmail: string | null): string {
+  14:   const raw = profileEmail ?? userEmail ?? ''
+  15:   if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) {
+  16:     return PROVIDER_SAFE_EMAIL
+  17:   }
+  18:   return raw
+  19: }
+  20: 
+  21: export async function POST(req: NextRequest) {
+  22:   if (process.env.TERTIARY_BILLING_ENABLED !== 'true') {
+  23:     return NextResponse.json({ error: 'Tertiary billing checkout is not yet available.' }, { status: 503 })
+  24:   }
+  25:   const body = await req.json().catch(() => ({}))
+  26:   const provider = body.provider as 'flutterwave' | 'paystack'
+  27:   const kind: 'period' | 'founding_conversion' = body.kind === 'founding_conversion' ? 'founding_conversion' : 'period'
+  28:   const applicationId = typeof body.applicationId === 'string' ? body.applicationId : null
+  29:   if (!['flutterwave', 'paystack'].includes(provider)) return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+  30:   if (kind === 'founding_conversion' && !applicationId) return NextResponse.json({ error: 'Application is required' }, { status: 400 })
+  31: 
+  32:   const supabase = await createClient()
+  33:   const { user } = await getAuthenticatedUser(supabase)
+  34:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  35: 
+  36:   const { data: profile } = await supabase.from('users').select('organization_id, role, name, email').eq('id', user.id).single()
+  37:   if (!profile?.organization_id || profile.role !== 'admin') {
+  38:     return NextResponse.json({ error: 'Only an institution admin can make tertiary billing payments' }, { status: 403 })
+  39:   }
+  40:   const orgId = profile.organization_id
+  41:   const { data: org } = await supabase.from('organizations').select('type').eq('id', orgId).single()
+  42:   if (org?.type !== 'university') {
+  43:     return NextResponse.json({ error: 'Tertiary billing only applies to University/Polytechnic/College institutions' }, { status: 400 })
+  44:   }
+  45: 
+  46:   const quoteReference = `edux-tq-${orgId}-${Date.now()}`
+  47:   const { data: quote, error: quoteError } = kind === 'period'
+  48:     ? await supabase.rpc('create_tertiary_payment_quote', { p_org_id: orgId, p_reference: quoteReference })
+  49:     : await supabase.rpc('create_founding_conversion_quote', { p_application_id: applicationId, p_reference: quoteReference })
+  50:   if (quoteError || !quote) return NextResponse.json({ error: quoteError?.message ?? 'Could not create a quote' }, { status: 400 })
+  51: 
+  52:   const amount = Number(quote.amount_due)
+  53:   const currency = quote.currency as Currency
+  54:   const reference = `${quote.reference}-${Date.now().toString(36)}`
+  55: 
+  56:   const metadata: TertiaryCheckoutMetadata = {
+  57:     type: 'tertiary_subscription', quoteKind: kind, organizationId: orgId, quoteReference: quote.reference,
+  58:     tierKey: quote.tier_key ?? undefined, billingCycle: quote.billing_cycle ?? undefined,
+  59:     platform_key: 'results', expected_amount: amount, expected_currency: currency,
+  60:   }
+  61:   const commonInput = {
+  62:     email: paymentEmail(profile.email, user.email ?? null),
+  63:     name: profile.name ?? 'Institution Admin', amount, currency, reference,
+  64:     redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
+  65:   }
+  66:   const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(commonInput) : await initiatePaystackCheckout(commonInput)
+  67:   if (!result.success || !result.paymentLink) return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+  68: 
+  69:   return NextResponse.json({ paymentLink: result.paymentLink, amount, currency, reused: quote.reused, periodLabel: quote.period_label ?? null })
+  70: }
+
+######## src\app\api\internal\payments\confirm\route.ts ########
+   1: // app/api/internal/payments/confirm/route.ts
+   2: //
+   3: // Called ONLY by the central payments service â€” not by browsers, not
+   4: // directly by Paystack/Flutterwave. Reuses applySuccessfulSubscription()
+   5: // as-is, including its existing idempotency guard (unique insert into
+   6: // processed_payments) â€” nothing about that function is reimplemented here.
+   7: //
+   8: // Env var to add: RESULTS_CENTRAL_SHARED_SECRET
+   9: // Must exactly match platforms.shared_secret for the 'results' row in
+  10: // the central payments Supabase project.
+  11: 
+  12: import { NextRequest, NextResponse } from 'next/server'
+  13: import crypto from 'crypto'
+  14: import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+  15: import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+  16: import { AnyCheckoutMetadata } from '@/lib/payments/types'
+  17: 
+  18: const SHARED_SECRET = process.env.RESULTS_CENTRAL_SHARED_SECRET!
+  19: 
+  20: function verifySignature(rawBody: string, signatureHeader: string | null): boolean {
+  21:   if (!signatureHeader || !SHARED_SECRET) return false
+  22:   const computed = crypto.createHmac('sha256', SHARED_SECRET).update(rawBody).digest('hex')
+  23:   // timing-safe compare
+  24:   const a = Buffer.from(computed)
+  25:   const b = Buffer.from(signatureHeader)
+  26:   if (a.length !== b.length) return false
+  27:   return crypto.timingSafeEqual(a, b)
+  28: }
+  29: 
+  30: export async function POST(req: NextRequest) {
+  31:   const rawBody = await req.text()
+  32:   const signature = req.headers.get('x-signature')
+  33: 
+  34:   if (!verifySignature(rawBody, signature)) {
+  35:     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  36:   }
+  37: 
+  38:   const payload = JSON.parse(rawBody)
+  39:   const { event_type, reference, provider, metadata, amount } = payload as {
+  40:     event_type: string
+  41:     reference: string
+  42:     provider: 'paystack' | 'flutterwave'
+  43:     metadata: AnyCheckoutMetadata
+  44:     amount: number
+  45:   }
+  46: 
+  47:   if (!reference || !provider) {
+  48:     return NextResponse.json({ error: 'Missing reference or provider' }, { status: 400 })
+  49:   }
+  50: 
+  51:   // Refunds/chargebacks: NOT auto-processed for the same reason as Stats â€”
+  52:   // reversing a subscription grant or a commission automatically risks
+  53:   // getting it wrong. Log and require manual handling.
+  54:   if (event_type === 'refund' || event_type === 'chargeback') {
+  55:     console.warn(`[CENTRAL] ${event_type} received for reference=${reference} â€” needs manual review`)
+  56:     return NextResponse.json({ ok: true, note: `${event_type} logged for manual review` }, { status: 200 })
+  57:   }
+  58: 
+  59:   // Founding 500 is a distinct enrollment flow, not a subscription â€” route
+  60:   // it to applyFounding500Payment entirely.
+  61:   if (metadata?.type === 'founding_500') {
+  62:     const result = await applyFounding500Payment(
+  63:       metadata, provider, reference, amount, 'NGN'
+  64:     )
+  65:     if (!result.success) {
+  66:       return NextResponse.json({ error: result.error }, { status: 500 })
+  67:     }
+  68:     return NextResponse.json({ ok: true })
+  69:   }
+  70: 
+  71:   // Regular subscription flow - TypeScript now knows this is CheckoutMetadata
+  72:   // because type !== 'founding_500'
+  73:   if (!('accountId' in metadata) || !('plan' in metadata) || !('cycle' in metadata)) {
+  74:     return NextResponse.json({ error: 'Missing required subscription metadata fields' }, { status: 400 })
+  75:   }
+  76: 
+  77:   // âœ… FIX: Pass payload.amount to applySuccessfulSubscription
+  78:   const result = await applySuccessfulSubscription(metadata, provider, reference, amount)
+  79: 
+  80:   if (!result.success) {
+  81:     return NextResponse.json({ error: result.error }, { status: 500 })
+  82:   }
+  83: 
+  84:   return NextResponse.json({ ok: true })
+  85: }// force redeploy
+
+######## src\app\api\founding-500\initiate\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { createClient as createServiceClient } from '@supabase/supabase-js'
+   5: import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+   6: import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+   7: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   8: 
+   9: export async function POST(req: NextRequest) {
+  10:   const { provider } = await req.json() as { provider: 'flutterwave' | 'paystack' }
+  11:   if (!['flutterwave', 'paystack'].includes(provider)) {
+  12:     return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+  13:   }
+  14: 
+  15:   const supabase = await createClient()
+  16:   const { user } = await getAuthenticatedUser(supabase)
+  17:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  18: 
+  19:   const admin = createServiceClient(
+  20:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  21:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  22:     { auth: { autoRefreshToken: false, persistSession: false } }
+  23:   )
+  24: 
+  25:   const { data: profile } = await supabase
+  26:     .from('users').select('organization_id, role, name, email').eq('id', user.id).single()
+  27: 
+  28:   if (!profile?.organization_id || profile.role !== 'admin') {
+  29:     return NextResponse.json({ error: 'Only a school admin can activate Founding 500' }, { status: 403 })
+  30:   }
+  31:   const orgId = profile.organization_id
+  32:   const { data: orgTypeRow } = await admin.from('organizations').select('type').eq('id', orgId).single()
+  33:   if (orgTypeRow?.type === 'university') {
+  34:     return NextResponse.json({ error: 'Founding 500 is for schools. Higher institutions use the Founding 50 programme.' }, { status: 403 })
+  35:   }
+  36: 
+  37:   // Referral is resolved server-side from signup-time data â€” never
+  38:   // re-entered or trusted from the client at payment time.
+  39:   const { data: referral, error: referralError } = await admin
+  40:     .from('referrals')
+  41:     .select('referral_code, status')
+  42:     .eq('organization_id', orgId)
+  43:     .neq('status', 'rejected')
+  44:     .maybeSingle()
+  45: 
+  46:   if (referralError) {
+  47:     console.error('referrals query failed:', referralError)
+  48:     return NextResponse.json({ error: `Referral lookup failed: ${referralError.message}` }, { status: 500 })
+  49:   }
+  50:   if (!referral) {
+  51:     return NextResponse.json(
+  52:       { error: 'Founding 500 requires signing up through a valid representative referral link.' },
+  53:       { status: 400 }
+  54:     )
+  55:   }
+  56: 
+  57:   const { data: existingEnrollment } = await admin
+  58:     .from('founding500_enrollments')
+  59:     .select('id')
+  60:     .eq('campaign_key', 'founding_500')
+  61:     .eq('organization_id', orgId)
+  62:     .maybeSingle()
+  63:   if (existingEnrollment) {
+  64:     return NextResponse.json({ error: 'This school already has a Founding 500 enrollment' }, { status: 400 })
+  65:   }
+  66: 
+  67:   const { data: campaign, error: campaignError } = await admin
+  68:     .from('campaign_slot_counters')
+  69:     .select('slots_max, slots_claimed, is_active, qualifying_price')
+  70:     .eq('campaign_key', 'founding_500')
+  71:     .maybeSingle()
+  72: 
+  73:   if (campaignError) {
+  74:     console.error('campaign_slot_counters query failed:', campaignError)
+  75:     return NextResponse.json({ error: `Campaign lookup failed: ${campaignError.message}` }, { status: 500 })
+  76:   }
+  77:   if (!campaign || !campaign.is_active) {
+  78:     return NextResponse.json({ error: 'The Founding 500 campaign is not currently active' }, { status: 400 })
+  79:   }
+  80:   if (campaign.slots_claimed >= campaign.slots_max) {
+  81:     return NextResponse.json({ error: 'All Founding 500 slots have been claimed' }, { status: 400 })
+  82:   }
+  83: 
+  84:   const { data: org } = await admin
+  85:     .from('organizations').select('current_term_id').eq('id', orgId).single()
+  86:   if (!org?.current_term_id) {
+  87:     return NextResponse.json(
+  88:       { error: "Please set your school's current academic term before activating Founding 500" },
+  89:       { status: 400 }
+  90:     )
+  91:   }
+  92:   const { data: term } = await admin
+  93:     .from('terms').select('end_date').eq('id', org.current_term_id).single()
+  94:   if (!term?.end_date) {
+  95:     return NextResponse.json(
+  96:       { error: 'Your current academic term has no end date set. Please update it before activating Founding 500' },
+  97:       { status: 400 }
+  98:     )
+  99:   }
+ 100: 
+ 101:   const amount = campaign.qualifying_price
+ 102:   const reference = `edux-f500-${orgId}-${Date.now()}`
+ 103: 
+ 104:   const metadata = {
+ 105:     type: 'founding_500' as const,
+ 106:     organizationId: orgId,
+ 107:     platform_key: 'results',
+ 108:     expected_amount: amount,
+ 109:     expected_currency: 'NGN' as const,
+ 110:     referral_code: referral.referral_code,
+ 111:   }
+ 112: 
+ 113:   const commonInput = {
+ 114:     email: profile.email ?? user.email!,
+ 115:     name: profile.name ?? 'School Admin',
+ 116:     amount,
+ 117:     currency: 'NGN' as const,
+ 118:     reference,
+ 119:     redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`,
+ 120:     metadata,
+ 121:   }
+ 122: 
+ 123:   const result = provider === 'flutterwave'
+ 124:     ? await initiateFlutterwaveCheckout(commonInput)
+ 125:     : await initiatePaystackCheckout(commonInput)
+ 126: 
+ 127:   if (!result.success || !result.paymentLink) {
+ 128:     return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+ 129:   }
+ 130: 
+ 131:   return NextResponse.json({ paymentLink: result.paymentLink })
+ 132: }
+
+######## src\app\api\webhooks\paystack\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import crypto from 'crypto'
+   4: import { verifyPaystackTransaction } from '@/lib/payments/paystack'
+   5: import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+   6: import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+   7: import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
+   8: 
+   9: export async function POST(req: NextRequest) {
+  10:   const rawBody = await req.text()
+  11:   const signature = req.headers.get('x-paystack-signature')
+  12: 
+  13:   const expectedSignature = crypto
+  14:     .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY!)
+  15:     .update(rawBody)
+  16:     .digest('hex')
+  17: 
+  18:   if (!signature || signature !== expectedSignature) {
+  19:     return new NextResponse(null, { status: 401 })
+  20:   }
+  21: 
+  22:   const event = JSON.parse(rawBody)
+  23: 
+  24:   if (event.event === 'charge.success') {
+  25:     const verification = await verifyPaystackTransaction(event.data.reference)
+  26: 
+  27:     // âœ… Require reference AND amount before applying subscription
+  28:     if (verification.success && verification.status === 'successful' && verification.metadata && verification.reference && verification.amount !== undefined) {
+  29:       const result =
+  30:         verification.metadata.type === 'founding_500'
+  31:           ? await applyFounding500Payment(
+  32:               verification.metadata, 'paystack', verification.reference, verification.amount,
+  33:               verification.currency ?? 'NGN'
+  34:             )
+  35:           : verification.metadata.type === 'tertiary_subscription'
+  36:           ? await applySuccessfulTertiarySubscription(
+  37:               verification.metadata, 'paystack', verification.reference, verification.amount,
+  38:               verification.currency ?? 'NGN'
+  39:             )
+  40:           : await applySuccessfulSubscription(
+  41:               verification.metadata, 'paystack', verification.reference, verification.amount
+  42:             )
+  43:       if (!result.success) console.error('Failed to apply payment:', result.error)
+  44:     } else if (verification.success && verification.status === 'successful' && !verification.reference) {
+  45:       console.error('Paystack verification succeeded but returned no reference â€” refusing to apply subscription')
+  46:     } else if (verification.success && verification.status === 'successful' && verification.amount === undefined) {
+  47:       console.error('Paystack verification succeeded but returned no amount â€” refusing to apply subscription')
+  48:     }
+  49:   }
+  50: 
+  51:   return new NextResponse(null, { status: 200 })
+  52: }
+
+######## src\app\api\webhooks\flutterwave\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
+   4: import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+   5: import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+   6: import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
+   7: 
+   8: export async function POST(req: NextRequest) {
+   9:   const signature = req.headers.get('verif-hash')
+  10:   if (!signature || signature !== process.env.FLW_WEBHOOK_HASH) {
+  11:     return new NextResponse(null, { status: 401 })
+  12:   }
+  13: 
+  14:   const event = await req.json()
+  15: 
+  16:   if (event.event === 'charge.completed' && event.data.status === 'successful') {
+  17:     const verification = await verifyFlutterwaveTransaction(String(event.data.id))
+  18: 
+  19:     // âœ… Require reference AND amount before applying subscription
+  20:     if (verification.success && verification.status === 'successful' && verification.metadata && verification.reference && verification.amount !== undefined) {
+  21:       const result =
+  22:         verification.metadata.type === 'founding_500'
+  23:           ? await applyFounding500Payment(
+  24:               verification.metadata, 'flutterwave', verification.reference, verification.amount,
+  25:               verification.currency ?? 'NGN'
+  26:             )
+  27:           : verification.metadata.type === 'tertiary_subscription'
+  28:           ? await applySuccessfulTertiarySubscription(
+  29:               verification.metadata, 'flutterwave', verification.reference, verification.amount,
+  30:               verification.currency ?? 'NGN'
+  31:             )
+  32:           : await applySuccessfulSubscription(
+  33:               verification.metadata, 'flutterwave', verification.reference, verification.amount
+  34:             )
+  35:       if (!result.success) console.error('Failed to apply payment:', result.error)
+  36:     } else if (verification.success && verification.status === 'successful' && !verification.reference) {
+  37:       console.error('Flutterwave verification succeeded but returned no reference â€” refusing to apply subscription')
+  38:     } else if (verification.success && verification.status === 'successful' && verification.amount === undefined) {
+  39:       console.error('Flutterwave verification succeeded but returned no amount â€” refusing to apply subscription')
+  40:     }
+  41:   }
+  42: 
+  43:   return new NextResponse(null, { status: 200 })
+  44: }
+
+######## src\app\api\representatives\me\route.ts ########
+   1: import { createClient } from '@/lib/supabase/server';
+   2: import { NextResponse } from 'next/server';
+   3: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   4: 
+   5: export async function GET() {
+   6:   const supabase = await createClient();
+   7:   const { user } = await getAuthenticatedUser(supabase);
+   8:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+   9: 
+  10:   const { data: rep, error } = await supabase
+  11:     .from('representatives')
+  12:     .select('*')
+  13:     .eq('user_id', user.id)
+  14:     .single();
+  15: 
+  16:   if (error || !rep) return NextResponse.json({ error: 'You do not have representative access' }, { status: 403 });
+  17: 
+  18:   const { data: referrals } = await supabase
+  19:     .from('referrals')
+  20:     .select('id, organization_id, referred_user_id, status, referred_at, qualified_at')
+  21:     .eq('representative_id', rep.id)
+  22:     .order('referred_at', { ascending: false });
+  23: 
+  24:   const orgIds = [...new Set((referrals ?? []).map(r => r.organization_id).filter(Boolean))];
+  25:   const userIds = [...new Set((referrals ?? []).map(r => r.referred_user_id).filter(Boolean))];
+  26: 
+  27:   const [{ data: orgs }, { data: refUsers }] = await Promise.all([
+  28:     orgIds.length > 0 ? supabase.from('organizations').select('id, name').in('id', orgIds) : Promise.resolve({ data: [] }),
+  29:     userIds.length > 0 ? supabase.from('users').select('id, name').in('id', userIds) : Promise.resolve({ data: [] }),
+  30:   ]);
+  31: 
+  32:   const orgMap = new Map((orgs ?? []).map(o => [o.id, o.name]));
+  33:   const userMap = new Map((refUsers ?? []).map(u => [u.id, u.name]));
+  34: 
+  35:   const enrichedReferrals = (referrals ?? []).map(r => ({
+  36:     id: r.id,
+  37:     status: r.status,
+  38:     referredAt: r.referred_at,
+  39:     qualifiedAt: r.qualified_at,
+  40:     targetType: r.organization_id ? 'school' : 'solo_teacher',
+  41:     targetName: r.organization_id ? (orgMap.get(r.organization_id) ?? 'School') : (userMap.get(r.referred_user_id) ?? 'Solo Teacher'),
+  42:   }));
+  43: 
+  44:   const { data: commissions } = await supabase
+  45:     .from('commissions')
+  46:     .select('id, amount, status, subscription_plan, created_at, paid_at')
+  47:     .eq('representative_id', rep.id)
+  48:     .order('created_at', { ascending: false });
+  49: 
+  50:   // Wallet breakdown per spec: five distinct numbers, each a separate business event.
+  51:   const pendingAmount = (commissions ?? [])
+  52:     .filter(c => c.status === 'pending')
+  53:     .reduce((s, c) => s + Number(c.amount), 0);
+  54: 
+  55:   const availableAmount = (commissions ?? [])
+  56:     .filter(c => c.status === 'payable')
+  57:     .reduce((s, c) => s + Number(c.amount), 0);
+  58: 
+  59:   const { data: bankAccounts } = await supabase
+  60:     .from('bank_accounts')
+  61:     .select('id, bank_name, account_number, account_name, is_primary, is_verified')
+  62:     .eq('representative_id', rep.id)
+  63:     .order('created_at', { ascending: false });
+  64: 
+  65:   const { data: withdrawals } = await supabase
+  66:     .from('withdrawals')
+  67:     .select('id, amount_requested, amount_claimed, status, date_requested, date_paid, payment_reference, rejection_reason')
+  68:     .eq('representative_id', rep.id)
+  69:     .order('date_requested', { ascending: false });
+  70: 
+  71:   return NextResponse.json({
+  72:     representative: rep,
+  73:     referrals: enrichedReferrals,
+  74:     commissions: commissions ?? [],
+  75:     wallet: {
+  76:       totalEarned: Number(rep.total_commission_earned),   // Pending + Payable + Paid, all-time
+  77:       pending: pendingAmount,                               // still in 14-day hold
+  78:       available: availableAmount,                           // payable, not yet withdrawal-locked
+  79:       withdrawn: Number(rep.total_commission_paid),          // actually paid out
+  80:       walletBalance: availableAmount,                        // = available; this is what's requestable right now
+  81:     },
+  82:     bankAccounts: bankAccounts ?? [],
+  83:     withdrawals: withdrawals ?? [],
+  84:     // kept for backward compatibility with anything else reading this field
+  85:     pendingCommission: pendingAmount + availableAmount,
+  86:   });
+  87: }
+
+######## src\app\api\representatives\withdrawals\route.ts ########
+   1: import { createClient } from '@/lib/supabase/server';
+   2: import { NextResponse } from 'next/server';
+   3: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   4: 
+   5: export async function POST(request: Request) {
+   6:   const supabase = await createClient();
+   7:   const { user } = await getAuthenticatedUser(supabase);
+   8:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+   9: 
+  10:   const body = await request.json();
+  11:   const { amount, bankAccountId } = body;
+  12: 
+  13:   if (typeof amount !== 'number' || amount <= 0 || !bankAccountId) {
+  14:     return NextResponse.json({ error: 'A positive numeric amount and bankAccountId are required' }, { status: 400 });
+  15:   }
+  16: 
+  17:   // The RPC function derives the representative from auth.uid() itself â€”
+  18:   // we never pass a representative_id from the client, by design (Step 8).
+  19:   const { data: withdrawalId, error } = await supabase.rpc('request_withdrawal', {
+  20:     p_amount: amount,
+  21:     p_bank_account_id: bankAccountId,
+  22:   });
+  23: 
+  24:   if (error) {
+  25:     // These are business-rule failures raised by the function itself
+  26:     // (inactive account, no bank account, insufficient balance, etc.)
+  27:     // â€” surface the real message rather than a generic 500.
+  28:     return NextResponse.json({ error: error.message }, { status: 422 });
+  29:   }
+  30: 
+  31:   return NextResponse.json({ success: true, withdrawalId });
+  32: }
+  33: 
+  34: export async function GET() {
+  35:   const supabase = await createClient();
+  36:   const { user } = await getAuthenticatedUser(supabase);
+  37:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  38: 
+  39:   const { data: rep } = await supabase
+  40:     .from('representatives')
+  41:     .select('id')
+  42:     .eq('user_id', user.id)
+  43:     .single();
+  44: 
+  45:   if (!rep) return NextResponse.json({ error: 'You do not have representative access' }, { status: 403 });
+  46: 
+  47:   const { data: withdrawals, error } = await supabase
+  48:     .from('withdrawals')
+  49:     .select('id, amount_requested, amount_claimed, status, date_requested, date_paid, payment_reference, rejection_reason')
+  50:     .eq('representative_id', rep.id)
+  51:     .order('date_requested', { ascending: false });
+  52: 
+  53:   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  54: 
+  55:   return NextResponse.json({ withdrawals: withdrawals ?? [] });
+  56: }
+
+######## src\app\api\billing\initiate\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+   5: import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+   6: import { getPrice, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
+   7: import { CheckoutMetadata } from '@/lib/payments/types'
+   8: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   9: 
+  10: export async function POST(req: NextRequest) {
+  11:   const { plan, currency, cycle, provider } = await req.json() as {
+  12:     plan: PaidPlan
+  13:     currency: Currency
+  14:     cycle: BillingCycle
+  15:     provider: 'flutterwave' | 'paystack'
+  16:   }
+  17: 
+  18:   const validPlans = ['small_school', 'standard_school', 'premium_school', 'solo_teacher_pro']
+  19:   if (!validPlans.includes(plan)) {
+  20:     console.error('Invalid plan received:', plan)
+  21:     return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 })
+  22:   }
+  23:   if (!['NGN', 'USD'].includes(currency)) {
+  24:     return NextResponse.json({ error: 'Invalid currency' }, { status: 400 })
+  25:   }
+  26:   if (!['termly', 'annual'].includes(cycle)) {
+  27:     return NextResponse.json({ error: 'Invalid billing cycle' }, { status: 400 })
+  28:   }
+  29:   if (!['flutterwave', 'paystack'].includes(provider)) {
+  30:     return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+  31:   }
+  32: 
+  33:   const supabase = await createClient()
+  34:   const { user } = await getAuthenticatedUser(supabase)
+  35:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  36: 
+  37:   const { data: profile } = await supabase
+  38:     .from('users').select('organization_id, name, email').eq('id', user.id).single()
+  39: 
+  40:   if (profile?.organization_id) {
+  41:     const { data: orgRow } = await supabase.from('organizations').select('type').eq('id', profile.organization_id).single()
+  42:     if (orgRow?.type === 'university') {
+  43:       return NextResponse.json({ error: 'University institutions are billed through Institution Settings.' }, { status: 403 })
+  44:     }
+  45:   }
+  46: 
+  47:   const accountType = profile?.organization_id ? 'org' : 'solo'
+  48:   const accountId = profile?.organization_id ?? user.id
+  49: 
+  50:   const amount = getPrice(plan, currency, cycle)
+  51:   const reference = `edux-${accountType}-${accountId}-${Date.now()}`
+  52: 
+  53:   // NEW: platform_key lets the central payments router identify this as
+  54:   // a Results transaction. expected_amount/currency let the router catch
+  55:   // a tampered/mismatched amount before it ever reaches this app.
+  56:   const metadata: CheckoutMetadata = {
+  57:     type: 'subscription',
+  58:     accountType,
+  59:     accountId,
+  60:     plan,
+  61:     cycle,
+  62:     platform_key: 'results',
+  63:     expected_amount: amount,
+  64:     expected_currency: currency,
+  65:   }
+  66: 
+  67:   const commonInput = {
+  68:     email: profile?.email ?? user.email!,
+  69:     name: profile?.name ?? 'Customer',
+  70:     amount,
+  71:     currency,
+  72:     reference,
+  73:     redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`,
+  74:     metadata,
+  75:   }
+  76: 
+  77:   const result = provider === 'flutterwave'
+  78:     ? await initiateFlutterwaveCheckout(commonInput)
+  79:     : await initiatePaystackCheckout(commonInput)
+  80: 
+  81:   if (!result.success || !result.paymentLink) {
+  82:     return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+  83:   }
+  84: 
+  85:   return NextResponse.json({ paymentLink: result.paymentLink })
+  86: }
+
+######## src\app\api\billing\verify\page.tsx ########
+   1: import { Suspense } from 'react'
+   2: import VerifyContent from './VerifyContent'
+   3: 
+   4: export const dynamic = 'force-dynamic'
+   5: 
+   6: export default function VerifyPage() {
+   7:   return (
+   8:     <Suspense fallback={
+   9:       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+  10:         <div className="animate-pulse text-ink-muted">Loading...</div>
+  11:       </div>
+  12:     }>
+  13:       <VerifyContent />
+  14:     </Suspense>
+  15:   )
+  16: }
+
+######## src\app\api\billing\verify\VerifyContent.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useEffect, useState } from 'react'
+   4: import { useRouter, useSearchParams } from 'next/navigation'
+   5: import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+   6: 
+   7: type Status = 'checking' | 'successful' | 'pending' | 'failed' | 'error'
+   8: 
+   9: export default function VerifyContent() {
+  10:   const router = useRouter()
+  11:   const searchParams = useSearchParams()
+  12:   const [status, setStatus] = useState<Status>('checking')
+  13:   const [message, setMessage] = useState<string | null>(null)
+  14:   const [plan, setPlan] = useState<string | null>(null)
+  15: 
+  16:   useEffect(() => {
+  17:     const provider = searchParams.get('provider')
+  18:     const ref = searchParams.get('ref') ?? searchParams.get('tx_ref') ?? searchParams.get('reference')
+  19:     const transactionId = searchParams.get('transaction_id')
+  20: 
+  21:     if (!provider || !ref) {
+  22:       setStatus('error')
+  23:       setMessage('Missing payment reference. If you completed payment, check back in a few minutes â€” your dashboard will update automatically once confirmed.')
+  24:       return
+  25:     }
+  26: 
+  27:     let attempts = 0
+  28:     const maxAttempts = 5
+  29: 
+  30:     async function poll() {
+  31:       attempts++
+  32:       try {
+  33:         const params = new URLSearchParams({ provider: provider!, ref: ref! })
+  34:         if (transactionId) params.set('transaction_id', transactionId)
+  35: 
+  36:         const res = await fetch(`/api/billing/verify-status?${params.toString()}`)
+  37:         const data = await res.json()
+  38: 
+  39:         if (data.status === 'successful') {
+  40:           setStatus('successful')
+  41:           setPlan(data.plan ?? null)
+  42:           setTimeout(() => router.push('/settings'), 2500)
+  43:           return
+  44:         }
+  45: 
+  46:         if (data.status === 'error') {
+  47:           setStatus('error')
+  48:           setMessage(data.message ?? 'Something went wrong confirming your payment.')
+  49:           return
+  50:         }
+  51: 
+  52:         // 'pending' or 'failed' from the gateway â€” payment may still be
+  53:         // processing, so retry a few times before giving up.
+  54:         if (attempts < maxAttempts) {
+  55:           setTimeout(poll, 2000)
+  56:         } else {
+  57:           setStatus(data.status === 'failed' ? 'failed' : 'pending')
+  58:         }
+  59:       } catch {
+  60:         if (attempts < maxAttempts) {
+  61:           setTimeout(poll, 2000)
+  62:         } else {
+  63:           setStatus('error')
+  64:           setMessage('Could not reach the server to confirm your payment.')
+  65:         }
+  66:       }
+  67:     }
+  68: 
+  69:     poll()
+  70:   }, [searchParams, router])
+  71: 
+  72:   return (
+  73:     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+  74:       {status === 'checking' && (
+  75:         <>
+  76:           <Loader2 size={40} className="animate-spin text-brand-500 mb-4" />
+  77:           <h2 className="text-xl font-semibold text-ink">Confirming your paymentâ€¦</h2>
+  78:           <p className="text-ink-muted mt-2">This will just take a moment.</p>
+  79:         </>
+  80:       )}
+  81: 
+  82:       {status === 'successful' && (
+  83:         <>
+  84:           <CheckCircle2 size={40} className="text-green-500 mb-4" />
+  85:           <h2 className="text-xl font-semibold text-ink">Payment confirmed!</h2>
+  86:           <p className="text-ink-muted mt-2">
+  87:             {plan ? `Your ${plan.replace('_', ' ')} plan is now active.` : 'Your subscription is now active.'} Redirectingâ€¦
+  88:           </p>
+  89:         </>
+  90:       )}
+  91: 
+  92:       {status === 'pending' && (
+  93:         <>
+  94:           <Loader2 size={40} className="text-amber-500 mb-4" />
+  95:           <h2 className="text-xl font-semibold text-ink">Payment still processing</h2>
+  96:           <p className="text-ink-muted mt-2">
+  97:             This can take a few minutes for some payment methods. We'll update your account automatically once it clears â€” no action needed.
+  98:           </p>
+  99:         </>
+ 100:       )}
+ 101: 
+ 102:       {status === 'failed' && (
+ 103:         <>
+ 104:           <XCircle size={40} className="text-red-500 mb-4" />
+ 105:           <h2 className="text-xl font-semibold text-ink">Payment not successful</h2>
+ 106:           <p className="text-ink-muted mt-2">Your payment wasn't completed. You can try again from Settings â†’ Billing.</p>
+ 107:         </>
+ 108:       )}
+ 109: 
+ 110:       {status === 'error' && (
+ 111:         <>
+ 112:           <XCircle size={40} className="text-red-500 mb-4" />
+ 113:           <h2 className="text-xl font-semibold text-ink">Couldn't confirm payment</h2>
+ 114:           <p className="text-ink-muted mt-2">{message}</p>
+ 115:         </>
+ 116:       )}
+ 117:     </div>
+ 118:   )
+ 119: }
+
+######## src\app\api\billing\verify-status\route.ts ########
+   1: export const runtime = 'nodejs'
+   2: import { NextRequest, NextResponse } from 'next/server'
+   3: import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
+   4: import { verifyPaystackTransaction } from '@/lib/payments/paystack'
+   5: import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
+   6: import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
+   7: import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
+   8: 
+   9: export async function GET(req: NextRequest) {
+  10:   const provider = req.nextUrl.searchParams.get('provider')
+  11:   const ref = req.nextUrl.searchParams.get('ref')
+  12:   // Flutterwave's redirect also appends its own transaction_id â€” prefer
+  13:   // that for Flutterwave verification since tx_ref alone isn't enough
+  14:   // for their verify-by-id endpoint.
+  15:   const transactionId = req.nextUrl.searchParams.get('transaction_id')
+  16: 
+  17:   if (!provider || !ref) {
+  18:     return NextResponse.json({ status: 'error', message: 'Missing provider or reference' }, { status: 400 })
+  19:   }
+  20: 
+  21:   try {
+  22:     const verification = provider === 'flutterwave'
+  23:       ? await verifyFlutterwaveTransaction(transactionId ?? ref)
+  24:       : await verifyPaystackTransaction(ref)
+  25: 
+  26:     if (!verification.success) {
+  27:       return NextResponse.json({ status: 'error', message: verification.error ?? 'Verification failed' })
+  28:     }
+  29: 
+  30:     if (verification.status !== 'successful') {
+  31:       return NextResponse.json({ status: verification.status })
+  32:     }
+  33: 
+  34:     if (!verification.metadata) {
+  35:       return NextResponse.json({ status: 'error', message: 'Payment verified but no subscription details found' })
+  36:     }
+  37: 
+  38:     // âœ… Validate reference exists before applying
+  39:     if (!verification.reference) {
+  40:       console.error('Payment verified but provider returned no reference â€” refusing to apply subscription')
+  41:       return NextResponse.json({ status: 'error', message: 'Payment verification incomplete â€” please contact support' })
+  42:     }
+  43: 
+  44:     // âœ… Validate amount exists before applying â€” same pattern as the
+  45:     // reference check above. amount should always be present once
+  46:     // status === 'successful', but we don't silently fall back to 0.
+  47:     if (verification.amount === undefined) {
+  48:       console.error('Payment verified but provider returned no amount â€” refusing to apply subscription')
+  49:       return NextResponse.json({ status: 'error', message: 'Payment verification incomplete â€” please contact support' })
+  50:     }
+  51: 
+  52:     // âœ… Pass gateway and verification.reference to applySuccessfulSubscription
+  53:     // No fallback here â€” apply-subscription.ts owns the fallback logic centrally
+  54:     const applied = verification.metadata.type === 'founding_500'
+  55:       ? await applyFounding500Payment(
+  56:           verification.metadata,
+  57:           provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+  58:           verification.reference,
+  59:           verification.amount,
+  60:           verification.currency ?? 'NGN'
+  61:         )
+  62:       : verification.metadata.type === 'tertiary_subscription'
+  63:       ? await applySuccessfulTertiarySubscription(
+  64:           verification.metadata,
+  65:           provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+  66:           verification.reference,
+  67:           verification.amount,
+  68:           verification.currency ?? 'NGN'
+  69:         )
+  70:       : await applySuccessfulSubscription(
+  71:           verification.metadata,
+  72:           provider === 'flutterwave' ? 'flutterwave' : 'paystack',
+  73:           verification.reference,
+  74:           verification.amount
+  75:         )
+  76:     if (!applied.success) {
+  77:       if ('needsReview' in applied && applied.needsReview) {
+  78:         return NextResponse.json({ status: 'needs_review', message: applied.error })
+  79:       }
+  80: 
+  81:       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
+  82:     }
+  83: 
+  84:     return NextResponse.json({
+  85:       status: 'successful',
+  86:       plan: verification.metadata.type === 'founding_500'
+  87:         ? 'founding_500'
+  88:         : verification.metadata.type === 'tertiary_subscription'
+  89:         ? (verification.metadata.tierKey ?? 'founding_conversion')
+  90:         : verification.metadata.plan,
+  91:     })
+  92:   } catch (err: any) {
+  93:     console.error('Verify status error:', err)
+  94:     return NextResponse.json({ status: 'error', message: 'Something went wrong verifying your payment' }, { status: 500 })
+  95:   }
+  96: }
+
+######## src\lib\payments\apply-founding500.ts ########
+   1: import { createClient } from '@supabase/supabase-js'
+   2: import { FoundingCheckoutMetadata } from './types'
+   3: 
+   4: function serviceClient() {
+   5:   return createClient(
+   6:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   7:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+   8:     { auth: { autoRefreshToken: false, persistSession: false } }
+   9:   )
+  10: }
+  11: 
+  12: export async function applyFounding500Payment(
+  13:   metadata: FoundingCheckoutMetadata,
+  14:   provider: 'paystack' | 'flutterwave',
+  15:   reference: string,
+  16:   amountPaid: number,
+  17:   currency: string
+  18: ): Promise<{ success: boolean; error?: string }> {
+  19:   const admin = serviceClient()
+  20: 
+  21:   // Re-verify amount/currency server-side against the live campaign price â€”
+  22:   // never trust metadata.expected_amount alone, in case the qualifying
+  23:   // price changed between checkout initiation and this confirmation.
+  24:   const { data: campaign } = await admin
+  25:     .from('campaign_slot_counters')
+  26:     .select('qualifying_price')
+  27:     .eq('campaign_key', 'founding_500')
+  28:     .single()
+  29: 
+  30:   if (!campaign || amountPaid !== campaign.qualifying_price || currency !== 'NGN') {
+  31:     console.error(
+  32:       `Founding 500 payment amount/currency mismatch: paid=${amountPaid} ${currency}, expected=${campaign?.qualifying_price} NGN`
+  33:     )
+  34:     return { success: false, error: 'Payment amount or currency did not match the Founding 500 offer' }
+  35:   }
+  36: 
+  37:   // Referral code is deliberately NOT taken from the frontend/metadata â€”
+  38:   // enroll_founding_500() itself looks up the matching referrals row by
+  39:   // organization_id server-side. We only need to know which one to pass.
+  40:   const { data: referral } = await admin
+  41:     .from('referrals')
+  42:     .select('referral_code')
+  43:     .eq('organization_id', metadata.organizationId)
+  44:     .eq('status', 'pending')
+  45:     .maybeSingle()
+  46: 
+  47:   if (!referral) {
+  48:     console.error(`No pending referral found for organization ${metadata.organizationId} â€” cannot enroll in Founding 500`)
+  49:     return { success: false, error: 'No valid referral found for this school. Please contact support.' }
+  50:   }
+  51: 
+  52:   // âœ… enroll_founding_500() handles its own idempotency â€” no pre-claim needed
+  53:   const { error: enrollError } = await admin.rpc('enroll_founding_500', {
+  54:     p_org_id: metadata.organizationId,
+  55:     p_referral_code: referral.referral_code,
+  56:     p_payment_reference: reference,
+  57:     p_provider: provider,
+  58:     p_amount_paid: amountPaid,
+  59:   })
+  60: 
+  61:   if (enrollError) {
+  62:     console.error('enroll_founding_500 failed:', enrollError.message)
+  63:     return { success: false, error: enrollError.message }
+  64:   }
+  65: 
+  66:   return { success: true }
+  67: }
+
+######## src\lib\payments\apply-subscription.ts ########
+   1: import { createClient } from '@supabase/supabase-js'
+   2: import { CheckoutMetadata } from './types'
+   3: import { getCycleDurationDays, getPrice, PaidPlan, Currency, BillingCycle } from './pricing'
+   4: 
+   5: function serviceClient() {
+   6:   return createClient(
+   7:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   8:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+   9:     { auth: { autoRefreshToken: false, persistSession: false } }
+  10:   )
+  11: }
+  12: 
+  13: export async function applySuccessfulSubscription(
+  14:   metadata: CheckoutMetadata,
+  15:   provider: 'paystack' | 'flutterwave',
+  16:   reference: string,
+  17:   amountPaid: number
+  18: ): Promise<{ success: boolean; error?: string }> {
+  19:   const admin = serviceClient()
+  20: 
+  21:   // From here, TypeScript knows metadata is CheckoutMetadata (type === 'subscription')
+  22:   // IDEMPOTENCY GUARD: try to claim this (provider, reference) pair first.
+  23:   // If it's already been claimed â€” by the webhook, by verify-status polling,
+  24:   // or by a retried webhook delivery â€” this insert fails on the unique
+  25:   // constraint and we stop here, before touching subscriptions or commissions.
+  26:   const { error: claimError } = await admin
+  27:     .from('processed_payments')
+  28:     .insert({
+  29:       provider,
+  30:       reference,
+  31:       account_id: metadata.accountId,
+  32:       plan: metadata.plan,
+  33:       amount: amountPaid,
+  34:       currency: metadata.expected_currency,
+  35:       billing_cycle: metadata.cycle ?? null,
+  36:       gateway: provider,
+  37:     })
+  38: 
+  39:   if (claimError) {
+  40:     if (claimError.code === '23505') {
+  41:       // Already processed â€” this is the expected, safe outcome for a
+  42:       // duplicate webhook or a verify-status call after the webhook
+  43:       // already ran. Not an error from the caller's point of view.
+  44:       return { success: true }
+  45:     }
+  46:     console.error('Error claiming payment reference:', claimError)
+  47:     return { success: false, error: claimError.message }
+  48:   }
+  49: 
+  50:   if (!metadata.cycle) {
+  51:     return { success: false, error: 'Missing billing cycle in metadata for subscription plan' }
+  52:   }
+  53: 
+  54:   const now = new Date()
+  55:   const expiresAt = new Date(now.getTime() + getCycleDurationDays(metadata.cycle) * 86400000)
+  56: 
+  57:   const updates = {
+  58:     subscription_plan: metadata.plan,
+  59:     subscription_status: 'active',
+  60:     subscription_start: now.toISOString(),
+  61:     subscription_expires_at: expiresAt.toISOString(),
+  62:     billing_cycle: metadata.cycle,
+  63:     suspended_at: null,
+  64:     cancelled_at: null,
+  65:   }
+  66: 
+  67:   const table = metadata.accountType === 'org' ? 'organizations' : 'users'
+  68: 
+  69:   const { error } = await admin
+  70:     .from(table)
+  71:     .update(updates)
+  72:     .eq('id', metadata.accountId)
+  73: 
+  74:   if (error) {
+  75:     console.error('Error applying subscription:', error)
+  76:     return { success: false, error: error.message }
+  77:   }
+  78: 
+  79:   // â”€â”€ Representative commission check â”€â”€
+  80:   try {
+  81:     const referralQuery = metadata.accountType === 'org'
+  82:       ? admin.from('referrals').select('id').eq('organization_id', metadata.accountId).eq('status', 'pending')
+  83:       : admin.from('referrals').select('id').eq('referred_user_id', metadata.accountId).eq('status', 'pending')
+  84: 
+  85:     const { data: referral } = await referralQuery.maybeSingle()
+  86: 
+  87:     if (referral) {
+  88:       if (amountPaid > 0) {
+  89:         await admin.rpc('record_commission', {
+  90:           p_referral_id: referral.id,
+  91:           p_plan: metadata.plan,
+  92:           p_amount: amountPaid,
+  93:         })
+  94:       }
+  95:     }
+  96:   } catch (err) {
+  97:     console.error('Commission recording failed (non-fatal):', err)
+  98:   }
+  99: 
+ 100:   return { success: true }
+ 101: }
+
+######## src\lib\payments\apply-tertiary-subscription.ts ########
+   1: import { createClient } from '@supabase/supabase-js'
+   2: import { TertiaryCheckoutMetadata } from './types'
+   3: 
+   4: export async function applySuccessfulTertiarySubscription(
+   5:   metadata: TertiaryCheckoutMetadata,
+   6:   provider: 'paystack' | 'flutterwave',
+   7:   reference: string,
+   8:   amountPaid: number,
+   9:   currencyPaid: string
+  10: ): Promise<{ success: boolean; error?: string; needsReview?: boolean }> {
+  11:   const admin = createClient(
+  12:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  13:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  14:     { auth: { autoRefreshToken: false, persistSession: false } }
+  15:   )
+  16:   const { data, error } = await admin.rpc('confirm_tertiary_payment', {
+  17:     p_provider: provider,
+  18:     p_gateway_reference: reference,
+  19:     p_quote_reference: metadata.quoteReference,
+  20:     p_org_id: metadata.organizationId,
+  21:     p_amount: amountPaid,
+  22:     p_currency: currencyPaid,
+  23:   })
+  24:   if (error) {
+  25:     console.error('confirm_tertiary_payment failed:', error.message)
+  26:     return { success: false, error: 'Could not record your payment. Please contact support before paying again.' }
+  27:   }
+  28:   if (data?.status === 'needs_review') {
+  29:     console.error('Tertiary payment needs review:', data.reason, reference)
+  30:     return { success: false, needsReview: true, error: 'Your payment was received but needs review before it can be applied. Our team has been notified. Please do not pay again.' }
+  31:   }
+  32:   return { success: true }
+  33: }
+
+######## src\lib\payments\flutterwave.ts ########
+   1: import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, AnyCheckoutMetadata } from './types'
+   2: 
+   3: const FLW_BASE = 'https://api.flutterwave.com/v3'
+   4: 
+   5: export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
+   6:   try {
+   7:     // Build description based on metadata type
+   8:     let description: string
+   9:     if (input.metadata.type === 'founding_500') {
+  10:       description = 'Founding 500 Enrollment'
+  11:     } else if (input.metadata.type === 'tertiary_subscription') {
+  12:       description = input.metadata.quoteKind === 'founding_conversion'
+  13:         ? 'Founding 50 conversion fee'
+  14:         : `Tertiary: ${input.metadata.tierKey} (${input.metadata.billingCycle})`
+  15:     } else {
+  16:       description = `${input.metadata.plan} (${input.metadata.cycle})`
+  17:     }
+  18: 
+  19:     const response = await fetch(`${FLW_BASE}/payments`, {
+  20:       method: 'POST',
+  21:       headers: {
+  22:         Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+  23:         'Content-Type': 'application/json',
+  24:       },
+  25:       body: JSON.stringify({
+  26:         tx_ref: input.reference,
+  27:         amount: input.amount,
+  28:         currency: input.currency,
+  29:         redirect_url: input.redirectUrl,
+  30:         customer: { email: input.email, name: input.name },
+  31:         customizations: { title: 'Eduxellence', description },
+  32:         meta: input.metadata,
+  33:       }),
+  34:     })
+  35: 
+  36:     const json = await response.json()
+  37: 
+  38:     if (json.status !== 'success' || !json.data?.link) {
+  39:       console.error('Flutterwave initiate error:', json)
+  40:       return { success: false, error: json.message ?? 'Failed to initiate Flutterwave checkout' }
+  41:     }
+  42: 
+  43:     return { success: true, paymentLink: json.data.link }
+  44:   } catch (err: any) {
+  45:     console.error('Flutterwave initiate error:', err)
+  46:     return { success: false, error: 'Failed to initiate Flutterwave checkout' }
+  47:   }
+  48: }
+  49: 
+  50: export async function verifyFlutterwaveTransaction(transactionId: string): Promise<VerifyTransactionResult> {
+  51:   try {
+  52:     const response = await fetch(`${FLW_BASE}/transactions/${transactionId}/verify`, {
+  53:       headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` },
+  54:     })
+  55:     const json = await response.json()
+  56: 
+  57:     if (json.status !== 'success' || json.data?.status !== 'successful') {
+  58:       return { success: true, status: 'failed' }
+  59:     }
+  60: 
+  61:     return {
+  62:       success: true,
+  63:       status: 'successful',
+  64:       amount: json.data.amount,
+  65:       currency: json.data.currency,
+  66:       metadata: json.data.meta as AnyCheckoutMetadata,
+  67:       reference: String(json.data.id),   // âœ… NEW â€” canonical, matches what the webhook itself sees
+  68:     }
+  69:   } catch (err: any) {
+  70:     console.error('Flutterwave verify error:', err)
+  71:     return { success: false, status: 'failed', error: 'Verification failed' }
+  72:   }
+  73: }
+
+######## src\lib\payments\paystack.ts ########
+   1: import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, CheckoutMetadata } from './types'
+   2: 
+   3: const PAYSTACK_BASE = 'https://api.paystack.co'
+   4: 
+   5: // Paystack expects amounts in the smallest currency unit
+   6: // (kobo for NGN, cents for USD) â€” i.e. multiplied by 100.
+   7: export async function initiatePaystackCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
+   8:   try {
+   9:     const res = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+  10:       method: 'POST',
+  11:       headers: {
+  12:         Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+  13:         'Content-Type': 'application/json',
+  14:       },
+  15:       body: JSON.stringify({
+  16:         email: input.email,
+  17:         amount: Math.round(input.amount * 100),
+  18:         currency: input.currency,
+  19:         reference: input.reference,
+  20:         callback_url: input.redirectUrl,
+  21:         metadata: input.metadata,
+  22:       }),
+  23:     })
+  24: 
+  25:     const json = await res.json()
+  26: 
+  27:     if (!json.status || !json.data?.authorization_url) {
+  28:       console.error('Paystack initiate error:', json)
+  29:       return { success: false, error: json.message ?? 'Failed to initiate Paystack checkout' }
+  30:     }
+  31: 
+  32:     return { success: true, paymentLink: json.data.authorization_url }
+  33:   } catch (err: any) {
+  34:     console.error('Paystack initiate error:', err)
+  35:     return { success: false, error: 'Failed to initiate Paystack checkout' }
+  36:   }
+  37: }
+  38: 
+  39: export async function verifyPaystackTransaction(reference: string): Promise<VerifyTransactionResult> {
+  40:   try {
+  41:     const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
+  42:       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+  43:     })
+  44:     const json = await res.json()
+  45: 
+  46:     if (!json.status || json.data?.status !== 'success') {
+  47:       return { success: true, status: 'failed' }
+  48:     }
+  49: 
+  50:     return {
+  51:       success: true,
+  52:       status: 'successful',
+  53:       amount: json.data.amount / 100,
+  54:       currency: json.data.currency,
+  55:       metadata: json.data.metadata as CheckoutMetadata,
+  56:       reference: json.data.reference,   // âœ… NEW
+  57:     }
+  58:   } catch (err: any) {
+  59:     console.error('Paystack verify error:', err)
+  60:     return { success: false, status: 'failed', error: 'Verification failed' }
+  61:   }
+  62: }
+
+######## src\lib\payments\pricing.ts ########
+   1: export type BillingCycle = 'termly' | 'annual'
+   2: export type Currency = 'NGN' | 'USD'
+   3: export type PaidPlan = 'small_school' | 'standard_school' | 'premium_school' | 'solo_teacher_pro'
+   4: 
+   5: // Amounts are in the currency's smallest whole unit for display,
+   6: // converted to kobo/cents at checkout time by each provider wrapper.
+   7: export const PRICING: Record<PaidPlan, Record<Currency, Record<BillingCycle, number>>> = {
+   8:   small_school: {
+   9:     NGN: { termly: 15000, annual: 42000 },
+  10:     USD: { termly: 15, annual: 42 },
+  11:   },
+  12:   standard_school: {
+  13:     NGN: { termly: 35000, annual: 99000 },
+  14:     USD: { termly: 35, annual: 99 },
+  15:   },
+  16:   premium_school: {
+  17:     NGN: { termly: 75000, annual: 210000 },
+  18:     USD: { termly: 75, annual: 210 },
+  19:   },
+  20:   solo_teacher_pro: {
+  21:     NGN: { termly: 3000, annual: 8000 },
+  22:     USD: { termly: 3, annual: 8 },
+  23:   },
+  24: }
+  25: 
+  26: export function getPrice(plan: PaidPlan, currency: Currency, cycle: BillingCycle): number {
+  27:   return PRICING[plan][currency][cycle]
+  28: }
+  29: 
+  30: // Approximate cycle length used to compute subscription_expires_at.
+  31: // 1 term â‰ˆ 1/3 of a school year.
+  32: export function getCycleDurationDays(cycle: BillingCycle): number {
+  33:   return cycle === 'annual' ? 365 : 122
+  34: }
+  35: 
+  36: // âœ… Dynamically computed savings â€” never hardcode a percentage.
+  37: // Compares the annual price against what 3 terms would cost if paid termly.
+  38: export function getAnnualSavingsPercent(plan: PaidPlan, currency: Currency): number {
+  39:   const termly = getPrice(plan, currency, 'termly')
+  40:   const annual = getPrice(plan, currency, 'annual')
+  41:   if (termly === 0 || annual === 0) return 0
+  42:   const fullYearIfTermly = termly * 3
+  43:   return Math.round(((fullYearIfTermly - annual) / fullYearIfTermly) * 100)
+  44: }
+
+######## src\lib\payments\types.ts ########
+   1: import { BillingCycle, Currency, PaidPlan } from './pricing'
+   2: 
+   3: export type { Currency } from './pricing'
+   4: 
+   5: export type AccountType = 'org' | 'solo'
+   6: 
+   7: export interface CheckoutMetadata {
+   8:   type: 'subscription'
+   9:   accountType: AccountType
+  10:   accountId: string   // organization_id or user_id
+  11:   plan: PaidPlan
+  12:   cycle: BillingCycle
+  13:   platform_key: string   // âœ… ADDED - identifies platform to central router
+  14:   expected_amount: number   // âœ… ADDED - amount central expects
+  15:   expected_currency: Currency   // âœ… ADDED - currency central expects
+  16: }
+  17: 
+  18: // Founding 500 is institution-only (organization_id is NOT NULL on
+  19: // founding500_enrollments, confirmed against the schema) â€” no accountType
+  20: // needed, it's always an org.
+  21: export interface FoundingCheckoutMetadata {
+  22:   type: 'founding_500'
+  23:   organizationId: string
+  24:   platform_key: string
+  25:   expected_amount: number
+  26:   expected_currency: Currency
+  27:   referral_code?: string   // Founding 500 only
+  28: }
+  29: 
+  30: export interface TertiaryCheckoutMetadata {
+  31:   type: 'tertiary_subscription'
+  32:   quoteKind: 'period' | 'founding_conversion'
+  33:   organizationId: string
+  34:   quoteReference: string
+  35:   tierKey?: string
+  36:   billingCycle?: 'termly' | 'annual'
+  37:   platform_key: string
+  38:   expected_amount: number
+  39:   expected_currency: Currency
+  40: }
+  41: 
+  42: export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata
+  43: 
+  44: export interface InitiateCheckoutInput {
+  45:   email: string
+  46:   name: string
+  47:   amount: number
+  48:   currency: Currency
+  49:   reference: string
+  50:   redirectUrl: string
+  51:   metadata: AnyCheckoutMetadata
+  52: }
+  53: 
+  54: export interface InitiateCheckoutResult {
+  55:   success: boolean
+  56:   paymentLink?: string
+  57:   error?: string
+  58: }
+  59: 
+  60: export interface VerifyTransactionResult {
+  61:   success: boolean
+  62:   status: 'successful' | 'failed' | 'pending'
+  63:   amount?: number
+  64:   currency?: Currency
+  65:   metadata?: AnyCheckoutMetadata
+  66:   reference?: string
+  67:   error?: string
+  68: }
+
+######## src\components\billing\ExpiredBanner.tsx ########
+   1: 'use client'
+   2: 
+   3: import Link from 'next/link'
+   4: import { AlertTriangle } from 'lucide-react'
+   5: 
+   6: export default function ExpiredBanner() {
+   7:   return (
+   8:     <div className="p-3 border border-red-200 rounded-lg bg-red-50 flex items-center justify-between gap-3 flex-wrap">
+   9:       <div className="flex items-center gap-2.5">
+  10:         <AlertTriangle size={16} className="shrink-0 text-red-600" />
+  11:         <p className="text-sm text-red-800">
+  12:           Your subscription has expired. Renew now to regain full access to editing and report generation.
+  13:         </p>
+  14:       </div>
+  15:       <Link href="/settings?tab=billing" className="btn-primary btn-sm bg-red-600 hover:bg-red-700 border-red-600 hover:border-red-700 text-white shrink-0">
+  16:         Renew Subscription
+  17:       </Link>
+  18:     </div>
+  19:   )
+  20: }
+
+######## src\components\billing\ExpiringSoonBanner.tsx ########
+   1: 'use client'
+   2: 
+   3: import Link from 'next/link'
+   4: import { AlertTriangle } from 'lucide-react'
+   5: 
+   6: interface Props {
+   7:   daysUntilExpiry: number
+   8: }
+   9: 
+  10: export default function ExpiringSoonBanner({ daysUntilExpiry }: Props) {
+  11:   const urgencyColor = daysUntilExpiry <= 1 ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+  12:   const urgencyIcon = daysUntilExpiry <= 1 ? 'text-red-600' : 'text-amber-600'
+  13:   
+  14:   return (
+  15:     <div className={`p-3 border rounded-lg flex items-center justify-between gap-3 flex-wrap ${urgencyColor}`}>
+  16:       <div className="flex items-center gap-2.5">
+  17:         <AlertTriangle size={16} className={`shrink-0 ${urgencyIcon}`} />
+  18:         <p className="text-sm">
+  19:           {daysUntilExpiry === 0 
+  20:             ? 'Your subscription renews today' 
+  21:             : `Your subscription renews in ${daysUntilExpiry} day${daysUntilExpiry > 1 ? 's' : ''}`}
+  22:         </p>
+  23:       </div>
+  24:       <Link href="/settings#billing" className="btn-primary btn-sm btn shrink-0">
+  25:         Renew Now
+  26:       </Link>
+  27:     </div>
+  28:   )
+  29: }
+
+######## src\components\billing\GracePeriodBanner.tsx ########
+   1: 'use client'
+   2: 
+   3: import Link from 'next/link'
+   4: import { AlertTriangle } from 'lucide-react'
+   5: 
+   6: interface Props {
+   7:   daysRemaining: number
+   8: }
+   9: 
+  10: export default function GracePeriodBanner({ daysRemaining }: Props) {
+  11:   let tone: { bg: string; border: string; text: string; iconColor: string }
+  12:   let message: string
+  13: 
+  14:   if (daysRemaining <= 1) {
+  15:     tone = { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', iconColor: 'text-red-600' }
+  16:     message = 'Final reminder: Renew today to avoid losing editing access.'
+  17:   } else if (daysRemaining <= 3) {
+  18:     tone = { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', iconColor: 'text-orange-600' }
+  19:     message = `Only ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remain before your account becomes read-only.`
+  20:   } else {
+  21:     tone = { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', iconColor: 'text-amber-600' }
+  22:     message = `Your subscription has expired, but you're in a grace period. Renew within ${daysRemaining} days to continue editing and generating reports.`
+  23:   }
+  24: 
+  25:   return (
+  26:     <div className={`p-3 border rounded-lg flex items-center justify-between gap-3 flex-wrap ${tone.bg} ${tone.border}`}>
+  27:       <div className="flex items-center gap-2.5">
+  28:         <AlertTriangle size={16} className={`shrink-0 ${tone.iconColor}`} />
+  29:         <p className={`text-sm ${tone.text}`}>{message}</p>
+  30:       </div>
+  31:       <Link href="/settings?tab=billing" className="btn-primary btn-sm btn shrink-0">
+  32:         Renew Subscription
+  33:       </Link>
+  34:     </div>
+  35:   )
+  36: }
+
+######## src\components\billing\PlanDowngradeCard.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState } from 'react'
+   4: import { useRouter } from 'next/navigation'
+   5: import toast from 'react-hot-toast'
+   6: import { AlertTriangle, Loader2 } from 'lucide-react'
+   7: import { requestDowngrade } from '@/app/(dashboard)/settings/billing/actions'
+   8: import type { PlanKey } from '@/lib/plans/config'
+   9: 
+  10: interface Props { plan: PlanKey; label: string }
+  11: 
+  12: export default function PlanDowngradeCard({ plan, label }: Props) {
+  13:   const router = useRouter()
+  14:   const [loading, setLoading] = useState(false)
+  15:   const [blockedChecks, setBlockedChecks] = useState<{ label: string; current: number; limit: number | 'unlimited' }[] | null>(null)
+  16: 
+  17:   async function handleDowngrade() {
+  18:     if (!confirm(`Downgrade to ${label}? This takes effect immediately.`)) return
+  19:     setLoading(true)
+  20:     const fd = new FormData()
+  21:     fd.append('target_plan', plan)
+  22:     const result = await requestDowngrade(fd)
+  23:     setLoading(false)
+  24: 
+  25:     if (!result.success) {
+  26:       if (result.checks) {
+  27:         setBlockedChecks(result.checks)
+  28:       } else {
+  29:         toast.error(result.message || 'Failed to downgrade')
+  30:       }
+  31:       return
+  32:     }
+  33: 
+  34:     toast.success(`Switched to ${label}`)
+  35:     router.refresh()
+  36:   }
+  37: 
+  38:   return (
+  39:     <div className="p-3 border border-surface-200 rounded-lg flex flex-col gap-2">
+  40:       <div className="flex items-center justify-between">
+  41:         <p className="text-sm font-medium text-ink">{label}</p>
+  42:         <button onClick={handleDowngrade} disabled={loading} className="btn-secondary btn-sm btn">
+  43:           {loading ? <Loader2 size={13} className="animate-spin" /> : 'Downgrade'}
+  44:         </button>
+  45:       </div>
+  46: 
+  47:       {blockedChecks && (
+  48:         <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800">
+  49:           <p className="font-medium flex items-center gap-1.5 mb-1.5">
+  50:             <AlertTriangle size={13} /> Your current usage exceeds this plan's limits:
+  51:           </p>
+  52:           <ul className="flex flex-col gap-0.5 ml-5 list-disc">
+  53:             {blockedChecks.map(c => (
+  54:               <li key={c.label}>{c.label}: {c.current} / {c.limit}</li>
+  55:             ))}
+  56:           </ul>
+  57:           <p className="mt-1.5">Please reduce usage before downgrading.</p>
+  58:         </div>
+  59:       )}
+  60:     </div>
+  61:   )
+  62: }
+
+######## src\components\billing\PlanUpgradeCard.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState } from 'react'
+   4: import toast from 'react-hot-toast'
+   5: import { Loader2 } from 'lucide-react'
+   6: import { getPrice, getAnnualSavingsPercent, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
+   7: 
+   8: interface Props {
+   9:   plan: PaidPlan
+  10:   label: string
+  11: }
+  12: 
+  13: export default function PlanUpgradeCard({ plan, label }: Props) {
+  14:   const [cycle, setCycle] = useState<BillingCycle>('annual')
+  15:   const [currency, setCurrency] = useState<Currency>('NGN')
+  16:   const [loadingProvider, setLoadingProvider] = useState<'flutterwave' | 'paystack' | null>(null)
+  17: 
+  18:   const price = getPrice(plan, currency, cycle)
+  19:   const symbol = currency === 'NGN' ? 'â‚¦' : '$'
+  20: 
+  21:   async function checkout(provider: 'flutterwave' | 'paystack') {
+  22:     setLoadingProvider(provider)
+  23:     try {
+  24:       const res = await fetch('/api/billing/initiate', {
+  25:         method: 'POST',
+  26:         headers: { 'Content-Type': 'application/json' },
+  27:         body: JSON.stringify({ plan, currency, cycle, provider }),
+  28:       })
+  29:       const data = await res.json()
+  30:       if (data.paymentLink) {
+  31:         window.location.href = data.paymentLink
+  32:       } else {
+  33:         toast.error(data.error ?? 'Failed to start checkout')
+  34:         setLoadingProvider(null)
+  35:       }
+  36:     } catch {
+  37:       toast.error('Failed to start checkout')
+  38:       setLoadingProvider(null)
+  39:     }
+  40:   }
+  41: 
+  42:   return (
+  43:     <div className="p-3 border border-surface-200 rounded-lg flex flex-col gap-3">
+  44:       <div className="flex items-center justify-between">
+  45:         <p className="text-sm font-medium text-ink">{label}</p>
+  46:         <div className="flex gap-1 text-xs">
+  47:           <button
+  48:             onClick={() => setCurrency('NGN')}
+  49:             className={`px-2 py-0.5 rounded ${currency === 'NGN' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
+  50:           >
+  51:             â‚¦ NGN
+  52:           </button>
+  53:           <button
+  54:             onClick={() => setCurrency('USD')}
+  55:             className={`px-2 py-0.5 rounded ${currency === 'USD' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
+  56:           >
+  57:             $ USD
+  58:           </button>
+  59:         </div>
+  60:       </div>
+  61: 
+  62:       <div className="flex flex-wrap items-center justify-between gap-2">
+  63:         <div className="flex items-baseline gap-1">
+  64:           <span className="text-lg font-bold text-ink">{symbol}{price.toLocaleString()}</span>
+  65:           <span className="text-xs text-ink-muted">/ {cycle === 'annual' ? 'year' : 'term'}</span>
+  66:         </div>
+  67:         <div className="flex gap-1 text-xs">
+  68:           <button
+  69:             onClick={() => setCycle('termly')}
+  70:             className={`px-2 py-0.5 rounded ${cycle === 'termly' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
+  71:           >
+  72:             Termly
+  73:           </button>
+  74:           <button
+  75:             onClick={() => setCycle('annual')}
+  76:             className={`px-2 py-0.5 rounded ${cycle === 'annual' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
+  77:           >
+  78:             Annual Â· Save {getAnnualSavingsPercent(plan, currency)}%
+  79:           </button>
+  80:         </div>
+  81:       </div>
+  82: 
+  83:       <div className="flex gap-2">
+  84:         <button
+  85:           onClick={() => checkout('flutterwave')}
+  86:           disabled={loadingProvider !== null}
+  87:           className="btn-primary btn-sm btn flex-1 disabled:opacity-50"
+  88:         >
+  89:           {loadingProvider === 'flutterwave' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Flutterwave'}
+  90:         </button>
+  91:         <button
+  92:           onClick={() => checkout('paystack')}
+  93:           disabled={loadingProvider !== null}
+  94:           className="btn-secondary btn-sm btn flex-1 disabled:opacity-50"
+  95:         >
+  96:           {loadingProvider === 'paystack' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Paystack'}
+  97:         </button>
+  98:       </div>
+  99:     </div>
+ 100:   )
+ 101: }
+
+######## src\components\billing\TertiaryPaymentPanel.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState } from 'react'
+   4: import toast from 'react-hot-toast'
+   5: import { Loader2 } from 'lucide-react'
+   6: import { createClient } from '@/lib/supabase/client'
+   7: 
+   8: export function formatCurrency(amount: number | null | undefined, currency: string = 'NGN') {
+   9:   if (amount == null) return 'â€”'
+  10:   const locale = currency === 'NGN' ? 'en-NG' : 'en-US'
+  11:   try {
+  12:     return new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount)
+  13:   } catch {
+  14:     return `${currency} ${amount.toLocaleString('en', { maximumFractionDigits: 2 })}`
+  15:   }
+  16: }
+  17: 
+  18: const fmtDate = (s: string) =>
+  19:   new Date(s.length === 10 ? `${s}T00:00:00` : s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  20: 
+  21: export interface Entitlement {
+  22:   status: 'pilot' | 'paid' | 'grace' | 'expired' | 'never_paid'
+  23:   entitled: boolean
+  24:   paid_until: string | null
+  25:   grace_ends_at: string | null
+  26:   between_periods?: boolean
+  27:   pilot?: { pilot_ends_at: string } | null
+  28:   next_period?: { period_start: string } | null
+  29: }
+  30: export interface PendingQuote { id: string; amount_due: number; currency: string; period_label: string | null; expires_at: string }
+  31: interface Estimate { amount_due: number; currency: string; student_count: number; billing_cycle: string }
+  32: 
+  33: function statusLine(e: Entitlement | null): string {
+  34:   if (!e) return ''
+  35:   switch (e.status) {
+  36:     case 'pilot': return e.pilot ? `Founding pilot until ${fmtDate(e.pilot.pilot_ends_at)}` : 'Founding pilot'
+  37:     case 'paid':
+  38:       if (e.between_periods && e.paid_until) return `Paid through ${fmtDate(e.paid_until)}${e.next_period ? ` (next period starts ${fmtDate(e.next_period.period_start)})` : ''}`
+  39:       return e.paid_until ? `Active until ${fmtDate(e.paid_until)}` : 'Active'
+  40:     case 'grace': return e.grace_ends_at ? `Payment overdue. Grace period ends ${fmtDate(e.grace_ends_at)}` : 'Payment overdue'
+  41:     case 'expired': return e.paid_until ? `Expired on ${fmtDate(e.paid_until)}` : 'Expired'
+  42:     default: return 'No payment received yet'
+  43:   }
+  44: }
+  45: 
+  46: export default function TertiaryPaymentPanel({ estimate, entitlement, pendingQuote }: {
+  47:   estimate: Estimate; entitlement: Entitlement | null; pendingQuote: PendingQuote | null
+  48: }) {
+  49:   const supabase = createClient()
+  50:   const [provider, setProvider] = useState<'paystack' | 'flutterwave'>('paystack')
+  51:   const [loading, setLoading] = useState(false)
+  52:   const [cancelling, setCancelling] = useState(false)
+  53:   const enabled = process.env.NEXT_PUBLIC_TERTIARY_BILLING_ENABLED === 'true'
+  54: 
+  55:   // A pending quote is a locked offer: show ITS amount, not today's estimate.
+  56:   const amount = pendingQuote ? pendingQuote.amount_due : estimate.amount_due
+  57:   const currency = pendingQuote ? pendingQuote.currency : estimate.currency
+  58: 
+  59:   async function pay() {
+  60:     setLoading(true)
+  61:     try {
+  62:       const res = await fetch('/api/tertiary/billing/initiate', {
+  63:         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider }),
+  64:       })
+  65:       const data = await res.json()
+  66:       if (data.paymentLink) { window.location.href = data.paymentLink; return }
+  67:       toast.error(data.error ?? 'Failed to start checkout')
+  68:     } catch {
+  69:       toast.error('Could not reach the server. Please check your connection and try again.')
+  70:     }
+  71:     setLoading(false)
+  72:   }
+  73: 
+  74:   async function cancelQuote() {
+  75:     if (!pendingQuote) return
+  76:     setCancelling(true)
+  77:     const { error } = await supabase.rpc('cancel_tertiary_payment_quote', { p_quote_id: pendingQuote.id })
+  78:     if (error) { toast.error(error.message); setCancelling(false); return }
+  79:     window.location.reload()
+  80:   }
+  81: 
+  82:   return (
+  83:     <div className="border border-surface-200 rounded-lg p-4 flex flex-col gap-3">
+  84:       {entitlement && <p className="text-sm font-medium text-ink">{statusLine(entitlement)}</p>}
+  85: 
+  86:       <div className="text-sm text-ink-muted">
+  87:         {pendingQuote ? (
+  88:           <>
+  89:             A payment of <span className="font-medium text-ink">{formatCurrency(amount, currency)}</span>
+  90:             {pendingQuote.period_label ? ` for ${pendingQuote.period_label}` : ''} is in progress and the amount is locked until {fmtDate(pendingQuote.expires_at)}.
+  91:           </>
+  92:         ) : (
+  93:           <>
+  94:             {estimate.student_count} active student{estimate.student_count !== 1 ? 's' : ''}, billed {estimate.billing_cycle}.
+  95:             Amount due: <span className="font-medium text-ink">{formatCurrency(amount, currency)}</span>.
+  96:             The billing period is taken from your academic calendar when you continue.
+  97:           </>
+  98:         )}
+  99:       </div>
+ 100: 
+ 101:       {!enabled ? (
+ 102:         <p className="text-xs text-ink-faint">Online payment is not yet available for your institution.</p>
+ 103:       ) : (
+ 104:         <>
+ 105:           <div className="flex flex-col gap-2">
+ 106:             <p className="text-sm font-medium text-ink">Choose payment method</p>
+ 107:             <label className="flex items-center gap-2 text-sm">
+ 108:               <input type="radio" name="tertiary_provider" checked={provider === 'paystack'} onChange={() => setProvider('paystack')} /> Paystack
+ 109:             </label>
+ 110:             <label className="flex items-center gap-2 text-sm">
+ 111:               <input type="radio" name="tertiary_provider" checked={provider === 'flutterwave'} onChange={() => setProvider('flutterwave')} /> Flutterwave
+ 112:             </label>
+ 113:           </div>
+ 114:           <div className="flex gap-2">
+ 115:             <button onClick={pay} disabled={loading || cancelling} className="btn-primary btn-sm btn disabled:opacity-50">
+ 116:               {loading ? <Loader2 size={13} className="animate-spin" /> : 'Continue to pay'}
+ 117:             </button>
+ 118:             {pendingQuote && (
+ 119:               <button onClick={cancelQuote} disabled={loading || cancelling} className="btn-secondary btn-sm btn disabled:opacity-50">
+ 120:                 {cancelling ? <Loader2 size={13} className="animate-spin" /> : 'Cancel this payment'}
+ 121:               </button>
+ 122:             )}
+ 123:           </div>
+ 124:           <p className="text-xs text-ink-faint">Your plan is only active once the payment is confirmed. Returning from the payment page does not activate it.</p>
+ 125:         </>
+ 126:       )}
+ 127:     </div>
+ 128:   )
+ 129: }
+
+######## src\components\billing\UpgradeButton.tsx ########
+   1: 'use client';
+   2: 
+   3: import { useState } from 'react';
+   4: import toast from 'react-hot-toast';
+   5: 
+   6: interface UpgradeButtonProps {
+   7:   planKey: string;
+   8:   label: string;
+   9: }
+  10: 
+  11: export default function UpgradeButton({ planKey, label }: UpgradeButtonProps) {
+  12:   const [loading, setLoading] = useState(false);
+  13: 
+  14:   const handleUpgrade = async () => {
+  15:     setLoading(true);
+  16:     try {
+  17:       const response = await fetch('/api/billing/initiate', {
+  18:         method: 'POST',
+  19:         headers: {
+  20:           'Content-Type': 'application/json',
+  21:         },
+  22:         body: JSON.stringify({ planKey }),
+  23:       });
+  24: 
+  25:       const data = await response.json();
+  26: 
+  27:       if (data.paymentLink) {
+  28:         window.location.href = data.paymentLink;
+  29:       } else {
+  30:         toast.error(data.error || 'Failed to initiate payment');
+  31:         setLoading(false);
+  32:       }
+  33:     } catch (error) {
+  34:       toast.error('Something went wrong');
+  35:       setLoading(false);
+  36:     }
+  37:   };
+  38: 
+  39:   return (
+  40:     <button 
+  41:       onClick={handleUpgrade} 
+  42:       disabled={loading}
+  43:       className="btn-primary btn-sm btn"
+  44:     >
+  45:       {loading ? 'Processing...' : 'Upgrade'}
+  46:     </button>
+  47:   );
+  48: }
+
+######## src\app\rep\page.tsx ########
+   1: import { createClient } from '@/lib/supabase/server'
+   2: import { redirect } from 'next/navigation'
+   3: import { getCachedUser } from '@/lib/supabase/getCachedUser'
+   4: import Link from 'next/link'
+   5: import { TicketIcon, GraduationCap, BookOpen, CreditCard, Building2 } from 'lucide-react'
+   6: import RepDashboard from '@/components/representatives/RepDashboard'
+   7: import LogoutButton from '@/components/super-admin/LogoutButton'
+   8: import NotificationBell from '@/components/notifications/NotificationBell'
+   9: import AnnouncementBanner from '@/components/announcements/AnnouncementBanner'
+  10: 
+  11: export default async function RepPage() {
+  12:   const supabase = await createClient()
+  13:   const { data: { user } } = await getCachedUser()
+  14:   if (!user) redirect('/login')
+  15: 
+  16:   const { data: rep } = await supabase
+  17:     .from('representatives')
+  18:     .select('id, photo_status')
+  19:     .eq('user_id', user.id)
+  20:     .maybeSingle()
+  21: 
+  22:   if (!rep) redirect('/dashboard')
+  23: 
+  24:   // Mandatory onboarding gate â€” agreement acceptance and an approved
+  25:   // passport are both required before dashboard access, for every rep,
+  26:   // not just newly registered ones.
+  27:   const { data: latestVersion } = await supabase
+  28:     .from('representative_agreement_versions')
+  29:     .select('id').order('version', { ascending: false }).limit(1).maybeSingle()
+  30: 
+  31:   const agreementAccepted = latestVersion
+  32:     ? !!(await supabase
+  33:         .from('representative_agreement_acceptances')
+  34:         .select('id')
+  35:         .eq('representative_id', rep.id)
+  36:         .eq('agreement_version_id', latestVersion.id)
+  37:         .maybeSingle()).data
+  38:     : false
+  39: 
+  40:   if (!agreementAccepted || rep.photo_status !== 'approved') {
+  41:     redirect('/rep/onboarding')
+  42:   }
+  43: 
+  44:   return (
+  45:     <div className="min-h-screen bg-surface-50 p-6">
+  46:       {/* âœ… Header with Support Link + Notification Bell + Logout */}
+  47:       <div className="flex justify-end items-center gap-2 max-w-4xl mx-auto mb-4 flex-wrap">
+  48:         <Link href="/rep/onboarding" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+  49:           <GraduationCap size={14} /> Onboarding
+  50:         </Link>
+  51:         <Link href="/rep/schools" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+  52:           <Building2 size={14} /> My School Portfolio
+  53:         </Link>
+  54:         <Link href="/rep/resources" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+  55:           <BookOpen size={14} /> Resource Centre
+  56:         </Link>
+  57:         <Link href="/rep/id-card" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+  58:           <CreditCard size={14} /> My ID Card
+  59:         </Link>
+  60:         <Link href="/school-support" className="btn-secondary btn-sm btn flex items-center gap-1.5">
+  61:           <TicketIcon size={14} /> Support
+  62:         </Link>
+  63:         <NotificationBell />
+  64:         <LogoutButton />
+  65:       </div>
+  66:       <div className="max-w-4xl mx-auto">
+  67:         <AnnouncementBanner />
+  68:       </div>
+  69:       <RepDashboard />
+  70:     </div>
+  71:   )
+  72: }
+
+######## src\app\rep\id-card\page.tsx ########
+   1: import { createClient } from '@/lib/supabase/server'
+   2: import { redirect } from 'next/navigation'
+   3: import IdCardGenerator from '@/components/representatives/IdCardGenerator'
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export default async function IdCardPage() {
+   7:   const supabase = await createClient()
+   8:   const { user } = await getAuthenticatedUser(supabase)
+   9:   if (!user) redirect('/login')
+  10: 
+  11:   const { data: rep } = await supabase.from('representatives').select('id').eq('user_id', user.id).maybeSingle()
+  12:   if (!rep) redirect('/dashboard')
+  13: 
+  14:   return (
+  15:     <div className="max-w-2xl mx-auto p-4 sm:p-6">
+  16:       <h1 className="text-2xl font-semibold text-gray-900 mb-4">?? My ID Card</h1>
+  17:       <IdCardGenerator />
+  18:     </div>
+  19:   )
+  20: }
+
+######## src\app\rep\leaderboard\page.tsx ########
+   1: // src/app/rep/leaderboard/page.tsx
+   2: import LeaderboardFull from '@/components/representatives/LeaderboardFull'
+   3: export const dynamic = 'force-dynamic'
+   4: export default function Page() { return <LeaderboardFull /> }
+
+######## src\app\rep\onboarding\OnboardingClient.tsx ########
+   1: 'use client'
+   2: import { useEffect, useState } from 'react'
+   3: import { createClient } from '@/lib/supabase/client'
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: type Steps = { profile_completed: boolean; passport_uploaded: boolean; passport_approved: boolean; agreement_accepted: boolean }
+   7: 
+   8: export default function OnboardingClient() {
+   9:   const [status, setStatus] = useState<{ steps: Steps; percent: number; fullyOnboarded: boolean } | null>(null)
+  10:   const [passport, setPassport] = useState<{ photoStatus: string; rejectionReason: string | null; signedUrl: string | null } | null>(null)
+  11:   const [agreement, setAgreement] = useState<{ version: number; content: string; accepted: boolean; acceptedAt: string | null } | null>(null)
+  12:   const [uploading, setUploading] = useState(false)
+  13:   const [accepting, setAccepting] = useState(false)
+  14:   const [checked, setChecked] = useState(false)
+  15:   const [error, setError] = useState<string | null>(null)
+  16: 
+  17:   async function loadAll() {
+  18:     setError(null)
+  19:     const [s, p, a] = await Promise.all([
+  20:       fetch('/api/representatives/onboarding-status').then(r => r.json()),
+  21:       fetch('/api/representatives/passport').then(r => r.json()),
+  22:       fetch('/api/representatives/agreement').then(r => r.json()),
+  23:     ])
+  24:     if (s.error || p.error || a.error) {
+  25:       setError(s.error ?? p.error ?? a.error ?? 'Something went wrong loading your onboarding status')
+  26:       return
+  27:     }
+  28:     setStatus(s); setPassport(p); setAgreement(a)
+  29:   }
+  30:   useEffect(() => { loadAll() }, [])
+  31: 
+  32:   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  33:     const file = e.target.files?.[0]
+  34:     if (!file) return
+  35:     setUploading(true)
+  36:     setError(null)
+  37:     try {
+  38:       const supabase = createClient()
+  39:       const { user } = await getAuthenticatedUser(supabase)
+  40:       if (!user) throw new Error('Not authenticated')
+  41: 
+  42:       const ext = file.name.split('.').pop()
+  43:       const path = `${user.id}/passport-${Date.now()}.${ext}`
+  44: 
+  45:       const { error: uploadError } = await supabase.storage
+  46:         .from('representative-passports')
+  47:         .upload(path, file, { upsert: false })
+  48:       if (uploadError) throw uploadError
+  49: 
+  50:       const res = await fetch('/api/representatives/passport', {
+  51:         method: 'POST', headers: { 'Content-Type': 'application/json' },
+  52:         body: JSON.stringify({ path }),
+  53:       })
+  54:       const json = await res.json()
+  55:       if (json.error) throw new Error(json.error)
+  56: 
+  57:       await loadAll()
+  58:     } catch (err: any) {
+  59:       setError(err.message ?? 'Upload failed')
+  60:     } finally {
+  61:       setUploading(false)
+  62:     }
+  63:   }
+  64: 
+  65:   async function handleAcceptAgreement() {
+  66:     if (!agreement || !checked) return
+  67:     setAccepting(true)
+  68:     setError(null)
+  69:     const res = await fetch('/api/representatives/agreement', {
+  70:       method: 'POST', headers: { 'Content-Type': 'application/json' },
+  71:       body: JSON.stringify({ version: agreement.version }),
+  72:     })
+  73:     const json = await res.json()
+  74:     if (json.error) setError(json.error)
+  75:     else await loadAll()
+  76:     setAccepting(false)
+  77:   }
+  78: 
+  79:   if (!status || !passport || !agreement) return <div className="p-8 text-gray-500">Loadingâ€¦</div>
+  80: 
+  81:   return (
+  82:     <div className="max-w-2xl mx-auto p-6 space-y-8">
+  83:       <div>
+  84:         <h1 className="text-2xl font-semibold text-gray-900">Representative Onboarding</h1>
+  85:         <p className="text-gray-600 mt-1">{status.percent}% complete</p>
+  86:         <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+  87:           <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${status.percent}%` }} />
+  88:         </div>
+  89:         <ul className="mt-4 space-y-1 text-sm">
+  90:           <li>{status.steps.profile_completed ? 'âœ…' : 'â¬œ'} Profile completed</li>
+  91:           <li>{status.steps.passport_uploaded ? 'âœ…' : 'â¬œ'} Passport uploaded</li>
+  92:           <li>{status.steps.passport_approved ? 'âœ…' : status.steps.passport_uploaded ? 'â³' : 'â¬œ'} Passport approved</li>
+  93:           <li>{status.steps.agreement_accepted ? 'âœ…' : 'â¬œ'} Agreement accepted</li>
+  94:         </ul>
+  95:       </div>
+  96: 
+  97:       {error && <p className="text-sm text-red-600">{error}</p>}
+  98: 
+  99:       <div className="border rounded-lg p-5">
+ 100:         <h2 className="font-semibold text-gray-900 mb-2">Passport Photo</h2>
+ 101:         {passport.signedUrl && (
+ 102:           <img src={passport.signedUrl} alt="Passport" className="w-32 h-32 object-cover rounded mb-3 border" />
+ 103:         )}
+ 104:         <p className="text-sm mb-3">
+ 105:           Status:{' '}
+ 106:           {passport.photoStatus === 'approved' && <span className="text-green-600 font-medium">Approved</span>}
+ 107:           {passport.photoStatus === 'pending_review' && <span className="text-amber-600 font-medium">Pending approval</span>}
+ 108:           {passport.photoStatus === 'rejected' && <span className="text-red-600 font-medium">Rejected â€” {passport.rejectionReason}</span>}
+ 109:           {passport.photoStatus === 'not_submitted' && <span className="text-gray-500">Not submitted</span>}
+ 110:         </p>
+ 111:         {passport.photoStatus !== 'approved' && (
+ 112:           <label className="inline-block">
+ 113:             <span className="btn-sm btn bg-blue-50 text-blue-600 cursor-pointer">
+ 114:               {uploading ? 'Uploadingâ€¦' : passport.photoStatus === 'rejected' ? 'Re-upload Photo' : 'Upload Photo'}
+ 115:             </span>
+ 116:             <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+ 117:           </label>
+ 118:         )}
+ 119:       </div>
+ 120: 
+ 121:       <div className="border rounded-lg p-5">
+ 122:         <h2 className="font-semibold text-gray-900 mb-2">Representative Agreement (v{agreement.version})</h2>
+ 123:         {agreement.accepted ? (
+ 124:           <p className="text-sm text-green-600 font-medium">Accepted on {new Date(agreement.acceptedAt!).toLocaleDateString()}</p>
+ 125:         ) : (
+ 126:           <>
+ 127:             <div className="text-sm text-gray-700 whitespace-pre-wrap border rounded p-3 max-h-60 overflow-y-auto mb-3">
+ 128:               {agreement.content}
+ 129:             </div>
+ 130:             <label className="flex items-center gap-2 text-sm mb-3">
+ 131:               <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} />
+ 132:               I have read and accept this agreement
+ 133:             </label>
+ 134:             <button
+ 135:               disabled={!checked || accepting}
+ 136:               onClick={handleAcceptAgreement}
+ 137:               className="btn-primary btn-sm btn disabled:opacity-50"
+ 138:             >
+ 139:               {accepting ? 'Submittingâ€¦' : 'Accept Agreement'}
+ 140:             </button>
+ 141:           </>
+ 142:         )}
+ 143:       </div>
+ 144:     </div>
+ 145:   )
+ 146: }
+
+######## src\app\rep\onboarding\page.tsx ########
+   1: export const runtime = 'nodejs'
+   2: import { redirect } from 'next/navigation'
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import OnboardingClient from './OnboardingClient'
+   5: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   6: 
+   7: export default async function RepOnboardingPage() {
+   8:   const supabase = await createClient()
+   9:   const { user } = await getAuthenticatedUser(supabase)
+  10:   if (!user) redirect('/login')
+  11: 
+  12:   const { data: rep } = await supabase
+  13:     .from('representatives').select('id').eq('user_id', user.id).maybeSingle()
+  14:   if (!rep) redirect('/dashboard')
+  15: 
+  16:   return <OnboardingClient />
+  17: }
+
+######## src\app\rep\resources\page.tsx ########
+   1: export const runtime = 'nodejs'
+   2: import { redirect } from 'next/navigation'
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import ResourceCentreClient from './ResourceCentreClient'
+   5: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   6: 
+   7: export default async function ResourceCentrePage() {
+   8:   const supabase = await createClient()
+   9:   const { user } = await getAuthenticatedUser(supabase)
+  10:   if (!user) redirect('/login')
+  11:   const { data: rep } = await supabase.from('representatives').select('id').eq('user_id', user.id).maybeSingle()
+  12:   if (!rep) redirect('/dashboard')
+  13:   return <ResourceCentreClient />
+  14: }
+
+######## src\app\rep\resources\ResourceCentreClient.tsx ########
+   1: 'use client'
+   2: import { useEffect, useState } from 'react'
+   3: 
+   4: export default function ResourceCentreClient() {
+   5:   const [resources, setResources] = useState<any[]>([])
+   6:   const [loading, setLoading] = useState(true)
+   7:   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+   8:   const [search, setSearch] = useState('')
+   9: 
+  10:   useEffect(() => {
+  11:     fetch('/api/representatives/resources').then(r => r.json()).then(d => {
+  12:       setResources(d.resources ?? [])
+  13:       setLoading(false)
+  14:     })
+  15:   }, [])
+  16: 
+  17:   async function download(id: string) {
+  18:     const res = await fetch(`/api/representatives/resources/${id}/download`, { method: 'POST' })
+  19:     const json = await res.json()
+  20:     if (json.error) { alert(json.error); return }
+  21:     window.open(json.url, '_blank')
+  22:   }
+  23: 
+  24:   const categories = Array.from(new Set(resources.map(r => r.resource_categories?.label).filter(Boolean)))
+  25:   const filtered = resources.filter(r =>
+  26:     (categoryFilter === 'all' || r.resource_categories?.label === categoryFilter) &&
+  27:     (search === '' || r.title.toLowerCase().includes(search.toLowerCase()))
+  28:   )
+  29: 
+  30:   if (loading) return <div className="p-8 text-gray-500">Loadingâ€¦</div>
+  31: 
+  32:   return (
+  33:     <div className="max-w-3xl mx-auto p-4 sm:p-6">
+  34:       <h1 className="text-2xl font-semibold text-gray-900 mb-4">ðŸ“š Resource Centre</h1>
+  35: 
+  36:       <div className="flex flex-col sm:flex-row gap-2 mb-4">
+  37:         <input
+  38:           type="text" placeholder="Search resourcesâ€¦" value={search}
+  39:           onChange={e => setSearch(e.target.value)}
+  40:           className="flex-1 border rounded-lg px-3 py-2 text-sm"
+  41:         />
+  42:         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+  43:           <option value="all">All categories</option>
+  44:           {categories.map(c => <option key={c} value={c}>{c}</option>)}
+  45:         </select>
+  46:       </div>
+  47: 
+  48:       <div className="space-y-3">
+  49:         {filtered.length === 0 && <p className="text-sm text-gray-500 text-center py-8">No resources found.</p>}
+  50:         {filtered.map(r => (
+  51:           <div key={r.id} className="border rounded-lg p-4 flex items-start justify-between gap-3">
+  52:             <div className="min-w-0">
+  53:               <div className="flex items-center gap-2 flex-wrap">
+  54:                 {r.is_important && <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">ðŸ“Œ Important</span>}
+  55:                 {r.is_featured && <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-medium">â­ Featured</span>}
+  56:                 <p className="font-medium text-gray-900">{r.title}</p>
+  57:               </div>
+  58:               {r.description && <p className="text-sm text-gray-600 mt-1">{r.description}</p>}
+  59:               <p className="text-xs text-gray-400 mt-1">
+  60:                 {r.resource_categories?.label ?? 'Uncategorized'}
+  61:                 {r.version && ` Â· v${r.version}`}
+  62:                 {' Â· Updated ' + new Date(r.updated_at).toLocaleDateString()}
+  63:               </p>
+  64:             </div>
+  65:             <button onClick={() => download(r.id)} className="btn-sm btn bg-blue-50 text-blue-600 whitespace-nowrap flex-shrink-0">
+  66:               Download
+  67:             </button>
+  68:           </div>
+  69:         ))}
+  70:       </div>
+  71:     </div>
+  72:   )
+  73: }
+
+######## src\app\rep\schools\page.tsx ########
+   1: // src/app/rep/schools/page.tsx
+   2: import SchoolPortfolio from '@/components/representatives/SchoolPortfolio'
+   3: 
+   4: export const dynamic = 'force-dynamic'
+   5: 
+   6: export default function RepSchoolsPage() {
+   7:   return <SchoolPortfolio />
+   8: }
+
+######## src\app\rep\schools\[id]\page.tsx ########
+   1: // src/app/rep/schools/[id]/page.tsx
+   2: import SchoolProfilePanel from '@/components/representatives/SchoolProfilePanel'
+   3: 
+   4: export const dynamic = 'force-dynamic'
+   5: 
+   6: export default async function RepSchoolDetailPage({ params }: { params: Promise<{ id: string }> }) {
+   7:   const { id } = await params
+   8:   return <SchoolProfilePanel organizationId={id} />
+   9: }
+
+######## src\app\(dashboard)\attendance\page.tsx ########
+   1: import { createClient } from '@/lib/supabase/server'
+   2: import { redirect } from 'next/navigation'
+   3: import AttendanceSheet from '@/components/attendance/AttendanceSheet'
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export default async function AttendancePage() {
+   7:   const supabase = await createClient()
+   8:   const { user: authUser } = await getAuthenticatedUser(supabase)
+   9:   if (!authUser) redirect('/login')
+  10: 
+  11:   const { data: user } = await supabase
+  12:     .from('users')
+  13:     .select('*, organization:organizations!users_organization_id_fkey(*)')
+  14:     .eq('id', authUser.id)
+  15:     .single()
+  16: 
+  17:   const orgId = user?.organization_id
+  18:   const isSoloTeacher = !orgId
+  19: 
+  20:   // âœ… FIX: Check permission instead of hard role check
+  21:   const { data: canViewAttendance } = orgId
+  22:     ? await supabase.rpc('has_permission', { 
+  23:         p_user_id: authUser.id, 
+  24:         p_permission_key: 'attendance.view' 
+  25:       })
+  26:     : { data: false }
+  27: 
+  28:   // If not admin and doesn't have permission, redirect
+  29:   if (user?.role !== 'admin' && !canViewAttendance) redirect('/dashboard')
+  30: 
+  31:   // Resolve the current term/session â€” institutions use organizations.current_term_id,
+  32:   // solo teachers use users.current_term_id. Same pattern as your report generator page.
+  33:   let currentTermId: string | null = null
+  34: 
+  35:   if (isSoloTeacher) {
+  36:     currentTermId = user?.current_term_id ?? null
+  37:   } else {
+  38:     const { data: org } = await supabase
+  39:       .from('organizations')
+  40:       .select('current_term_id')
+  41:       .eq('id', orgId)
+  42:       .single()
+  43:     currentTermId = org?.current_term_id ?? null
+  44:   }
+  45: 
+  46:   let termId: string | null = null
+  47:   let sessionId: string | null = null
+  48:   let termLabel: string | null = null
+  49: 
+  50:   if (currentTermId) {
+  51:     const { data: term } = await supabase
+  52:       .from('terms')
+  53:       .select('id, name, session_id, session:academic_sessions(name)')
+  54:       .eq('id', currentTermId)
+  55:       .single()
+  56: 
+  57:     if (term) {
+  58:       termId = term.id
+  59:       sessionId = term.session_id
+  60:       const sessionName = (term.session as unknown as { name: string } | null)?.name ?? ''
+  61:       termLabel = `${sessionName} â€” ${term.name}`
+  62:     }
+  63:   }
+  64: 
+  65:   // Classes this user can mark attendance for
+  66:   const groupsQuery = supabase
+  67:     .from('groups')
+  68:     .select('id, name')
+  69:     .eq('type', 'class')
+  70:     .eq('is_active', true)
+  71:     .order('name')
+  72: 
+  73:   const { data: classes } = isSoloTeacher
+  74:     ? await groupsQuery.eq('instructor_id', authUser.id)
+  75:     : await groupsQuery.eq('organization_id', orgId)
+  76: 
+  77:   return (
+  78:     <div className="flex flex-col gap-6">
+  79:       <div>
+  80:         <h1 className="page-title">Attendance</h1>
+  81:         <p className="page-subtitle">
+  82:           {termLabel ? `Marking attendance for ${termLabel}` : 'Mark daily attendance for your class.'}
+  83:         </p>
+  84:       </div>
+  85: 
+  86:       {!termId || !sessionId ? (
+  87:         <div className="card p-8 text-center text-sm text-ink-muted">
+  88:           No current academic term is set. Please set your current term in Settings before marking attendance.
+  89:         </div>
+  90:       ) : !classes || classes.length === 0 ? (
+  91:         <div className="card p-8 text-center text-sm text-ink-muted">
+  92:           No classes found. Create a class first.
+  93:         </div>
+  94:       ) : (
+  95:         <AttendanceSheet classes={classes} termId={termId} sessionId={sessionId} />
+  96:       )}
+  97:     </div>
+  98:   )
+  99: }
+
+######## src\app\(dashboard)\attendance\reports\page.tsx ########
+   1: // src/app/(dashboard)/attendance/reports/page.tsx
+   2: 'use client'
+   3: import { useState, useEffect } from 'react'
+   4: import { createClient } from '@/lib/supabase/client'
+   5: import { pdf } from '@react-pdf/renderer'
+   6: import { saveAs } from 'file-saver'
+   7: import * as XLSX from 'xlsx'
+   8: import toast from 'react-hot-toast'
+   9: import { Loader2, FileDown, FileSpreadsheet, Download } from 'lucide-react'
+  10: import { AttendanceReportPDF } from '@/components/attendance/AttendanceReportPDF'
+  11: import { DailyRegisterPDF } from '@/components/attendance/DailyRegisterPDF'
+  12: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+  13: 
+  14: interface ClassOption { id: string; name: string }
+  15: interface TermOption { id: string; name: string; session_name?: string }
+  16: 
+  17: export default function AttendanceReportsPage() {
+  18:   const supabase = createClient()
+  19:   const [classes, setClasses] = useState<ClassOption[]>([])
+  20:   const [terms, setTerms] = useState<TermOption[]>([])
+  21:   const [groupId, setGroupId] = useState('')
+  22:   const [termId, setTermId] = useState('')
+  23:   const [startDate, setStartDate] = useState('')
+  24:   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
+  25:   const [generating, setGenerating] = useState<'report' | 'register' | 'excel' | null>(null)
+  26:   const [userName, setUserName] = useState('')
+  27:   const [userRole, setUserRole] = useState('')
+  28: 
+  29:   useEffect(() => {
+  30:     async function load() {
+  31:       const { user } = await getAuthenticatedUser(supabase)
+  32:       if (!user) return
+  33:       const { data: profile } = await supabase.from('users').select('organization_id, role, name').eq('id', user.id).single()
+  34:       setUserName(profile?.name ?? '')
+  35:       setUserRole(profile?.role ?? '')
+  36: 
+  37:       const groupsQuery = supabase.from('groups').select('id, name').eq('type', 'class').eq('is_active', true).order('name')
+  38:       const { data: groupData } = profile?.organization_id
+  39:         ? await groupsQuery.eq('organization_id', profile.organization_id)
+  40:         : await groupsQuery.eq('instructor_id', user.id)
+  41:       setClasses(groupData ?? [])
+  42:       if (groupData && groupData.length > 0) setGroupId(groupData[0].id)
+  43: 
+  44:       const sessionsQuery = profile?.organization_id
+  45:         ? supabase.from('academic_sessions').select('id').eq('organization_id', profile.organization_id)
+  46:         : supabase.from('academic_sessions').select('id').eq('instructor_id', user.id)
+  47:       const { data: sessions } = await sessionsQuery
+  48:       const sessionIds = (sessions ?? []).map(s => s.id)
+  49:       if (sessionIds.length > 0) {
+  50:         const { data: termsData } = await supabase
+  51:           .from('terms').select('id, name, session_id, session:academic_sessions(name)')
+  52:           .in('session_id', sessionIds).order('name')
+  53:         const enriched = (termsData ?? []).map((t: any) => ({ id: t.id, name: t.name, session_name: t.session?.name }))
+  54:         setTerms(enriched)
+  55:         if (enriched.length > 0) setTermId(enriched[0].id)
+  56:       }
+  57:     }
+  58:     load()
+  59:   }, [])
+  60: 
+  61:   async function fetchReportData(): Promise<any> {
+  62:     const params = new URLSearchParams({ groupId, termId, startDate, endDate })
+  63:     const res = await fetch(`/api/attendance/report?${params}`)
+  64:     const data = await res.json()
+  65:     if (data.error) throw new Error(data.error)
+  66:     return data
+  67:   }
+  68: 
+  69:   async function generateReport() {
+  70:     if (!groupId || !termId || !startDate || !endDate) { toast.error('Select class, term and date range'); return }
+  71:     setGenerating('report')
+  72:     try {
+  73:       const data = await fetchReportData()
+  74:       const doc = (
+  75:         <AttendanceReportPDF
+  76:           school={data.school} classInfo={data.class} term={data.term} period={data.period}
+  77:           schoolDays={data.school_days} students={data.students}
+  78:           preparedByName={userName} preparedByTitle={userRole === 'admin' ? 'School Admin' : 'Class Teacher'}
+  79:         />
+  80:       )
+  81:       const blob = await pdf(doc).toBlob()
+  82:       saveAs(blob, `${data.class.name}_Attendance_Report_${startDate}_to_${endDate}.pdf`)
+  83:       toast.success('Report generated')
+  84:     } catch (e) {
+  85:       toast.error(e instanceof Error ? e.message : 'Failed to generate report')
+  86:     } finally {
+  87:       setGenerating(null)
+  88:     }
+  89:   }
+  90: 
+  91:   async function generateRegister() {
+  92:     if (!groupId || !termId || !startDate || !endDate) { toast.error('Select class, term and date range'); return }
+  93:     setGenerating('register')
+  94:     try {
+  95:       const data = await fetchReportData()
+  96:       const doc = (
+  97:         <DailyRegisterPDF school={data.school} classInfo={data.class} term={data.term}
+  98:           students={data.students} dailyRegister={data.daily_register} />
+  99:       )
+ 100:       const blob = await pdf(doc).toBlob()
+ 101:       saveAs(blob, `${data.class.name}_Daily_Register_${startDate}_to_${endDate}.pdf`)
+ 102:       toast.success('Register generated')
+ 103:     } catch (e) {
+ 104:       toast.error(e instanceof Error ? e.message : 'Failed to generate register')
+ 105:     } finally {
+ 106:       setGenerating(null)
+ 107:     }
+ 108:   }
+ 109: 
+ 110:   async function generateExcel() {
+ 111:     if (!groupId || !termId || !startDate || !endDate) { toast.error('Select class, term and date range'); return }
+ 112:     setGenerating('excel')
+ 113:     try {
+ 114:       const data = await fetchReportData()
+ 115:       const headers = ['#', 'Student', 'Adm. No', 'Present', 'Absent', 'Late', 'Attendance %']
+ 116:       const rows = data.students.map((s: any, i: number) => [
+ 117:         i + 1, `${s.last_name} ${s.first_name}`, s.admission_number ?? '',
+ 118:         s.days_present, s.days_absent, s.days_late, s.attendance_percentage ?? '',
+ 119:       ])
+ 120:       const wb = XLSX.utils.book_new()
+ 121:       const ws = XLSX.utils.aoa_to_sheet([[`${data.class.name} â€” Attendance Report`], [], headers, ...rows])
+ 122:       XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
+ 123:       XLSX.writeFile(wb, `${data.class.name}_Attendance_${startDate}_to_${endDate}.xlsx`)
+ 124:       toast.success('Excel downloaded')
+ 125:     } catch (e) {
+ 126:       toast.error(e instanceof Error ? e.message : 'Failed to generate Excel')
+ 127:     } finally {
+ 128:       setGenerating(null)
+ 129:     }
+ 130:   }
+ 131: 
+ 132:   return (
+ 133:     <div className="max-w-2xl flex flex-col gap-6">
+ 134:       <div>
+ 135:         <h1 className="page-title">Attendance Reports</h1>
+ 136:         <p className="page-subtitle">Generate inspection-ready attendance reports and daily registers.</p>
+ 137:       </div>
+ 138: 
+ 139:       <div className="card p-5 flex flex-col gap-3">
+ 140:         <div>
+ 141:           <label className="block text-xs font-medium text-ink mb-1">Class</label>
+ 142:           <select value={groupId} onChange={e => setGroupId(e.target.value)} className="input">
+ 143:             {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+ 144:           </select>
+ 145:         </div>
+ 146:         <div>
+ 147:           <label className="block text-xs font-medium text-ink mb-1">Term</label>
+ 148:           <select value={termId} onChange={e => setTermId(e.target.value)} className="input">
+ 149:             {terms.map(t => <option key={t.id} value={t.id}>{t.session_name} â€” {t.name}</option>)}
+ 150:           </select>
+ 151:         </div>
+ 152:         <div className="grid grid-cols-2 gap-3">
+ 153:           <div>
+ 154:             <label className="block text-xs font-medium text-ink mb-1">Start Date</label>
+ 155:             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="input" />
+ 156:           </div>
+ 157:           <div>
+ 158:             <label className="block text-xs font-medium text-ink mb-1">End Date</label>
+ 159:             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="input" />
+ 160:           </div>
+ 161:         </div>
+ 162: 
+ 163:         <div className="flex gap-2 flex-wrap pt-2 border-t border-surface-100">
+ 164:           <button onClick={generateReport} disabled={generating !== null} className="btn-primary btn-sm btn flex items-center gap-1.5">
+ 165:             {generating === 'report' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} Attendance Report PDF
+ 166:           </button>
+ 167:           <button onClick={generateRegister} disabled={generating !== null} className="btn-secondary btn-sm btn flex items-center gap-1.5">
+ 168:             {generating === 'register' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} Daily Register PDF
+ 169:           </button>
+ 170:           <button onClick={generateExcel} disabled={generating !== null} className="btn-secondary btn-sm btn flex items-center gap-1.5">
+ 171:             {generating === 'excel' ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />} Excel
+ 172:           </button>
+ 173:         </div>
+ 174:       </div>
+ 175:     </div>
+ 176:   )
+ 177: }
+
+######## src\app\api\attendance\report\route.ts ########
+   1: // src/app/api/attendance/report/route.ts
+   2: import { createClient } from '@/lib/supabase/server';
+   3: import { NextResponse } from 'next/server';
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export async function GET(request: Request) {
+   7:   const supabase = await createClient();
+   8:   const { user } = await getAuthenticatedUser(supabase);
+   9:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  10: 
+  11:   const { searchParams } = new URL(request.url);
+  12:   const groupId = searchParams.get('groupId');
+  13:   const termId = searchParams.get('termId');
+  14:   const startDate = searchParams.get('startDate');
+  15:   const endDate = searchParams.get('endDate');
+  16:   const learnerId = searchParams.get('learnerId');
+  17: 
+  18:   if (!groupId || !termId || !startDate || !endDate) {
+  19:     return NextResponse.json({ error: 'groupId, termId, startDate and endDate are required' }, { status: 400 });
+  20:   }
+  21: 
+  22:   const { data, error } = await supabase.rpc('get_attendance_report_data', {
+  23:     p_group_id: groupId,
+  24:     p_term_id: termId,
+  25:     p_start_date: startDate,
+  26:     p_end_date: endDate,
+  27:     p_learner_id: learnerId || null,
+  28:   });
+  29: 
+  30:   if (error) return NextResponse.json({ error: error.message }, { status: 422 });
+  31:   return NextResponse.json(data);
+  32: }
+
+######## src\app\api\executive\attendance-alerts\route.ts ########
+   1: // src/app/api/executive/attendance-alerts/route.ts
+   2: import { createClient } from '@/lib/supabase/server';
+   3: import { NextResponse } from 'next/server';
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export async function GET() {
+   7:   const supabase = await createClient();
+   8:   const { user } = await getAuthenticatedUser(supabase);
+   9:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  10: 
+  11:   const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+  12:   if (!profile?.organization_id) return NextResponse.json({ error: 'No organization found' }, { status: 400 });
+  13: 
+  14:   const [{ data: alerts, error }, { data: followups }] = await Promise.all([
+  15:     supabase.rpc('get_attendance_alerts', { p_org_id: profile.organization_id }),
+  16:     supabase.from('attendance_alert_followups').select('learner_id, alert_type, followed_up_at').eq('organization_id', profile.organization_id),
+  17:   ]);
+  18: 
+  19:   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
+  20:   return NextResponse.json({ ...alerts, followups: followups ?? [] });
+  21: }
+
+######## src\app\api\executive\attendance-alerts\followup\route.ts ########
+   1: // src/app/api/executive/attendance-alerts/followup/route.ts
+   2: import { createClient } from '@/lib/supabase/server';
+   3: import { NextResponse } from 'next/server';
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export async function POST(request: Request) {
+   7:   const supabase = await createClient();
+   8:   const { user } = await getAuthenticatedUser(supabase);
+   9:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  10: 
+  11:   const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+  12:   if (!profile?.organization_id) return NextResponse.json({ error: 'No organization found' }, { status: 400 });
+  13: 
+  14:   const body = await request.json();
+  15:   const { learnerId, alertType, notes } = body;
+  16:   if (!learnerId || !alertType) return NextResponse.json({ error: 'learnerId and alertType are required' }, { status: 400 });
+  17: 
+  18:   const { error } = await supabase.from('attendance_alert_followups').insert({
+  19:     organization_id: profile.organization_id,
+  20:     learner_id: learnerId,
+  21:     alert_type: alertType,
+  22:     followed_up_by: user.id,
+  23:     notes: notes ?? null,
+  24:   });
+  25: 
+  26:   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  27:   return NextResponse.json({ success: true });
+  28: }
+
+######## src\components\attendance\AttendanceReportPDF.tsx ########
+   1: // src/components/attendance/AttendanceReportPDF.tsx
+   2: import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
+   3: 
+   4: const gold = '#C8960C'
+   5: const goldLight = '#F5E6B8'
+   6: const dark = '#0D0D0D'
+   7: const muted = '#6B6456'
+   8: const border = '#E2D9C8'
+   9: const cream = '#FDFAF4'
+  10: 
+  11: const styles = StyleSheet.create({
+  12:   page: { padding: 36, fontFamily: 'Helvetica', fontSize: 9, backgroundColor: '#FFFFFF' },
+  13:   header: { flexDirection: 'column', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: gold, paddingBottom: 12, marginBottom: 14 },
+  14:   logo: { width: 56, height: 56, marginBottom: 6, objectFit: 'contain' },
+  15:   schoolName: { fontSize: 17, fontFamily: 'Helvetica-Bold', color: dark, textAlign: 'center' },
+  16:   schoolAddress: { fontSize: 7.5, color: muted, marginTop: 1, textAlign: 'center' },
+  17:   reportTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', textAlign: 'center', backgroundColor: goldLight, paddingVertical: 5, paddingHorizontal: 8, marginBottom: 12, color: dark, borderRadius: 3 },
+  18:   reportSubtitle: { fontSize: 8, textAlign: 'center', color: muted, marginBottom: 10 },
+  19:   infoBox: { backgroundColor: cream, borderRadius: 4, borderWidth: 1, borderColor: border, padding: 8, marginBottom: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  20:   infoItem: { width: '33%' },
+  21:   infoLabel: { fontSize: 7, color: muted, fontFamily: 'Helvetica-Bold', marginBottom: 1 },
+  22:   infoValue: { fontSize: 9, color: dark },
+  23:   summary: { backgroundColor: goldLight, borderRadius: 4, padding: 8, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
+  24:   summaryItem: { alignItems: 'center' },
+  25:   summaryValue: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: dark },
+  26:   summaryLabel: { fontSize: 6.5, color: muted, marginTop: 1 },
+  27:   table: { marginBottom: 10 },
+  28:   tableHeader: { flexDirection: 'row', backgroundColor: gold, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 3, marginBottom: 1 },
+  29:   tableHeaderCell: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center' },
+  30:   tableHeaderCellLeft: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'left' },
+  31:   tableRow: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#EEE8DC' },
+  32:   tableRowAlt: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#EEE8DC', backgroundColor: cream },
+  33:   cellName: { fontSize: 8, color: dark, fontFamily: 'Helvetica-Bold', textAlign: 'left' },
+  34:   cell: { fontSize: 8, color: dark, textAlign: 'center' },
+  35:   cellFlag: { fontSize: 8, textAlign: 'center', fontFamily: 'Helvetica-Bold', color: '#991B1B' },
+  36:   footerInstitution: { marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: border, flexDirection: 'row', justifyContent: 'space-between' },
+  37:   sigBlock: { alignItems: 'center', width: '30%' },
+  38:   sigLine: { width: 100, borderBottomWidth: 0.75, borderBottomColor: dark, marginBottom: 2, marginTop: 20 },
+  39:   sigLabel: { fontSize: 7, color: muted, marginBottom: 2 },
+  40:   sigTitle: { fontSize: 6, color: muted, fontFamily: 'Helvetica-Oblique', marginTop: 1 },
+  41:   metaFooter: { marginTop: 10, alignItems: 'center' },
+  42:   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
+  43: })
+  44: 
+  45: interface StudentRow {
+  46:   learner_id: string
+  47:   first_name: string
+  48:   last_name: string
+  49:   admission_number: string | null
+  50:   days_present: number
+  51:   days_absent: number
+  52:   days_late: number
+  53:   days_recorded: number
+  54:   attendance_percentage: number | null
+  55: }
+  56: 
+  57: interface Props {
+  58:   school: { name: string; logo_url?: string; address?: string }
+  59:   classInfo: { name: string; section: string | null; arm: string | null; class_teacher_name: string | null; registered_students: number }
+  60:   term: { term_name: string; session_name: string }
+  61:   period: { start_date: string; end_date: string }
+  62:   schoolDays: number
+  63:   students: StudentRow[]
+  64:   preparedByName?: string
+  65:   preparedByTitle?: string
+  66:   generatedDate?: string
+  67: }
+  68: 
+  69: export function AttendanceReportPDF({ school, classInfo, term, period, schoolDays, students, preparedByName, preparedByTitle, generatedDate }: Props) {
+  70:   const withPercentage = students.filter(s => s.attendance_percentage !== null)
+  71:   const avgAttendance = withPercentage.length > 0
+  72:     ? withPercentage.reduce((sum, s) => sum + (s.attendance_percentage ?? 0), 0) / withPercentage.length
+  73:     : 0
+  74:   const below80 = withPercentage.filter(s => (s.attendance_percentage ?? 100) < 80).length
+  75: 
+  76:   const classLabel = [classInfo.section, classInfo.name, classInfo.arm].filter(Boolean).join(' ')
+  77: 
+  78:   return (
+  79:     <Document>
+  80:       <Page size="A4" style={styles.page}>
+  81:         <View style={styles.header}>
+  82:           {school.logo_url && <Image src={school.logo_url} style={styles.logo} />}
+  83:           <Text style={styles.schoolName}>{school.name}</Text>
+  84:           {school.address && <Text style={styles.schoolAddress}>{school.address}</Text>}
+  85:         </View>
+  86: 
+  87:         <Text style={styles.reportTitle}>STUDENT ATTENDANCE REPORT</Text>
+  88:         <Text style={styles.reportSubtitle}>
+  89:           {term.session_name} â€” {term.term_name} Â· {new Date(period.start_date).toLocaleDateString('en-NG')} to {new Date(period.end_date).toLocaleDateString('en-NG')}
+  90:         </Text>
+  91: 
+  92:         <View style={styles.infoBox}>
+  93:           <View style={styles.infoItem}><Text style={styles.infoLabel}>Class</Text><Text style={styles.infoValue}>{classLabel}</Text></View>
+  94:           <View style={styles.infoItem}><Text style={styles.infoLabel}>Class Teacher</Text><Text style={styles.infoValue}>{classInfo.class_teacher_name ?? 'â€”'}</Text></View>
+  95:           <View style={styles.infoItem}><Text style={styles.infoLabel}>Registered Students</Text><Text style={styles.infoValue}>{classInfo.registered_students}</Text></View>
+  96:         </View>
+  97: 
+  98:         <View style={styles.summary}>
+  99:           <View style={styles.summaryItem}><Text style={styles.summaryValue}>{students.length}</Text><Text style={styles.summaryLabel}>Total Students</Text></View>
+ 100:           <View style={styles.summaryItem}><Text style={styles.summaryValue}>{schoolDays}</Text><Text style={styles.summaryLabel}>Total School Days</Text></View>
+ 101:           <View style={styles.summaryItem}><Text style={styles.summaryValue}>{avgAttendance.toFixed(1)}%</Text><Text style={styles.summaryLabel}>Average Attendance</Text></View>
+ 102:           <View style={styles.summaryItem}><Text style={[styles.summaryValue, below80 > 0 ? { color: '#991B1B' } : {}]}>{below80}</Text><Text style={styles.summaryLabel}>Below 80% Attendance</Text></View>
+ 103:         </View>
+ 104: 
+ 105:         <View style={styles.table}>
+ 106:           <View style={styles.tableHeader}>
+ 107:             <Text style={[styles.tableHeaderCellLeft, { width: '30%' }]}>Student</Text>
+ 108:             <Text style={[styles.tableHeaderCell, { width: '16%' }]}>Adm. No.</Text>
+ 109:             <Text style={[styles.tableHeaderCell, { width: '13%' }]}>Present</Text>
+ 110:             <Text style={[styles.tableHeaderCell, { width: '13%' }]}>Absent</Text>
+ 111:             <Text style={[styles.tableHeaderCell, { width: '13%' }]}>Late</Text>
+ 112:             <Text style={[styles.tableHeaderCell, { width: '15%' }]}>Attendance %</Text>
+ 113:           </View>
+ 114:           {students.map((s, idx) => (
+ 115:             <View key={s.learner_id} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
+ 116:               <Text style={[styles.cellName, { width: '30%' }]}>{s.last_name} {s.first_name}</Text>
+ 117:               <Text style={[styles.cell, { width: '16%' }]}>{s.admission_number ?? 'â€”'}</Text>
+ 118:               <Text style={[styles.cell, { width: '13%' }]}>{s.days_present}</Text>
+ 119:               <Text style={[styles.cell, { width: '13%' }]}>{s.days_absent}</Text>
+ 120:               <Text style={[styles.cell, { width: '13%' }]}>{s.days_late}</Text>
+ 121:               <Text style={[s.attendance_percentage !== null && s.attendance_percentage < 80 ? styles.cellFlag : styles.cell, { width: '15%' }]}>
+ 122:                 {s.attendance_percentage !== null ? `${s.attendance_percentage}%` : 'â€”'}
+ 123:               </Text>
+ 124:             </View>
+ 125:           ))}
+ 126:         </View>
+ 127: 
+ 128:         <View style={styles.footerInstitution}>
+ 129:           <View style={styles.sigBlock}>
+ 130:             <View style={styles.sigLine} />
+ 131:             <Text style={styles.sigLabel}>Prepared by</Text>
+ 132:             <Text style={styles.sigTitle}>{preparedByName ?? 'â€”'}{preparedByTitle ? ` Â· ${preparedByTitle}` : ''}</Text>
+ 133:           </View>
+ 134:           <View style={styles.sigBlock}>
+ 135:             <View style={styles.sigLine} />
+ 136:             <Text style={styles.sigLabel}>Head Teacher / Principal Signature</Text>
+ 137:           </View>
+ 138:           <View style={styles.sigBlock}>
+ 139:             <View style={styles.sigLine} />
+ 140:             <Text style={styles.sigLabel}>School Stamp</Text>
+ 141:           </View>
+ 142:         </View>
+ 143: 
+ 144:         <View style={styles.metaFooter}>
+ 145:           <Text style={styles.metaFooterText}>
+ 146:             EDUXELLENCE RESULTS Â· Generated electronically by Eduxellence Results on {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG')}
+ 147:           </Text>
+ 148:         </View>
+ 149:       </Page>
+ 150:     </Document>
+ 151:   )
+ 152: }
+
+######## src\components\attendance\AttendanceSheet.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect } from 'react'
+   4: import { CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
+   5: import { createClient } from '@/lib/supabase/client'
+   6: 
+   7: interface ClassOption {
+   8:   id: string
+   9:   name: string
+  10: }
+  11: 
+  12: interface Learner {
+  13:   id: string
+  14:   first_name: string
+  15:   last_name: string
+  16:   admission_number: string | null
+  17: }
+  18: 
+  19: type Status = 'present' | 'absent' | 'late'
+  20: 
+  21: interface Props {
+  22:   classes: ClassOption[]
+  23:   termId: string
+  24:   sessionId: string
+  25: }
+  26: 
+  27: export default function AttendanceSheet({ classes, termId, sessionId }: Props) {
+  28:   const supabase = createClient()
+  29:   const [groupId, setGroupId] = useState(classes[0]?.id ?? '')
+  30:   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  31:   const [learners, setLearners] = useState<Learner[]>([])
+  32:   const [statuses, setStatuses] = useState<Record<string, Status>>({})
+  33:   const [loading, setLoading] = useState(false)
+  34:   const [saving, setSaving] = useState(false)
+  35:   const [error, setError] = useState<string | null>(null)
+  36:   const [saved, setSaved] = useState(false)
+  37: 
+  38:   useEffect(() => {
+  39:     if (!groupId) return
+  40:     setLoading(true)
+  41:     setSaved(false)
+  42:     setError(null)
+  43: 
+  44:     supabase
+  45:       .from('learners')
+  46:       .select('id, first_name, last_name, admission_number')
+  47:       .eq('group_id', groupId)
+  48:       .eq('is_active', true)
+  49:       .order('last_name')
+  50:       .then(({ data, error: fetchError }) => {
+  51:         if (fetchError) {
+  52:           setError('Could not load students for this class.')
+  53:           setLearners([])
+  54:         } else {
+  55:           setLearners(data ?? [])
+  56:           const initial: Record<string, Status> = {}
+  57:           ;(data ?? []).forEach((l) => {
+  58:             initial[l.id] = 'present'
+  59:           })
+  60:           setStatuses(initial)
+  61:         }
+  62:         setLoading(false)
+  63:       })
+  64:   }, [groupId])
+  65: 
+  66:   function setStatus(learnerId: string, status: Status) {
+  67:     setStatuses((prev) => ({ ...prev, [learnerId]: status }))
+  68:   }
+  69: 
+  70:   function markAllPresent() {
+  71:     const next: Record<string, Status> = {}
+  72:     learners.forEach((l) => (next[l.id] = 'present'))
+  73:     setStatuses(next)
+  74:   }
+  75: 
+  76:   async function save() {
+  77:     setSaving(true)
+  78:     setError(null)
+  79:     setSaved(false)
+  80: 
+  81:     const res = await fetch('/api/attendance', {
+  82:       method: 'POST',
+  83:       headers: { 'Content-Type': 'application/json' },
+  84:       body: JSON.stringify({
+  85:         groupId,
+  86:         termId,
+  87:         sessionId,
+  88:         date,
+  89:         records: learners.map((l) => ({ learnerId: l.id, status: statuses[l.id] })),
+  90:       }),
+  91:     })
+  92: 
+  93:     const data = await res.json()
+  94:     if (data.success) {
+  95:       setSaved(true)
+  96:     } else {
+  97:       setError(data.error ?? 'Failed to save attendance.')
+  98:     }
+  99:     setSaving(false)
+ 100:   }
+ 101: 
+ 102:   return (
+ 103:     <div className="card">
+ 104:       <div className="card-header flex items-center gap-4 flex-wrap">
+ 105:         <select
+ 106:           value={groupId}
+ 107:           onChange={(e) => setGroupId(e.target.value)}
+ 108:           className="border border-surface-200 rounded px-2 py-1.5 text-sm"
+ 109:         >
+ 110:           {classes.map((c) => (
+ 111:             <option key={c.id} value={c.id}>{c.name}</option>
+ 112:           ))}
+ 113:         </select>
+ 114:         <input
+ 115:           type="date"
+ 116:           value={date}
+ 117:           onChange={(e) => setDate(e.target.value)}
+ 118:           className="border border-surface-200 rounded px-2 py-1.5 text-sm"
+ 119:         />
+ 120:         <button onClick={markAllPresent} className="btn-secondary btn-sm btn ml-auto">
+ 121:           Mark all present
+ 122:         </button>
+ 123:       </div>
+ 124: 
+ 125:       {loading ? (
+ 126:         <div className="p-8 text-center text-sm text-ink-muted flex items-center justify-center gap-2">
+ 127:           <Loader2 size={16} className="animate-spin" /> Loading students...
+ 128:         </div>
+ 129:       ) : learners.length === 0 ? (
+ 130:         <div className="p-8 text-center text-sm text-ink-muted">No students in this class.</div>
+ 131:       ) : (
+ 132:         <div className="divide-y divide-surface-100">
+ 133:           {learners.map((l) => (
+ 134:             <div key={l.id} className="px-5 py-3 flex items-center justify-between">
+ 135:               <div>
+ 136:                 <p className="text-sm font-medium text-ink">{l.last_name} {l.first_name}</p>
+ 137:                 {l.admission_number && (
+ 138:                   <p className="text-xs text-ink-faint font-mono">{l.admission_number}</p>
+ 139:                 )}
+ 140:               </div>
+ 141:               <div className="flex items-center gap-1.5">
+ 142:                 <button
+ 143:                   onClick={() => setStatus(l.id, 'present')}
+ 144:                   className={`btn-sm btn flex items-center gap-1 ${
+ 145:                     statuses[l.id] === 'present' ? 'bg-green-100 text-green-700' : 'btn-secondary'
+ 146:                   }`}
+ 147:                 >
+ 148:                   <CheckCircle2 size={13} /> Present
+ 149:                 </button>
+ 150:                 <button
+ 151:                   onClick={() => setStatus(l.id, 'late')}
+ 152:                   className={`btn-sm btn flex items-center gap-1 ${
+ 153:                     statuses[l.id] === 'late' ? 'bg-amber-100 text-amber-700' : 'btn-secondary'
+ 154:                   }`}
+ 155:                 >
+ 156:                   <Clock size={13} /> Late
+ 157:                 </button>
+ 158:                 <button
+ 159:                   onClick={() => setStatus(l.id, 'absent')}
+ 160:                   className={`btn-sm btn flex items-center gap-1 ${
+ 161:                     statuses[l.id] === 'absent' ? 'bg-red-100 text-red-700' : 'btn-secondary'
+ 162:                   }`}
+ 163:                 >
+ 164:                   <XCircle size={13} /> Absent
+ 165:                 </button>
+ 166:               </div>
+ 167:             </div>
+ 168:           ))}
+ 169:         </div>
+ 170:       )}
+ 171: 
+ 172:       <div className="px-5 py-4 border-t border-surface-100 flex items-center justify-between">
+ 173:         {error && <p className="text-xs text-red-600">{error}</p>}
+ 174:         {saved && <p className="text-xs text-green-600">Attendance saved.</p>}
+ 175:         <button
+ 176:           onClick={save}
+ 177:           disabled={saving || learners.length === 0}
+ 178:           className="btn-primary btn ml-auto"
+ 179:         >
+ 180:           {saving ? 'Saving...' : 'Save Attendance'}
+ 181:         </button>
+ 182:       </div>
+ 183:     </div>
+ 184:   )
+ 185: }
+
+######## src\components\attendance\DailyRegisterPDF.tsx ########
+   1: // src/components/attendance/DailyRegisterPDF.tsx
+   2: import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
+   3: 
+   4: const gold = '#C8960C'
+   5: const goldLight = '#F5E6B8'
+   6: const dark = '#0D0D0D'
+   7: const muted = '#6B6456'
+   8: const border = '#E2D9C8'
+   9: 
+  10: const styles = StyleSheet.create({
+  11:   page: { padding: 28, fontFamily: 'Helvetica', fontSize: 7, backgroundColor: '#FFFFFF' },
+  12:   header: { flexDirection: 'column', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: gold, paddingBottom: 8, marginBottom: 10 },
+  13:   logo: { width: 40, height: 40, marginBottom: 4, objectFit: 'contain' },
+  14:   schoolName: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: dark, textAlign: 'center' },
+  15:   reportTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', textAlign: 'center', backgroundColor: goldLight, paddingVertical: 4, marginBottom: 8, color: dark, borderRadius: 3 },
+  16:   reportSubtitle: { fontSize: 7, textAlign: 'center', color: muted, marginBottom: 8 },
+  17:   table: { borderWidth: 0.5, borderColor: border },
+  18:   tableHeader: { flexDirection: 'row', backgroundColor: gold },
+  19:   tableHeaderCell: { fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'center', paddingVertical: 3, borderRightWidth: 0.5, borderRightColor: '#FFFFFF' },
+  20:   tableHeaderCellLeft: { fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', textAlign: 'left', paddingVertical: 3, paddingLeft: 3, borderRightWidth: 0.5, borderRightColor: '#FFFFFF' },
+  21:   tableRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: border },
+  22:   cellName: { fontSize: 6.5, color: dark, textAlign: 'left', paddingVertical: 3, paddingLeft: 3, borderRightWidth: 0.5, borderRightColor: border },
+  23:   cell: { fontSize: 6.5, textAlign: 'center', paddingVertical: 3, borderRightWidth: 0.5, borderRightColor: border },
+  24:   legend: { flexDirection: 'row', gap: 10, marginTop: 8, justifyContent: 'center' },
+  25:   legendItem: { fontSize: 6.5, color: muted },
+  26:   metaFooter: { marginTop: 8, alignItems: 'center' },
+  27:   metaFooterText: { fontSize: 6, color: muted, textAlign: 'center' },
+  28: })
+  29: 
+  30: const STATUS_SYMBOL: Record<string, string> = { present: 'P', absent: 'A', late: 'L' }
+  31: const STATUS_COLOR: Record<string, string> = { present: '#166534', absent: '#991B1B', late: '#92400E' }
+  32: 
+  33: interface Props {
+  34:   school: { name: string; logo_url?: string }
+  35:   classInfo: { name: string; section: string | null; arm: string | null }
+  36:   term: { term_name: string; session_name: string }
+  37:   students: { learner_id: string; first_name: string; last_name: string; admission_number: string | null }[]
+  38:   dailyRegister: { learner_id: string; date: string; status: string }[]
+  39:   generatedDate?: string
+  40: }
+  41: 
+  42: const DATES_PER_PAGE = 15
+  43: 
+  44: export function DailyRegisterPDF({ school, classInfo, term, students, dailyRegister, generatedDate }: Props) {
+  45:   const allDates = [...new Set(dailyRegister.map(r => r.date))].sort()
+  46:   const statusMap = new Map(dailyRegister.map(r => [`${r.learner_id}_${r.date}`, r.status]))
+  47:   const classLabel = [classInfo.section, classInfo.name, classInfo.arm].filter(Boolean).join(' ')
+  48: 
+  49:   const pages: string[][] = []
+  50:   for (let i = 0; i < allDates.length; i += DATES_PER_PAGE) pages.push(allDates.slice(i, i + DATES_PER_PAGE))
+  51:   if (pages.length === 0) pages.push([])
+  52: 
+  53:   const nameWidth = 22
+  54:   const admWidth = 12
+  55:   const totalWidth = 100 - nameWidth - admWidth
+  56: 
+  57:   return (
+  58:     <Document>
+  59:       {pages.map((dates, pageIdx) => {
+  60:         const colWidth = dates.length > 0 ? totalWidth / dates.length : totalWidth
+  61:         return (
+  62:           <Page key={pageIdx} size="A4" orientation="landscape" style={styles.page}>
+  63:             <View style={styles.header}>
+  64:               {school.logo_url && <Image src={school.logo_url} style={styles.logo} />}
+  65:               <Text style={styles.schoolName}>{school.name}</Text>
+  66:             </View>
+  67:             <Text style={styles.reportTitle}>DAILY ATTENDANCE REGISTER</Text>
+  68:             <Text style={styles.reportSubtitle}>
+  69:               {classLabel} Â· {term.session_name} â€” {term.term_name}
+  70:               {pages.length > 1 ? ` Â· Page ${pageIdx + 1} of ${pages.length}` : ''}
+  71:             </Text>
+  72: 
+  73:             <View style={styles.table}>
+  74:               <View style={styles.tableHeader}>
+  75:                 <Text style={[styles.tableHeaderCellLeft, { width: `${nameWidth}%` }]}>Student</Text>
+  76:                 <Text style={[styles.tableHeaderCell, { width: `${admWidth}%` }]}>Adm. No.</Text>
+  77:                 {dates.map(d => (
+  78:                   <Text key={d} style={[styles.tableHeaderCell, { width: `${colWidth}%` }]}>
+  79:                     {new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short' })}
+  80:                   </Text>
+  81:                 ))}
+  82:               </View>
+  83:               {students.map(s => (
+  84:                 <View key={s.learner_id} style={styles.tableRow}>
+  85:                   <Text style={[styles.cellName, { width: `${nameWidth}%` }]}>{s.last_name} {s.first_name}</Text>
+  86:                   <Text style={[styles.cell, { width: `${admWidth}%` }]}>{s.admission_number ?? 'â€”'}</Text>
+  87:                   {dates.map(d => {
+  88:                     const status = statusMap.get(`${s.learner_id}_${d}`)
+  89:                     return (
+  90:                       <Text key={d} style={[styles.cell, { width: `${colWidth}%`, color: status ? STATUS_COLOR[status] : '#CCCCCC', fontFamily: 'Helvetica-Bold' }]}>
+  91:                         {status ? STATUS_SYMBOL[status] : 'â€”'}
+  92:                       </Text>
+  93:                     )
+  94:                   })}
+  95:                 </View>
+  96:               ))}
+  97:             </View>
+  98: 
+  99:             <View style={styles.legend}>
+ 100:               <Text style={styles.legendItem}>P = Present</Text>
+ 101:               <Text style={styles.legendItem}>A = Absent</Text>
+ 102:               <Text style={styles.legendItem}>L = Late</Text>
+ 103:               <Text style={styles.legendItem}>â€” = Not Recorded</Text>
+ 104:             </View>
+ 105: 
+ 106:             <View style={styles.metaFooter}>
+ 107:               <Text style={styles.metaFooterText}>
+ 108:                 EDUXELLENCE RESULTS Â· Generated electronically by Eduxellence Results on {(generatedDate ? new Date(generatedDate) : new Date()).toLocaleDateString('en-NG')}
+ 109:               </Text>
+ 110:             </View>
+ 111:           </Page>
+ 112:         )
+ 113:       })}
+ 114:     </Document>
+ 115:   )
+ 116: }
+
+######## src\components\executive\AttendanceIntelligence.tsx ########
+   1: // src/components/executive/AttendanceIntelligence.tsx
+   2: 'use client'
+   3: import { useState, useEffect } from 'react'
+   4: import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
+   5: 
+   6: const TIERS = [
+   7:   { key: 'consecutive_5plus', emoji: 'ðŸ”´', label: 'Absent 5+ consecutive school days', color: 'text-red-600', bg: 'bg-red-50' },
+   8:   { key: 'repeated_2weeks', emoji: 'ðŸŸ ', label: 'Absent repeatedly over the last 2 weeks', color: 'text-orange-600', bg: 'bg-orange-50' },
+   9:   { key: 'below_80_percent', emoji: 'ðŸŸ¡', label: 'Attendance below 80%', color: 'text-amber-600', bg: 'bg-amber-50' },
+  10: ] as const
+  11: 
+  12: export default function AttendanceIntelligence() {
+  13:   const [data, setData] = useState<any>(null)
+  14:   const [loading, setLoading] = useState(true)
+  15:   const [expanded, setExpanded] = useState<string | null>(null)
+  16:   const [busy, setBusy] = useState<string | null>(null)
+  17: 
+  18:   function load() {
+  19:     fetch('/api/executive/attendance-alerts').then(r => r.json()).then(setData).finally(() => setLoading(false))
+  20:   }
+  21:   useEffect(load, [])
+  22: 
+  23:   async function markFollowedUp(learnerId: string, alertType: string) {
+  24:     setBusy(learnerId)
+  25:     await fetch('/api/executive/attendance-alerts/followup', {
+  26:       method: 'POST', headers: { 'Content-Type': 'application/json' },
+  27:       body: JSON.stringify({ learnerId, alertType }),
+  28:     })
+  29:     setBusy(null)
+  30:     load()
+  31:   }
+  32: 
+  33:   if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" size={20} /></div>
+  34:   if (!data || data.error) return null
+  35: 
+  36:   const totalAlerts = TIERS.reduce((sum, t) => sum + (data[t.key]?.length ?? 0), 0)
+  37:   const followedUpSet = new Set((data.followups ?? []).map((f: any) => `${f.learner_id}_${f.alert_type}`))
+  38: 
+  39:   return (
+  40:     <div className="card p-5">
+  41:       <div className="flex items-center gap-2 mb-3">
+  42:         <AlertTriangle size={16} className="text-amber-500" />
+  43:         <h2 className="font-semibold text-sm text-ink">Attendance Alerts</h2>
+  44:         <span className="text-xs text-ink-faint ml-auto">{totalAlerts} student{totalAlerts !== 1 ? 's' : ''} flagged</span>
+  45:       </div>
+  46: 
+  47:       <div className="flex flex-col gap-2">
+  48:         {TIERS.map(tier => {
+  49:           const students = data[tier.key] ?? []
+  50:           if (students.length === 0) return null
+  51:           return (
+  52:             <div key={tier.key} className="border border-surface-100 rounded">
+  53:               <button
+  54:                 onClick={() => setExpanded(expanded === tier.key ? null : tier.key)}
+  55:                 className={`w-full flex items-center justify-between px-3 py-2.5 text-sm ${tier.bg} rounded`}
+  56:               >
+  57:                 <span>{tier.emoji} <strong>{students.length}</strong> student{students.length !== 1 ? 's' : ''} â€” {tier.label}</span>
+  58:                 <span className="text-xs text-ink-faint">{expanded === tier.key ? 'Hide' : 'View'}</span>
+  59:               </button>
+  60:               {expanded === tier.key && (
+  61:                 <div className="divide-y divide-surface-100">
+  62:                   {students.map((s: any) => {
+  63:                     const key = `${s.learner_id}_${tier.key}`
+  64:                     const followedUp = followedUpSet.has(key)
+  65:                     return (
+  66:                       <div key={s.learner_id} className="px-3 py-2.5 flex items-center justify-between text-sm">
+  67:                         <div>
+  68:                           <p className="font-medium text-ink">{s.last_name} {s.first_name}</p>
+  69:                           <p className="text-xs text-ink-faint">
+  70:                             {s.class_name ?? 'Unassigned'}
+  71:                             {tier.key === 'consecutive_5plus' && ` Â· ${s.consecutive_days} consecutive days`}
+  72:                             {tier.key === 'repeated_2weeks' && ` Â· ${s.absences_last_14_days} absences in 14 days`}
+  73:                             {tier.key === 'below_80_percent' && ` Â· ${s.attendance_percentage}% attendance`}
+  74:                           </p>
+  75:                           <p className="text-xs text-ink-faint italic mt-0.5">Requires follow-up</p>
+  76:                         </div>
+  77:                         {followedUp ? (
+  78:                           <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 size={13} /> Followed up</span>
+  79:                         ) : (
+  80:                           <button
+  81:                             disabled={busy === s.learner_id}
+  82:                             onClick={() => markFollowedUp(s.learner_id, tier.key)}
+  83:                             className="btn-sm btn bg-surface-100 text-ink"
+  84:                           >
+  85:                             Mark Followed Up
+  86:                           </button>
+  87:                         )}
+  88:                       </div>
+  89:                     )
+  90:                   })}
+  91:                 </div>
+  92:               )}
+  93:             </div>
+  94:           )
+  95:         })}
+  96:         {totalAlerts === 0 && <p className="text-xs text-ink-faint text-center py-4">No attendance concerns right now.</p>}
+  97:       </div>
+  98:     </div>
+  99:   )
+ 100: }

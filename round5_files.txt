@@ -1,0 +1,1562 @@
+﻿
+
+######## mobile\mobile\src\lib\supabase\queries\attendance.ts ########
+   1: import { supabase } from '../client'
+   2: 
+   3: export interface RosterEntry {
+   4:   learnerId: string
+   5:   firstName: string
+   6:   lastName: string
+   7:   admissionNumber: string | null
+   8:   status: 'present' | 'absent' | 'late' | null
+   9:   recordId: string | null
+  10: }
+  11: 
+  12: export async function loadClassRosterForDate(
+  13:   groupId: string,
+  14:   date: string // 'YYYY-MM-DD'
+  15: ): Promise<RosterEntry[]> {
+  16:   const { data: learners, error: learnersError } = await supabase
+  17:     .from('learners')
+  18:     .select('id, first_name, last_name, admission_number')
+  19:     .eq('group_id', groupId)
+  20:     .eq('is_active', true)
+  21:     .order('last_name')
+  22: 
+  23:   if (learnersError) throw new Error('Could not load the class roster.')
+  24: 
+  25:   const { data: existing, error: attendanceError } = await supabase
+  26:     .from('attendance_records')
+  27:     .select('id, learner_id, status')
+  28:     .eq('group_id', groupId)
+  29:     .eq('date', date)
+  30: 
+  31:   if (attendanceError) throw new Error('Could not load existing attendance for this date.')
+  32: 
+  33:   const existingByLearner = new Map((existing ?? []).map((r) => [r.learner_id, r]))
+  34: 
+  35:   return (learners ?? []).map((l) => {
+  36:     const record = existingByLearner.get(l.id)
+  37:     return {
+  38:       learnerId: l.id,
+  39:       firstName: l.first_name,
+  40:       lastName: l.last_name,
+  41:       admissionNumber: l.admission_number,
+  42:       status: (record?.status as RosterEntry['status']) ?? null,
+  43:       recordId: record?.id ?? null,
+  44:     }
+  45:   })
+  46: }
+  47: 
+  48: export async function submitAttendance(params: {
+  49:   organizationId: string
+  50:   groupId: string
+  51:   termId: string
+  52:   sessionId: string
+  53:   date: string
+  54:   entries: { learnerId: string; status: 'present' | 'absent' | 'late' }[]
+  55: }): Promise<void> {
+  56:   const rows = params.entries.map((e) => ({
+  57:     organization_id: params.organizationId,
+  58:     group_id: params.groupId,
+  59:     learner_id: e.learnerId,
+  60:     term_id: params.termId,
+  61:     session_id: params.sessionId,
+  62:     date: params.date,
+  63:     status: e.status,
+  64:   }))
+  65: 
+  66:   // Upsert on the natural key so re-marking the same day updates rather
+  67:   // than duplicates. Requires a unique constraint on
+  68:   // (group_id, learner_id, date) â€” see note below if this errors.
+  69:   const { error } = await supabase
+  70:     .from('attendance_records')
+  71:     .upsert(rows, { onConflict: 'group_id,learner_id,date' })
+  72: 
+  73:   if (error) throw new Error('Could not save attendance. Please try again.')
+  74: }
+  75: 
+  76: export interface AttendanceAlerts {
+  77:   consecutive5plus: { learnerId: string; firstName: string; lastName: string; className: string | null; consecutiveDays: number }[]
+  78:   repeated2Weeks: { learnerId: string; firstName: string; lastName: string; className: string | null; absencesLast14Days: number }[]
+  79:   below80Percent: { learnerId: string; firstName: string; lastName: string; className: string | null; attendancePercentage: number }[]
+  80: }
+  81: 
+  82: export async function loadAttendanceAlerts(orgId: string): Promise<AttendanceAlerts> {
+  83:   const { data, error } = await supabase.rpc('get_attendance_alerts', { p_org_id: orgId })
+  84:   if (error) throw new Error('Could not load attendance alerts.')
+  85: 
+  86:   return {
+  87:     consecutive5plus: (data.consecutive_5plus ?? []).map((r: any) => ({
+  88:       learnerId: r.learner_id, firstName: r.first_name, lastName: r.last_name,
+  89:       className: r.class_name, consecutiveDays: r.consecutive_days,
+  90:     })),
+  91:     repeated2Weeks: (data.repeated_2weeks ?? []).map((r: any) => ({
+  92:       learnerId: r.learner_id, firstName: r.first_name, lastName: r.last_name,
+  93:       className: r.class_name, absencesLast14Days: r.absences_last_14_days,
+  94:     })),
+  95:     below80Percent: (data.below_80_percent ?? []).map((r: any) => ({
+  96:       learnerId: r.learner_id, firstName: r.first_name, lastName: r.last_name,
+  97:       className: r.class_name, attendancePercentage: r.attendance_percentage,
+  98:     })),
+  99:   }
+ 100: }
+
+######## mobile\mobile\src\lib\offline\attendanceQueue.ts ########
+   1: import AsyncStorage from '@react-native-async-storage/async-storage'
+   2: import { submitAttendance } from '../supabase/queries/attendance'
+   3: 
+   4: const QUEUE_KEY = 'offline_queue:attendance'
+   5: 
+   6: export interface QueuedAttendance {
+   7:   id: string // local id, for removal after sync
+   8:   organizationId: string
+   9:   groupId: string
+  10:   groupName: string
+  11:   termId: string
+  12:   sessionId: string
+  13:   date: string
+  14:   entries: { learnerId: string; status: 'present' | 'absent' | 'late' }[]
+  15:   queuedAt: string
+  16: }
+  17: 
+  18: async function readQueue(): Promise<QueuedAttendance[]> {
+  19:   const raw = await AsyncStorage.getItem(QUEUE_KEY)
+  20:   return raw ? JSON.parse(raw) : []
+  21: }
+  22: 
+  23: async function writeQueue(queue: QueuedAttendance[]): Promise<void> {
+  24:   await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+  25: }
+  26: 
+  27: export async function enqueueAttendance(item: Omit<QueuedAttendance, 'id' | 'queuedAt'>): Promise<void> {
+  28:   const queue = await readQueue()
+  29:   queue.push({ ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, queuedAt: new Date().toISOString() })
+  30:   await writeQueue(queue)
+  31: }
+  32: 
+  33: export async function getQueuedAttendance(): Promise<QueuedAttendance[]> {
+  34:   return readQueue()
+  35: }
+  36: 
+  37: // Attempts to submit every queued item. Successes are removed; failures
+  38: // (e.g. still offline, or a real server error) stay queued for the next attempt.
+  39: // Returns counts so calling UI can show a result without needing to inspect the queue itself.
+  40: export async function processAttendanceQueue(): Promise<{ synced: number; failed: number }> {
+  41:   const queue = await readQueue()
+  42:   if (queue.length === 0) return { synced: 0, failed: 0 }
+  43: 
+  44:   let synced = 0
+  45:   const remaining: QueuedAttendance[] = []
+  46: 
+  47:   for (const item of queue) {
+  48:     try {
+  49:       await submitAttendance({
+  50:         organizationId: item.organizationId, groupId: item.groupId, termId: item.termId,
+  51:         sessionId: item.sessionId, date: item.date, entries: item.entries,
+  52:       })
+  53:       synced++
+  54:     } catch {
+  55:       remaining.push(item) // still failing (offline or real error) â€” keep for next attempt
+  56:     }
+  57:   }
+  58: 
+  59:   await writeQueue(remaining)
+  60:   return { synced, failed: remaining.length }
+  61: }
+
+######## mobile\mobile\src\lib\auth\AuthContext.tsx ########
+   1: import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+   2: import type { Session } from '@supabase/supabase-js'
+   3: import { supabase } from '../supabase/client'
+   4: import { registerForPushNotifications, unregisterCurrentDevice } from '../notifications/registerForPush'
+   5: 
+   6: export type UserRole = 'admin' | 'school_admin' | 'principal' | 'teacher' | 'lecturer' | 'assistant'
+   7: 
+   8: export interface StaffProfile {
+   9:   kind: 'staff'
+  10:   id: string
+  11:   name: string
+  12:   role: UserRole
+  13:   organizationId: string | null
+  14:   isActive: boolean
+  15: }
+  16: 
+  17: export interface ParentProfile {
+  18:   kind: 'parent'
+  19:   id: string // auth user id
+  20:   parentAccountId: string
+  21:   fullName: string
+  22: }
+  23: 
+  24: export interface StudentProfile {
+  25:   kind: 'student'
+  26:   id: string // auth user id
+  27:   learnerId: string
+  28: }
+  29: 
+  30: export type Profile = StaffProfile | ParentProfile | StudentProfile
+  31: 
+  32: interface AuthContextValue {
+  33:   session: Session | null
+  34:   profile: Profile | null
+  35:   loading: boolean
+  36:   authError: string | null
+  37:   clearAuthError: () => void
+  38:   signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  39:   signInWithAccessCode: (code: string) => Promise<{ error: string | null }>
+  40:   signOut: () => Promise<void>
+  41: }
+  42: 
+  43: const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+  44: 
+  45: // Maps Supabase's internal error codes/messages to messages safe and
+  46: // clear to show a school admin/teacher â€” never surfaces raw error objects.
+  47: function mapAuthError(error: { message?: string; code?: string; status?: number } | null): string {
+  48:   if (!error) return 'Something went wrong. Please try again.'
+  49: 
+  50:   const code = error.code ?? ''
+  51:   const message = error.message ?? ''
+  52: 
+  53:   if (code === 'invalid_credentials' || message.includes('Invalid login credentials')) {
+  54:     return 'Incorrect email or password.'
+  55:   }
+  56:   if (code === 'email_not_confirmed' || message.includes('Email not confirmed')) {
+  57:     return 'Please verify your email address before logging in. Check your inbox for a confirmation link.'
+  58:   }
+  59:   if (code === 'over_request_rate_limit' || message.includes('rate limit')) {
+  60:     return 'Too many attempts. Please wait a moment and try again.'
+  61:   }
+  62:   if (message.includes('Network request failed') || message.includes('fetch')) {
+  63:     return 'No internet connection. Please check your network and try again.'
+  64:   }
+  65:   return 'Unable to log in right now. Please try again.'
+  66: }
+  67: 
+  68: export function AuthProvider({ children }: { children: ReactNode }) {
+  69:   const [session, setSession] = useState<Session | null>(null)
+  70:   const [profile, setProfile] = useState<Profile | null>(null)
+  71:   const [loading, setLoading] = useState(true)
+  72:   const [authError, setAuthError] = useState<string | null>(null)
+  73: 
+  74:   // Fetches the user's identity from whichever table actually has a row:
+  75:   // 1. `users` (staff) â€” the server's answer, scoped by RLS
+  76:   // 2. `parent_accounts` (parent) â€” linked by auth_user_id
+  77:   // 3. `get_my_learner_id()` RPC (student) â€” resolves the caller to a learner
+  78:   // Never a value trusted from anywhere on the client.
+  79:   async function loadProfile(userId: string): Promise<Profile | null> {
+  80:     const { data: staffRow } = await supabase
+  81:       .from('users')
+  82:       .select('id, name, role, organization_id, is_active')
+  83:       .eq('id', userId)
+  84:       .maybeSingle()
+  85: 
+  86:     if (staffRow) {
+  87:       return {
+  88:         kind: 'staff',
+  89:         id: staffRow.id,
+  90:         name: staffRow.name,
+  91:         role: staffRow.role as UserRole,
+  92:         organizationId: staffRow.organization_id,
+  93:         isActive: staffRow.is_active,
+  94:       }
+  95:     }
+  96: 
+  97:     const { data: parentRow } = await supabase
+  98:       .from('parent_accounts')
+  99:       .select('id, full_name')
+ 100:       .eq('auth_user_id', userId)
+ 101:       .maybeSingle()
+ 102: 
+ 103:     if (parentRow) {
+ 104:       return {
+ 105:         kind: 'parent',
+ 106:         id: userId,
+ 107:         parentAccountId: parentRow.id,
+ 108:         fullName: parentRow.full_name,
+ 109:       }
+ 110:     }
+ 111: 
+ 112:     const { data: studentLearnerId } = await supabase.rpc('get_my_learner_id')
+ 113:     if (studentLearnerId) {
+ 114:       return { kind: 'student', id: userId, learnerId: studentLearnerId }
+ 115:     }
+ 116: 
+ 117:     return null
+ 118:   }
+ 119: 
+ 120:   async function handleSessionChange(newSession: Session | null) {
+ 121:     setSession(newSession)
+ 122:     if (!newSession) { setProfile(null); setLoading(false); return }
+ 123: 
+ 124:     const loadedProfile = await loadProfile(newSession.user.id)
+ 125: 
+ 126:     if (!loadedProfile) {
+ 127:       await supabase.auth.signOut()
+ 128:       setProfile(null)
+ 129:       setAuthError('We could not find an account matching this login.')
+ 130:       setLoading(false)
+ 131:       return
+ 132:     }
+ 133: 
+ 134:     if (loadedProfile.kind === 'staff') {
+ 135:       if (!loadedProfile.isActive) {
+ 136:         await supabase.auth.signOut()
+ 137:         setProfile(null)
+ 138:         setAuthError('Your account has been deactivated. Please contact your school administrator.')
+ 139:         setLoading(false)
+ 140:         return
+ 141:       }
+ 142:       if (!['admin', 'school_admin', 'principal', 'teacher', 'lecturer', 'assistant'].includes(loadedProfile.role)) {
+ 143:         await supabase.auth.signOut()
+ 144:         setProfile(null)
+ 145:         setAuthError('This account type is not yet supported in the mobile app.')
+ 146:         setLoading(false)
+ 147:         return
+ 148:       }
+ 149:     }
+ 150: 
+ 151:     // Fire-and-forget push registration. Any error here is non-fatal â€”
+ 152:     // the user is still logged in and everything else works. Registration
+ 153:     // should be idempotent on the server side (skip if the token is already
+ 154:     // saved for this user), since this may run repeatedly on token refreshes.
+ 155:     if (loadedProfile.kind === 'staff') {
+ 156:       registerForPushNotifications(loadedProfile.id, loadedProfile.organizationId).catch(() => {})
+ 157:     } else if (loadedProfile.kind === 'parent') {
+ 158:       registerForPushNotifications(loadedProfile.id, null).catch(() => {})
+ 159:     } else if (loadedProfile.kind === 'student') {
+ 160:       registerForPushNotifications(loadedProfile.id, null).catch(() => {})
+ 161:     }
+ 162: 
+ 163:     setProfile(loadedProfile)
+ 164:     setAuthError(null)
+ 165:     setLoading(false)
+ 166:   }
+ 167: 
+ 168:   useEffect(() => {
+ 169:     supabase.auth.getSession().then(({ data }) => {
+ 170:       handleSessionChange(data.session)
+ 171:     })
+ 172: 
+ 173:     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+ 174:       handleSessionChange(newSession)
+ 175:     })
+ 176: 
+ 177:     return () => listener.subscription.unsubscribe()
+ 178:   }, [])
+ 179: 
+ 180:   async function signIn(email: string, password: string): Promise<{ error: string | null }> {
+ 181:     setAuthError(null)
+ 182:     try {
+ 183:       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+ 184:       if (error) {
+ 185:         // Log only the error code/category â€” never the email or password,
+ 186:         // and never the full error object (which can include request context).
+ 187:         console.warn('Sign-in failed:', error.code ?? error.name)
+ 188:         const friendly = mapAuthError(error)
+ 189:         setAuthError(friendly)
+ 190:         return { error: friendly }
+ 191:       }
+ 192:       return { error: null }
+ 193:     } catch {
+ 194:       const friendly = 'No internet connection. Please check your network and try again.'
+ 195:       setAuthError(friendly)
+ 196:       return { error: friendly }
+ 197:     }
+ 198:   }
+ 199: 
+ 200:   async function signInWithAccessCode(code: string): Promise<{ error: string | null }> {
+ 201:     setAuthError(null)
+ 202:     try {
+ 203:       const res = await fetch('https://results.eduxellence.org/api/parents/access', {
+ 204:         method: 'POST',
+ 205:         headers: { 'Content-Type': 'application/json' },
+ 206:         body: JSON.stringify({ code: code.trim().toUpperCase() }),
+ 207:       })
+ 208:       const data = await res.json()
+ 209: 
+ 210:       if (!data.success || !data.token_hash) {
+ 211:         const message = data.error ?? 'Could not verify this code.'
+ 212:         setAuthError(message)
+ 213:         return { error: message }
+ 214:       }
+ 215: 
+ 216:       const { error } = await supabase.auth.verifyOtp({ token_hash: data.token_hash, type: 'magiclink' })
+ 217:       if (error) {
+ 218:         console.warn('verifyOtp failed:', error.code ?? error.name)
+ 219:         const message = 'This code could not be verified. Please request a new one from your school.'
+ 220:         setAuthError(message)
+ 221:         return { error: message }
+ 222:       }
+ 223:       return { error: null }
+ 224:     } catch {
+ 225:       const message = 'No internet connection. Please check your network and try again.'
+ 226:       setAuthError(message)
+ 227:       return { error: message }
+ 228:     }
+ 229:   }
+ 230: 
+ 231:   async function signOut() {
+ 232:     // Fire-and-forget unregister â€” don't let a slow network call hang logout.
+ 233:     if (session?.user?.id) {
+ 234:       unregisterCurrentDevice(session.user.id).catch(() => {})
+ 235:     }
+ 236:     await supabase.auth.signOut() // revokes the refresh token server-side
+ 237:   }
+ 238: 
+ 239:   return (
+ 240:     <AuthContext.Provider
+ 241:       value={{
+ 242:         session,
+ 243:         profile,
+ 244:         loading,
+ 245:         authError,
+ 246:         clearAuthError: () => setAuthError(null),
+ 247:         signIn,
+ 248:         signInWithAccessCode,
+ 249:         signOut,
+ 250:       }}
+ 251:     >
+ 252:       {children}
+ 253:     </AuthContext.Provider>
+ 254:   )
+ 255: }
+ 256: 
+ 257: export function useAuth() {
+ 258:   const ctx = useContext(AuthContext)
+ 259:   if (!ctx) throw new Error('useAuth must be used within an AuthProvider')
+ 260:   return ctx
+ 261: }
+
+######## src\app\auth\callback\route.ts ########
+   1: import { createClient } from '@/lib/supabase/server'
+   2: import { NextResponse } from 'next/server'
+   3: import type { NextRequest } from 'next/server'
+   4: 
+   5: // Permanent fix: this route used to build its own inline Supabase client,
+   6: // which meant it was the ONE place in the codebase that didn't apply the
+   7: // shared getCookieDomain() logic from lib/supabase/server.ts. That caused
+   8: // every session created through this route (all parent magic-link logins,
+   9: // password resets) to be written as a host-only cookie
+  10: // (Domain=results.eduxellence.org) instead of the shared
+  11: // Domain=.eduxellence.org cookie every other login path uses -- so a parent
+  12: // session and a staff session with the same cookie name could silently
+  13: // collide in the same browser.
+  14: //
+  15: // Fix: use the same createClient() everyone else uses, so there is exactly
+  16: // ONE place in the whole app that ever decides cookie domain. This class of
+  17: // bug can't recur without touching that single shared file.
+  18: 
+  19: export async function GET(request: NextRequest) {
+  20:   const { searchParams } = new URL(request.url)
+  21:   const code = searchParams.get('code')
+  22:   const token_hash = searchParams.get('token_hash')
+  23:   const type = searchParams.get('type')
+  24: 
+  25:   const supabase = await createClient()
+  26: 
+  27:   if (token_hash && type === 'recovery') {
+  28:     const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' })
+  29:     if (!error) {
+  30:       return NextResponse.redirect(new URL('/auth/reset-password', request.url))
+  31:     }
+  32:     return NextResponse.redirect(new URL('/auth/reset-password?error=invalid_token', request.url))
+  33:   }
+  34: 
+  35:   if (token_hash && type === 'magiclink') {
+  36:     const { data: sessionData, error } = await supabase.auth.verifyOtp({ token_hash, type: 'magiclink' })
+  37:     if (!error) {
+  38:       const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+  39:       const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+  40:       return NextResponse.redirect(new URL(destination, request.url))
+  41:     }
+  42:     return NextResponse.redirect(new URL('/access?error=invalid_code', request.url))
+  43:   }
+  44: 
+  45:   if (code) {
+  46:     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
+  47:     if (!error) {
+  48:       const isParentAccount = sessionData?.user?.user_metadata?.is_parent_account === true
+  49:       const destination = isParentAccount ? '/parent/dashboard' : '/dashboard'
+  50:       return NextResponse.redirect(new URL(destination, request.url))
+  51:     }
+  52:   }
+  53: 
+  54:   return NextResponse.redirect(new URL('/login?error=auth_failed', request.url))
+  55: }
+
+######## src\app\(auth)\set-password\page.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect } from 'react'
+   4: import { useRouter } from 'next/navigation'
+   5: import { createClient } from '@/lib/supabase/client'
+   6: import toast from 'react-hot-toast'
+   7: import { Eye, EyeOff, Loader2 } from 'lucide-react'
+   8: 
+   9: export default function SetPasswordPage() {
+  10:   const router = useRouter()
+  11:   const supabase = createClient()
+  12: 
+  13:   const [checking, setChecking] = useState(true)
+  14:   const [hasSession, setHasSession] = useState(false)
+  15:   const [password, setPassword] = useState('')
+  16:   const [confirmPassword, setConfirmPassword] = useState('')
+  17:   const [showPassword, setShowPassword] = useState(false)
+  18:   const [loading, setLoading] = useState(false)
+  19: 
+  20:   useEffect(() => {
+  21:     async function exchangeCode() {
+  22:       const params = new URLSearchParams(window.location.search)
+  23:       const code = params.get('code')
+  24: 
+  25:       if (code) {
+  26:         const { error } = await supabase.auth.exchangeCodeForSession(code)
+  27:         if (error) {
+  28:           console.error('Error exchanging code:', error)
+  29:           toast.error('This invite link is invalid or has expired.')
+  30:           setHasSession(false)
+  31:           setChecking(false)
+  32:           return
+  33:         }
+  34:       }
+  35: 
+  36:       // Confirm we now actually have a session either way
+  37:       const { data: { session } } = await supabase.auth.getSession()
+  38:       setHasSession(!!session)
+  39:       setChecking(false)
+  40:     }
+  41: 
+  42:     exchangeCode()
+  43:   }, [])
+  44: 
+  45:   async function handleSubmit(e: React.FormEvent) {
+  46:     e.preventDefault()
+  47: 
+  48:     if (password.length < 8) {
+  49:       toast.error('Password must be at least 8 characters')
+  50:       return
+  51:     }
+  52:     if (password !== confirmPassword) {
+  53:       toast.error('Passwords do not match')
+  54:       return
+  55:     }
+  56: 
+  57:     setLoading(true)
+  58:     const { error } = await supabase.auth.updateUser({ password })
+  59:     setLoading(false)
+  60: 
+  61:     if (error) {
+  62:       console.error('Error setting password:', error)
+  63:       toast.error('Failed to set password. Please try again.')
+  64:       return
+  65:     }
+  66: 
+  67:     toast.success('Password set! Redirectingâ€¦')
+  68:     router.push('/dashboard')
+  69:     router.refresh()
+  70:   }
+  71: 
+  72:   if (checking) {
+  73:     return (
+  74:       <div className="min-h-screen flex items-center justify-center">
+  75:         <Loader2 size={24} className="animate-spin text-brand-500" />
+  76:       </div>
+  77:     )
+  78:   }
+  79: 
+  80:   if (!hasSession) {
+  81:     return (
+  82:       <div className="min-h-screen flex items-center justify-center p-4">
+  83:         <div className="w-full max-w-md text-center">
+  84:           <h1 className="text-xl font-bold text-ink mb-2">Invite link invalid or expired</h1>
+  85:           <p className="text-sm text-ink-muted mb-6">
+  86:             Please ask your school administrator to send you a new invite.
+  87:           </p>
+  88:           <a href="/login" className="btn-primary btn">Go to login</a>
+  89:         </div>
+  90:       </div>
+  91:     )
+  92:   }
+  93: 
+  94:   return (
+  95:     <div className="min-h-screen flex items-center justify-center p-4">
+  96:       <div className="w-full max-w-md">
+  97:         <div className="text-center mb-8">
+  98:           <h1 className="text-2xl font-bold text-ink">
+  99:             Eduxellence <span className="text-brand-500">Results</span>
+ 100:           </h1>
+ 101:           <p className="text-sm text-ink-muted mt-1">Set your password to get started</p>
+ 102:         </div>
+ 103: 
+ 104:         <form onSubmit={handleSubmit} className="card p-6 flex flex-col gap-4">
+ 105:           <div>
+ 106:             <label className="block text-xs font-medium text-ink mb-1">New password</label>
+ 107:             <div className="relative">
+ 108:               <input
+ 109:                 type={showPassword ? 'text' : 'password'}
+ 110:                 value={password}
+ 111:                 onChange={e => setPassword(e.target.value)}
+ 112:                 className="input pr-10"
+ 113:                 placeholder="Min. 8 characters"
+ 114:                 required
+ 115:                 minLength={8}
+ 116:               />
+ 117:               <button
+ 118:                 type="button"
+ 119:                 onClick={() => setShowPassword(!showPassword)}
+ 120:                 className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+ 121:               >
+ 122:                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+ 123:               </button>
+ 124:             </div>
+ 125:           </div>
+ 126: 
+ 127:           <div>
+ 128:             <label className="block text-xs font-medium text-ink mb-1">Confirm password</label>
+ 129:             <input
+ 130:               type={showPassword ? 'text' : 'password'}
+ 131:               value={confirmPassword}
+ 132:               onChange={e => setConfirmPassword(e.target.value)}
+ 133:               className="input"
+ 134:               placeholder="Re-enter password"
+ 135:               required
+ 136:               minLength={8}
+ 137:             />
+ 138:           </div>
+ 139: 
+ 140:           <button type="submit" disabled={loading} className="btn-primary btn justify-center">
+ 141:             {loading ? 'Setting passwordâ€¦' : 'Set password & continue'}
+ 142:           </button>
+ 143:         </form>
+ 144:       </div>
+ 145:     </div>
+ 146:   )
+ 147: }
+
+######## src\app\(dashboard)\teacher\actions.ts ########
+   1: 'use server'
+   2: 
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { revalidatePath } from 'next/cache'
+   5: import { redirect } from 'next/navigation'
+   6: import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+   7: import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+   8: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   9: 
+  10: // Get all teachers in an organization
+  11: export async function getTeachers() {
+  12:   const supabase = await createClient()
+  13:   const { user } = await getAuthenticatedUser(supabase)
+  14:   if (!user) redirect('/login')
+  15: 
+  16:   const { data: profile } = await supabase
+  17:     .from('users').select('organization_id').eq('id', user.id).single()
+  18: 
+  19:   const { data: teachers } = await supabase
+  20:     .from('users')
+  21:     .select(`
+  22:       id, name, email, role,
+  23:       teacher_assignments(
+  24:         id,
+  25:         class_id,
+  26:         subject_id,
+  27:         role,
+  28:         groups:class_id(id, name),
+  29:         subjects:subject_id(id, name)
+  30:       )
+  31:     `)
+  32:     .eq('organization_id', profile?.organization_id)
+  33:     .neq('role', 'admin')
+  34:     .order('name')
+  35: 
+  36:   return teachers || []
+  37: }
+  38: 
+  39: // Assign teacher to class/subject
+  40: export async function assignTeacher(formData: FormData) {
+  41:   const supabase = await createClient()
+  42:   const { user } = await getAuthenticatedUser(supabase)
+  43:   if (!user) redirect('/login')
+  44: 
+  45:   // Check subscription status gate
+  46:   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  47:   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+  48: 
+  49:   const { data: profile } = await supabase
+  50:     .from('users').select('organization_id').eq('id', user.id).single()
+  51: 
+  52:   const teacherId = formData.get('teacher_id') as string
+  53:   const classId = formData.get('class_id') as string || null
+  54:   const subjectId = formData.get('subject_id') as string || null
+  55:   const role = formData.get('role') as string || 'subject_teacher'
+  56: 
+  57:   if (!teacherId) {
+  58:     console.error('Teacher ID is required')
+  59:     return
+  60:   }
+  61: 
+  62:   if (!classId && !subjectId) {
+  63:     console.error('Must assign to at least one class or subject')
+  64:     return
+  65:   }
+  66: 
+  67:   // Check if assignment already exists
+  68:   const { data: existing } = await supabase
+  69:     .from('teacher_assignments')
+  70:     .select('id')
+  71:     .eq('teacher_id', teacherId)
+  72:     .eq('class_id', classId)
+  73:     .eq('subject_id', subjectId)
+  74:     .eq('is_active', true)
+  75:     .maybeSingle()
+  76: 
+  77:   if (existing) {
+  78:     console.error('Assignment already exists')
+  79:     return
+  80:   }
+  81: 
+  82:   // Insert the assignment
+  83:   const { error } = await supabase
+  84:     .from('teacher_assignments')
+  85:     .insert({
+  86:       organization_id: profile?.organization_id,
+  87:       teacher_id: teacherId,
+  88:       class_id: classId,
+  89:       subject_id: subjectId,
+  90:       role: role,
+  91:       is_active: true,
+  92:     })
+  93: 
+  94:   if (error) {
+  95:     console.error('Assignment error:', error)
+  96:     return
+  97:   }
+  98: 
+  99:   // If assigning as class teacher, update the groups table
+ 100:   if (role === 'class_teacher' && classId) {
+ 101:     await supabase
+ 102:       .from('groups')
+ 103:       .update({ teacher_id: teacherId })
+ 104:       .eq('id', classId)
+ 105:   }
+ 106:   
+ 107:   // If assigning as subject teacher, update the subjects table
+ 108:   if (role === 'subject_teacher' && subjectId) {
+ 109:     await supabase
+ 110:       .from('subjects')
+ 111:       .update({ teacher_id: teacherId })
+ 112:       .eq('id', subjectId)
+ 113:   }
+ 114: 
+ 115:   revalidatePath('/settings/teachers')
+ 116: }
+ 117: 
+ 118: // Remove teacher assignment
+ 119: export async function removeAssignment(formData: FormData) {
+ 120:   const supabase = await createClient()
+ 121:   const { user } = await getAuthenticatedUser(supabase)
+ 122:   if (!user) redirect('/login')
+ 123: 
+ 124:   const assignmentId = formData.get('assignment_id') as string
+ 125:   if (!assignmentId) return
+ 126: 
+ 127:   // Get the assignment details first
+ 128:   const { data: assignment } = await supabase
+ 129:     .from('teacher_assignments')
+ 130:     .select('class_id, subject_id, role')
+ 131:     .eq('id', assignmentId)
+ 132:     .single()
+ 133: 
+ 134:   // Delete the assignment
+ 135:   await supabase
+ 136:     .from('teacher_assignments')
+ 137:     .delete()
+ 138:     .eq('id', assignmentId)
+ 139: 
+ 140:   // If it was a class teacher assignment, remove from groups
+ 141:   if (assignment?.role === 'class_teacher' && assignment.class_id) {
+ 142:     await supabase
+ 143:       .from('groups')
+ 144:       .update({ teacher_id: null })
+ 145:       .eq('id', assignment.class_id)
+ 146:   }
+ 147: 
+ 148:   // If it was a subject teacher assignment, remove from subjects
+ 149:   if (assignment?.role === 'subject_teacher' && assignment.subject_id) {
+ 150:     await supabase
+ 151:       .from('subjects')
+ 152:       .update({ teacher_id: null })
+ 153:       .eq('id', assignment.subject_id)
+ 154:   }
+ 155: 
+ 156:   revalidatePath('/settings/teachers')
+ 157: }
+ 158: 
+ 159: // Bulk upload teachers via CSV
+ 160: export async function uploadTeachers(formData: FormData) {
+ 161:   const supabase = await createClient()
+ 162:   const { user } = await getAuthenticatedUser(supabase)
+ 163:   if (!user) redirect('/login')
+ 164: 
+ 165:   // Check subscription status gate
+ 166:   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+ 167:   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+ 168: 
+ 169:   // Check plan limit gate (maxTeachers) - check before importing
+ 170:   const limitCheck = await checkPlanLimit(supabase, user.id, 'maxTeachers')
+ 171:   if (!limitCheck.allowed) {
+ 172:     console.error('Plan limit reached:', limitCheck.message)
+ 173:     return
+ 174:   }
+ 175: 
+ 176:   const { data: profile } = await supabase
+ 177:     .from('users').select('organization_id').eq('id', user.id).single()
+ 178: 
+ 179:   const file = formData.get('file') as File
+ 180:   if (!file) {
+ 181:     console.error('No file uploaded')
+ 182:     return
+ 183:   }
+ 184: 
+ 185:   try {
+ 186:     const text = await file.text()
+ 187:     const lines = text.split('\n').filter(line => line.trim())
+ 188:     
+ 189:     // Parse headers
+ 190:     const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+ 191:     const nameIndex = headers.indexOf('name')
+ 192:     const emailIndex = headers.indexOf('email')
+ 193:     const roleIndex = headers.indexOf('role')
+ 194:     const classIndex = headers.indexOf('class_name')
+ 195:     const subjectIndex = headers.indexOf('subject_name')
+ 196: 
+ 197:     if (nameIndex === -1 || emailIndex === -1) {
+ 198:       console.error('CSV must have name and email columns')
+ 199:       return
+ 200:     }
+ 201: 
+ 202:     const teachers = []
+ 203:     
+ 204:     // Process each row
+ 205:     for (let i = 1; i < lines.length; i++) {
+ 206:       const values = lines[i].split(',').map(v => v.trim())
+ 207:       const name = values[nameIndex]
+ 208:       const email = values[emailIndex]
+ 209:       const role = values[roleIndex] || 'subject_teacher'
+ 210:       const className = values[classIndex] || ''
+ 211:       const subjectName = values[subjectIndex] || ''
+ 212: 
+ 213:       if (!name || !email) continue
+ 214: 
+ 215:       teachers.push({
+ 216:         name,
+ 217:         email,
+ 218:         role,
+ 219:         className,
+ 220:         subjectName,
+ 221:         organization_id: profile?.organization_id
+ 222:       })
+ 223:     }
+ 224: 
+ 225:     if (teachers.length === 0) {
+ 226:       console.error('No valid teachers found in CSV')
+ 227:       return
+ 228:     }
+ 229: 
+ 230:     // Get current teacher count for limit checking
+ 231:     const { count: currentTeacherCount } = await supabase
+ 232:       .from('users')
+ 233:       .select('*', { count: 'exact', head: true })
+ 234:       .eq('organization_id', profile?.organization_id)
+ 235:       .neq('role', 'admin')
+ 236: 
+ 237:     const planConfig = await checkPlanLimit(supabase, user.id, 'maxTeachers')
+ 238:     if (!planConfig.allowed) {
+ 239:       console.error('Plan limit reached:', planConfig.message)
+ 240:       return
+ 241:     }
+ 242: 
+ 243:     // Create users and assignments
+ 244:     for (const teacher of teachers) {
+ 245:       // Check if user already exists
+ 246:       const { data: existingUser } = await supabase
+ 247:         .from('users')
+ 248:         .select('id')
+ 249:         .eq('email', teacher.email)
+ 250:         .maybeSingle()
+ 251: 
+ 252:       let teacherId
+ 253: 
+ 254:       if (existingUser) {
+ 255:         teacherId = existingUser.id
+ 256:       } else {
+ 257:         // Create new user
+ 258:         const { data: newUser, error: userError } = await supabase
+ 259:           .from('users')
+ 260:           .insert({
+ 261:             name: teacher.name,
+ 262:             email: teacher.email,
+ 263:             role: teacher.role,
+ 264:             organization_id: teacher.organization_id,
+ 265:             is_active: true
+ 266:           })
+ 267:           .select('id')
+ 268:           .single()
+ 269: 
+ 270:         if (userError) {
+ 271:           console.error('Error creating user:', userError)
+ 272:           continue
+ 273:         }
+ 274: 
+ 275:         teacherId = newUser.id
+ 276:       }
+ 277: 
+ 278:       // Find or create class
+ 279:       let classId = null
+ 280:       if (teacher.className) {
+ 281:         const { data: existingClass } = await supabase
+ 282:           .from('groups')
+ 283:           .select('id')
+ 284:           .eq('name', teacher.className)
+ 285:           .eq('organization_id', profile?.organization_id)
+ 286:           .maybeSingle()
+ 287: 
+ 288:         if (existingClass) {
+ 289:           classId = existingClass.id
+ 290:         } else {
+ 291:           const { data: newClass, error: classError } = await supabase
+ 292:             .from('groups')
+ 293:             .insert({
+ 294:               name: teacher.className,
+ 295:               organization_id: profile?.organization_id,
+ 296:               is_active: true
+ 297:             })
+ 298:             .select('id')
+ 299:             .single()
+ 300: 
+ 301:           if (classError) {
+ 302:             console.error('Error creating class:', classError)
+ 303:           } else {
+ 304:             classId = newClass.id
+ 305:           }
+ 306:         }
+ 307:       }
+ 308: 
+ 309:       // Find or create subject
+ 310:       let subjectId = null
+ 311:       if (teacher.subjectName && classId) {
+ 312:         const { data: existingSubject } = await supabase
+ 313:           .from('subjects')
+ 314:           .select('id')
+ 315:           .eq('name', teacher.subjectName)
+ 316:           .eq('group_id', classId)
+ 317:           .eq('organization_id', profile?.organization_id)
+ 318:           .maybeSingle()
+ 319: 
+ 320:         if (existingSubject) {
+ 321:           subjectId = existingSubject.id
+ 322:         } else {
+ 323:           const { data: newSubject, error: subjectError } = await supabase
+ 324:             .from('subjects')
+ 325:             .insert({
+ 326:               name: teacher.subjectName,
+ 327:               group_id: classId,
+ 328:               organization_id: profile?.organization_id,
+ 329:               is_active: true
+ 330:             })
+ 331:             .select('id')
+ 332:             .single()
+ 333: 
+ 334:           if (subjectError) {
+ 335:             console.error('Error creating subject:', subjectError)
+ 336:           } else {
+ 337:             subjectId = newSubject.id
+ 338:           }
+ 339:         }
+ 340:       }
+ 341: 
+ 342:       // Create assignment
+ 343:       if (teacherId && (classId || subjectId)) {
+ 344:         const { error: assignError } = await supabase
+ 345:           .from('teacher_assignments')
+ 346:           .insert({
+ 347:             organization_id: profile?.organization_id,
+ 348:             teacher_id: teacherId,
+ 349:             class_id: classId,
+ 350:             subject_id: subjectId,
+ 351:             role: teacher.role,
+ 352:             is_active: true
+ 353:           })
+ 354: 
+ 355:         if (assignError) {
+ 356:           console.error('Error creating assignment:', assignError)
+ 357:         }
+ 358:       }
+ 359:     }
+ 360: 
+ 361:     revalidatePath('/settings/teachers')
+ 362:   } catch (error) {
+ 363:     console.error('Error processing CSV:', error)
+ 364:   }
+ 365: }
+ 366: 
+ 367: // Download teacher template CSV
+ 368: export async function downloadTeacherTemplate() {
+ 369:   const csv = `name,email,role,class_name,subject_name
+ 370: John Doe,john@school.com,class_teacher,Primary 5,
+ 371: Jane Smith,jane@school.com,subject_teacher,Primary 5,Mathematics
+ 372: Mark Johnson,mark@school.com,subject_teacher,Primary 5,English
+ 373: Sarah Williams,sarah@school.com,subject_teacher,Primary 6,Science
+ 374: `
+ 375:   
+ 376:   return new Response(csv, {
+ 377:     headers: {
+ 378:       'Content-Type': 'text/csv',
+ 379:       'Content-Disposition': 'attachment; filename=teachers_template.csv',
+ 380:     },
+ 381:   })
+ 382: }
+ 383: 
+ 384: // Delete a teacher (soft delete or hard delete)
+ 385: export async function deleteTeacher(formData: FormData) {
+ 386:   const supabase = await createClient()
+ 387:   const { user } = await getAuthenticatedUser(supabase)
+ 388:   if (!user) redirect('/login')
+ 389: 
+ 390:   const teacherId = formData.get('teacher_id') as string
+ 391:   if (!teacherId) return
+ 392: 
+ 393:   // Delete all assignments first
+ 394:   await supabase
+ 395:     .from('teacher_assignments')
+ 396:     .delete()
+ 397:     .eq('teacher_id', teacherId)
+ 398: 
+ 399:   // Remove from groups where they're class teacher
+ 400:   await supabase
+ 401:     .from('groups')
+ 402:     .update({ teacher_id: null })
+ 403:     .eq('teacher_id', teacherId)
+ 404: 
+ 405:   // Remove from subjects where they're subject teacher
+ 406:   await supabase
+ 407:     .from('subjects')
+ 408:     .update({ teacher_id: null })
+ 409:     .eq('teacher_id', teacherId)
+ 410: 
+ 411:   // Delete the user (or soft delete by setting is_active false)
+ 412:   await supabase
+ 413:     .from('users')
+ 414:     .delete()
+ 415:     .eq('id', teacherId)
+ 416: 
+ 417:   revalidatePath('/settings/teachers')
+ 418: }
+
+######## src\app\(dashboard)\teacher\page.tsx ########
+   1: import { createClient } from '@/lib/supabase/server'
+   2: import { redirect } from 'next/navigation'
+   3: import Link from 'next/link'
+   4: import { getTeacherDashboardData } from '@/lib/teacher-utils'
+   5: import { BookOpen, Users, ClipboardList, Crown } from 'lucide-react'
+   6: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   7: 
+   8: export default async function TeacherDashboardPage() {
+   9:   const supabase = await createClient()
+  10:   const { user: authUser } = await getAuthenticatedUser(supabase)
+  11:   if (!authUser) redirect('/login')
+  12: 
+  13:   const { data: user } = await supabase
+  14:     .from('users').select('*')
+  15:     .eq('id', authUser.id).single()
+  16: 
+  17:   const { context, classes, subjects } = await getTeacherDashboardData(authUser.id)
+  18: 
+  19:   return (
+  20:     <div className="flex flex-col gap-6">
+  21:       <div>
+  22:         <h1 className="page-title">Welcome, {user?.name} ðŸ‘‹</h1>
+  23:         <p className="page-subtitle">
+  24:           {context.isClassTeacher && `You are the class teacher of ${classes.find(c => c.id === context.classTeacherOf)?.name || 'your class'}`}
+  25:           {context.isClassTeacher && context.subjectTeacherOf.length > 0 && ' and '}
+  26:           {context.subjectTeacherOf.length > 0 && `You teach ${context.subjectTeacherOf.length} subject${context.subjectTeacherOf.length > 1 ? 's' : ''}`}
+  27:         </p>
+  28:       </div>
+  29: 
+  30:       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  31:         {/* Classes Section */}
+  32:         <div className="card">
+  33:           <div className="card-header flex items-center justify-between">
+  34:             <div className="flex items-center gap-2">
+  35:               <Users size={16} className="text-brand-500" />
+  36:               <h2 className="font-semibold text-sm text-ink">My Classes</h2>
+  37:             </div>
+  38:             {context.classTeacherOf && (
+  39:               <span className="badge badge-amber text-[10px] flex items-center gap-1">
+  40:                 <Crown size={10} /> Class Teacher
+  41:               </span>
+  42:             )}
+  43:           </div>
+  44:           <div className="divide-y divide-surface-200">
+  45:             {classes.length > 0 ? (
+  46:               classes.map(cls => (
+  47:                 <div key={cls.id} className="px-4 py-3 flex items-center justify-between hover:bg-surface-50 transition-colors">
+  48:                   <div>
+  49:                     <p className="font-medium text-sm text-ink">{cls.name}</p>
+  50:                     <p className="text-xs text-ink-muted">
+  51:                       {cls.learner_count?.[0]?.count || 0} students
+  52:                     </p>
+  53:                   </div>
+  54:                   <div className="flex gap-2">
+  55:                     <Link href={`/scores?class=${cls.id}`} className="btn-secondary btn-sm btn">
+  56:                       Scores
+  57:                     </Link>
+  58:                     <Link href={`/classes/${cls.id}`} className="btn-primary btn-sm btn">
+  59:                       View
+  60:                     </Link>
+  61:                   </div>
+  62:                 </div>
+  63:               ))
+  64:             ) : (
+  65:               <div className="px-4 py-8 text-center text-sm text-ink-muted">
+  66:                 No classes assigned yet
+  67:               </div>
+  68:             )}
+  69:           </div>
+  70:         </div>
+  71: 
+  72:         {/* Subjects Section */}
+  73:         <div className="card">
+  74:           <div className="card-header">
+  75:             <div className="flex items-center gap-2">
+  76:               <BookOpen size={16} className="text-green-500" />
+  77:               <h2 className="font-semibold text-sm text-ink">My Subjects</h2>
+  78:             </div>
+  79:           </div>
+  80:           <div className="divide-y divide-surface-200">
+  81:             {subjects.length > 0 ? (
+  82:               subjects.map(subj => (
+  83:                 <div key={subj.id} className="px-4 py-3 flex items-center justify-between hover:bg-surface-50 transition-colors">
+  84:                   <div>
+  85:                     <p className="font-medium text-sm text-ink">{subj.name}</p>
+  86:                     <p className="text-xs text-ink-muted">
+  87:                       {(Array.isArray(subj.group) ? (subj.group as any[])[0]?.name : (subj.group as any)?.name) || 'No class'} {subj.code && `Â· ${subj.code}`}
+  88:                     </p>
+  89:                   </div>
+  90:                   <div className="flex gap-2">
+  91:                     <Link href={`/scores?subject=${subj.id}`} className="btn-secondary btn-sm btn">
+  92:                       <ClipboardList size={12} /> Scores
+  93:                     </Link>
+  94:                   </div>
+  95:                 </div>
+  96:               ))
+  97:             ) : (
+  98:               <div className="px-4 py-8 text-center text-sm text-ink-muted">
+  99:                 No subjects assigned yet
+ 100:               </div>
+ 101:             )}
+ 102:           </div>
+ 103:         </div>
+ 104:       </div>
+ 105: 
+ 106:       {/* Quick Stats */}
+ 107:       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+ 108:         <div className="stat-card">
+ 109:           <div className="stat-value">{classes.length}</div>
+ 110:           <div className="stat-label">Classes</div>
+ 111:         </div>
+ 112:         <div className="stat-card">
+ 113:           <div className="stat-value">{subjects.length}</div>
+ 114:           <div className="stat-label">Subjects</div>
+ 115:         </div>
+ 116:         <div className="stat-card">
+ 117:           <div className="stat-value">
+ 118:             {context.isClassTeacher ? 'Class Teacher' : 'Subject Teacher'}
+ 119:           </div>
+ 120:           <div className="stat-label">Role</div>
+ 121:         </div>
+ 122:         <div className="stat-card">
+ 123:           <div className="stat-value">{context.allAssignments.length}</div>
+ 124:           <div className="stat-label">Total Assignments</div>
+ 125:         </div>
+ 126:       </div>
+ 127:     </div>
+ 128:   )
+ 129: }
+
+######## src\app\api\webhooks\signup-notification\route.ts ########
+   1: import { createAdminClient } from '@/lib/supabase/admin';
+   2: import { NextResponse } from 'next/server';
+   3: 
+   4: const SUPER_ADMIN_BASE = 'https://admin.eduxellence.org';
+   5: const MAX_ATTEMPTS = 5;
+   6: 
+   7: function nextBackoff(attemptCount: number): string | null {
+   8:   // attemptCount is the count AFTER this failed attempt
+   9:   const minutes = [2, 10, 30, 60, 120][attemptCount - 1];
+  10:   if (minutes === undefined) return null; // exhausted
+  11:   return new Date(Date.now() + minutes * 60_000).toISOString();
+  12: }
+  13: 
+  14: // Applicants type free text that ends up in a staff email: escape everything.
+  15: function esc(value: unknown): string {
+  16:   return String(value ?? '')
+  17:     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  18:     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  19: }
+  20: function oneLine(value: unknown): string {
+  21:   return String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
+  22: }
+  23: 
+  24: function buildAdminLink(signupType: string, payload: Record<string, any>) {
+  25:   switch (signupType) {
+  26:     case 'institution': return `${SUPER_ADMIN_BASE}/schools/${encodeURIComponent(String(payload.organization_id ?? ''))}`;
+  27:     case 'solo_teacher': return `${SUPER_ADMIN_BASE}/solo-teachers/${encodeURIComponent(String(payload.user_id ?? ''))}`;
+  28:     case 'representative': return `${SUPER_ADMIN_BASE}/representatives/${encodeURIComponent(String(payload.representative_id ?? ''))}`;
+  29:     case 'founding_application': return `${SUPER_ADMIN_BASE}/founding-institutions`;
+  30:     default: return SUPER_ADMIN_BASE;
+  31:   }
+  32: }
+  33: 
+  34: function labelFor(signupType: string) {
+  35:   return {
+  36:     institution: 'Institution',
+  37:     solo_teacher: 'Solo Teacher',
+  38:     representative: 'Representative',
+  39:     founding_application: 'Founding 50 application',
+  40:   }[signupType] ?? signupType;
+  41: }
+  42: 
+  43: function buildEmail(signupType: string, payload: Record<string, any>) {
+  44:   const label = labelFor(signupType);
+  45:   const link = buildAdminLink(signupType, payload);
+  46:   const when = payload.created_at
+  47:     ? new Date(payload.created_at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })
+  48:     : '';
+  49: 
+  50:   const rows: [string, string | undefined][] = [
+  51:     ['Name', payload.name],
+  52:     ['Email', payload.email],
+  53:     ['Signup type', label],
+  54:     ['Organization / school', payload.organization_name],
+  55:     ['Institution type', payload.organization_type],
+  56:     ['State / territory', payload.territory_state],
+  57:     ['Phone', payload.phone],
+  58:     ['Estimated students', payload.estimated_students != null ? String(payload.estimated_students) : undefined],
+  59:     ['Programmes', payload.programmes],
+  60:     ['Referral / representative code', payload.referral_code],
+  61:     ['Registered at', when],
+  62:   ];
+  63: 
+  64:   const rowsHtml = rows.filter(([, v]) => v).map(([k, v]) => `<tr>
+  65:     <td style="padding:4px 16px 4px 0;color:#64748B;font-size:13px;white-space:nowrap;">${esc(k)}</td>
+  66:     <td style="padding:4px 0;color:#0B1829;font-size:13px;font-weight:600;">${esc(v)}</td>
+  67:   </tr>`).join('');
+  68: 
+  69:   return {
+  70:     subject: `New signup: ${label} â€” ${oneLine(payload.name)}`,
+  71:     html: `
+  72:       <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px;border:1px solid #E2E8F0;border-radius:8px;">
+  73:         <h2 style="color:#0B1829;margin-top:0;">New ${esc(label)}</h2>
+  74:         <table style="border-collapse:collapse;">${rowsHtml}</table>
+  75:         <div style="margin-top:24px;">
+  76:           <a href="${esc(link)}" style="background:#1E6BFF;color:#FFFFFF;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">
+  77:             View in Super Admin â†’
+  78:           </a>
+  79:         </div>
+  80:       </div>
+  81:     `,
+  82:   };
+  83: }
+  84: 
+  85: export async function POST(request: Request) {
+  86:   const secret = request.headers.get('x-signup-notification-secret');
+  87:   if (!secret || secret !== process.env.SIGNUP_NOTIFICATION_WEBHOOK_SECRET) {
+  88:     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  89:   }
+  90: 
+  91:   let outboxId: string | undefined;
+  92:   try {
+  93:     ({ outboxId } = await request.json());
+  94:   } catch {
+  95:     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  96:   }
+  97:   if (!outboxId) return NextResponse.json({ error: 'Missing outboxId' }, { status: 400 });
+  98: 
+  99:   const admin = createAdminClient();
+ 100: 
+ 101:   const { data: row, error: fetchError } = await admin
+ 102:     .from('signup_notification_outbox')
+ 103:     .select('*')
+ 104:     .eq('id', outboxId)
+ 105:     .maybeSingle();
+ 106: 
+ 107:   if (fetchError || !row) {
+ 108:     return NextResponse.json({ error: 'Outbox row not found' }, { status: 404 });
+ 109:   }
+ 110: 
+ 111:   // Idempotent guards â€” never re-send a completed or permanently
+ 112:   // exhausted notification, no matter how this route got invoked.
+ 113:   if (row.status === 'sent' || row.status === 'exhausted') {
+ 114:     return NextResponse.json({ success: true, skipped: row.status });
+ 115:   }
+ 116: 
+ 117:   const { subject, html } = buildEmail(row.signup_type, row.payload);
+ 118:   const attemptCount = (row.attempt_count ?? 0) + 1;
+ 119: 
+ 120:   try {
+ 121:     if (!process.env.RESEND_API_KEY) {
+ 122:       throw new Error('RESEND_API_KEY not configured');
+ 123:     }
+ 124:     const { Resend } = await import('resend');
+ 125:     const resend = new Resend(process.env.RESEND_API_KEY);
+ 126: 
+ 127:     await resend.emails.send({
+ 128:       from: 'Eduxellence Results <notifications@eduxellence.org>',
+ 129:       to: process.env.ADMIN_NOTIFICATION_EMAIL || 'j.sylvester@eduxellence.org',
+ 130:       subject,
+ 131:       html,
+ 132:     });
+ 133: 
+ 134:     await admin
+ 135:       .from('signup_notification_outbox')
+ 136:       .update({
+ 137:         status: 'sent',
+ 138:         sent_at: new Date().toISOString(),
+ 139:         attempt_count: attemptCount,
+ 140:         last_attempt_at: new Date().toISOString(),
+ 141:       })
+ 142:       .eq('id', outboxId);
+ 143: 
+ 144:     return NextResponse.json({ success: true });
+ 145:   } catch (err) {
+ 146:     console.error('signup-notification dispatch failed:', err);
+ 147:     const errorMessage = err instanceof Error ? err.message : String(err);
+ 148:     const backoff = nextBackoff(attemptCount);
+ 149: 
+ 150:     await admin
+ 151:       .from('signup_notification_outbox')
+ 152:       .update({
+ 153:         status: backoff ? 'failed' : 'exhausted',
+ 154:         attempt_count: attemptCount,
+ 155:         last_attempt_at: new Date().toISOString(),
+ 156:         next_attempt_at: backoff,
+ 157:         last_error: errorMessage,
+ 158:       })
+ 159:       .eq('id', outboxId);
+ 160: 
+ 161:     // 200, not 5xx: the failure is durably recorded for retry/investigation;
+ 162:     // we don't want the caller (pg_net or the cron retry loop) treating
+ 163:     // this as a transport error and doing its own separate retries.
+ 164:     return NextResponse.json({ success: false, error: 'Email send failed, logged for retry' }, { status: 200 });
+ 165:   }
+ 166: }
+
+######## src\app\api\representatives\record-referral\route.ts ########
+   1: import { createAdminClient } from '@/lib/supabase/admin';
+   2: import { NextResponse } from 'next/server';
+   3: 
+   4: export async function POST(request: Request) {
+   5:   const admin = createAdminClient();
+   6:   const body = await request.json();
+   7:   const { referralCode, userId } = body;
+   8: 
+   9:   if (!referralCode || !userId) {
+  10:     return NextResponse.json({ error: 'Missing referralCode or userId' }, { status: 400 });
+  11:   }
+  12: 
+  13:   const { data: rep } = await admin
+  14:     .from('representatives')
+  15:     .select('id, status')
+  16:     .eq('referral_code', referralCode)
+  17:     .maybeSingle();
+  18: 
+  19:   if (!rep || rep.status !== 'active') {
+  20:     return NextResponse.json({ success: false }); // silent no-op â€” invalid code should never block signup
+  21:   }
+  22: 
+  23:   // Fraud guard: no self-referral, no duplicate referral for the same user
+  24:   const { data: existing } = await admin
+  25:     .from('referrals')
+  26:     .select('id')
+  27:     .eq('referred_user_id', userId)
+  28:     .maybeSingle();
+  29: 
+  30:   if (existing) {
+  31:     return NextResponse.json({ success: false });
+  32:   }
+  33: 
+  34:   // âœ… FIX: Resolve the referred user's organization_id at insert time
+  35:   const { data: referredUser } = await admin
+  36:     .from('users')
+  37:     .select('organization_id')
+  38:     .eq('id', userId)
+  39:     .maybeSingle();
+  40: 
+  41:   await admin.from('referrals').insert({
+  42:     representative_id: rep.id,
+  43:     referred_user_id: userId,
+  44:     organization_id: referredUser?.organization_id ?? null,
+  45:     referral_code: referralCode,
+  46:     status: 'pending',
+  47:   });
+  48: 
+  49:   return NextResponse.json({ success: true });
+  50: }
+
+######## src\app\api\representatives\apply\route.ts ########
+   1: import { createAdminClient } from '@/lib/supabase/admin';
+   2: import { createClient } from '@/lib/supabase/server';
+   3: import { NextResponse } from 'next/server';
+   4: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   5: 
+   6: export async function POST(request: Request) {
+   7:   const supabase = await createClient();
+   8:   const { user } = await getAuthenticatedUser(supabase);
+   9:   if (!user) {
+  10:     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  11:   }
+  12: 
+  13:   const admin = createAdminClient();
+  14: 
+  15:   // Check if user already has a representative account
+  16:   const { data: existingRep } = await admin
+  17:     .from('representatives')
+  18:     .select('id, referral_code')
+  19:     .eq('user_id', user.id)
+  20:     .maybeSingle();
+  21: 
+  22:   if (existingRep) {
+  23:     return NextResponse.json(
+  24:       { error: 'You already have a representative account.', referralCode: existingRep.referral_code },
+  25:       { status: 409 }
+  26:     );
+  27:   }
+  28: 
+  29:   const body = await request.json();
+  30:   const { fullName, email, phone, state } = body;
+  31: 
+  32:   if (!fullName || !email) {
+  33:     return NextResponse.json({ error: 'Full name and email are required' }, { status: 400 });
+  34:   }
+  35: 
+  36:   const { data: codeResult } = await admin.rpc('generate_referral_code', { p_name: fullName, p_state: state ?? '' });
+  37:   const referralCode = codeResult as string;
+  38: 
+  39:   const { data: rep, error } = await admin
+  40:     .from('representatives')
+  41:     .insert({ user_id: user.id, full_name: fullName, email, phone: phone ?? null, referral_code: referralCode, territory_state: state ?? null })
+  42:     .select('id, referral_code')
+  43:     .single();
+  44: 
+  45:   if (error) {
+  46:     return NextResponse.json({ error: error.message }, { status: 500 });
+  47:   }
+  48: 
+  49:   return NextResponse.json({ success: true, referralCode: rep.referral_code });
+  50: }
+
+######## src\lib\plans\downgrade.ts ########
+   1: import { PlanKey, getPlanConfig } from './config'
+   2: 
+   3: // Explicit hierarchy â€” index position = rank. Higher index = higher tier.
+   4: const PLAN_RANK: PlanKey[] = ['free', 'small_school', 'standard_school', 'premium_school']
+   5: const SOLO_PLAN_RANK: PlanKey[] = ['free', 'solo_teacher_pro']
+   6: 
+   7: function getRankList(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+   8:   // If it's an institution, use institution hierarchy
+   9:   if (isInstitution) return PLAN_RANK
+  10:   // For solo teachers, use solo hierarchy
+  11:   return SOLO_PLAN_RANK
+  12: }
+  13: 
+  14: export function getUpgradeOptions(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+  15:   const list = getRankList(currentPlan, isInstitution)
+  16:   const idx = list.indexOf(currentPlan)
+  17:   return list.slice(idx + 1)
+  18: }
+  19: 
+  20: export function getDowngradeOptions(currentPlan: PlanKey, isInstitution: boolean): PlanKey[] {
+  21:   const list = getRankList(currentPlan, isInstitution)
+  22:   const idx = list.indexOf(currentPlan)
+  23:   
+  24:   // âœ… FIXED: Get all plans BEFORE the current plan (lower tiers)
+  25:   // For solo_teacher_pro: ['free'] â†’ returns ['free']
+  26:   // For premium_school: ['free', 'small_school', 'standard_school'] â†’ returns all lower tiers
+  27:   return list.slice(0, idx)
+  28: }
+  29: 
+  30: export interface UsageCheck {
+  31:   label: string
+  32:   current: number
+  33:   limit: number | 'unlimited'
+  34:   overLimit: boolean
+  35: }
+  36: 
+  37: export function checkDowngradeEligibility(
+  38:   targetPlan: PlanKey,
+  39:   usage: { students: number; teachers: number; classes: number }
+  40: ): { eligible: boolean; checks: UsageCheck[] } {
+  41:   const config = getPlanConfig(targetPlan)
+  42:   const checks: UsageCheck[] = [
+  43:     { label: 'Students', current: usage.students, limit: config.limits.maxStudents, overLimit: usage.students > config.limits.maxStudents },
+  44:     { label: 'Teachers', current: usage.teachers, limit: config.limits.maxTeachers, overLimit: usage.teachers > config.limits.maxTeachers },
+  45:     {
+  46:       label: 'Classes',
+  47:       current: usage.classes,
+  48:       limit: config.limits.maxClasses,
+  49:       overLimit: config.limits.maxClasses !== 'unlimited' && usage.classes > config.limits.maxClasses,
+  50:     },
+  51:   ]
+  52:   return { eligible: checks.every(c => !c.overLimit), checks }
+  53: }
+
+######## src\app\api\platform-staff\feature-overrides\route.ts ########
+   1: import { createClient } from '@/lib/supabase/server';
+   2: import { NextResponse } from 'next/server';
+   3: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+   4: 
+   5: export async function GET(request: Request) {
+   6:   const supabase = await createClient();
+   7:   const { user } = await getAuthenticatedUser(supabase);
+   8:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+   9: 
+  10:   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+  11:   if (!isSuperAdmin) return NextResponse.json({ error: 'Only Super Admins can manage feature overrides' }, { status: 403 });
+  12: 
+  13:   const { searchParams } = new URL(request.url);
+  14:   const orgId = searchParams.get('orgId');
+  15:   if (!orgId) return NextResponse.json({ error: 'Missing orgId' }, { status: 400 });
+  16: 
+  17:   const { data: overrides, error } = await supabase.from('feature_overrides').select('*').eq('organization_id', orgId);
+  18:   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  19: 
+  20:   return NextResponse.json({ overrides: overrides ?? [] });
+  21: }
+  22: 
+  23: export async function POST(request: Request) {
+  24:   const supabase = await createClient();
+  25:   const { user } = await getAuthenticatedUser(supabase);
+  26:   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  27: 
+  28:   const { data: isSuperAdmin } = await supabase.rpc('is_super_admin');
+  29:   if (!isSuperAdmin) return NextResponse.json({ error: 'Only Super Admins can manage feature overrides' }, { status: 403 });
+  30: 
+  31:   const body = await request.json();
+  32:   const { orgId, featureKey, enabled, reason, expiresAt } = body;
+  33: 
+  34:   const { error } = await supabase.from('feature_overrides').upsert(
+  35:     { organization_id: orgId, feature_key: featureKey, enabled, reason: reason ?? null, expires_at: expiresAt ?? null, created_by: user.id },
+  36:     { onConflict: 'organization_id,feature_key' }
+  37:   );
+  38: 
+  39:   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  40: 
+  41:   await supabase.rpc('log_platform_action', {
+  42:     p_actor_id: user.id, p_action: 'feature_override_set', p_target_type: 'organization', p_target_id: orgId,
+  43:     p_reason: reason ?? null, p_metadata: { featureKey, enabled },
+  44:   });
+  45: 
+  46:   return NextResponse.json({ success: true });
+  47: }

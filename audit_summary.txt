@@ -1,0 +1,637 @@
+﻿
+==================== TOP-LEVEL LAYOUT ====================
+
+Mode   Name                              
+----   ----                              
+da---- .github                           
+d----- cleanup-orphaned-files            
+d----- components                        
+d----- eduxellence-results               
+d----- mobile                            
+d----- phase5-security-test              
+da---- public                            
+d----- rc                                
+da---- src                               
+da---- supabase                          
+d----- supabase-audit-export             
+d----- test-results                      
+d----- tests                             
+d----- “src                              
+-a---- ({                                
+-a---- .env.local                        
+-a---- .env.local.backup                 
+-a---- .env.local.example                
+-a---- .gitignore                        
+-a---- 0                                 
+-a---- a                                 
+-a---- assessment_usage_scan.txt         
+-a---- auth-debug-2.txt                  
+-a---- auth-debug-extract.txt            
+-a---- auth-tenant-audit.txt             
+-a---- check-usd.js                      
+-a---- cohort_full_scan.txt              
+-a---- create-tertiary-test-admin.js     
+-a---- Eduxellence.ico                   
+-a---- eduxellence_audit.txt             
+-a---- fix-auth-routes-pass2.js          
+-a---- fix-auth-routes.js                
+-a---- flutterwave-node-v3.d.ts          
+-a---- group_type_definition_scan.txt    
+-a---- group_type_ts_scan.txt            
+-a---- group_type_ui_scan.txt            
+-a---- group_type_usage_scan.txt         
+-a---- instructor_teacher_usage_scan.txt 
+-a---- next-env.d.ts                     
+-a---- next.config.js                    
+-a---- package-lock.json                 
+-a---- package.json                      
+-a---- playwright.config.ts              
+-a---- playwright.production.config.ts   
+-a---- postcss.config.js                 
+-a---- README.md                         
+-a---- regrade-reports.js                
+-a---- rep_portal_files.txt              
+-a---- s.score                           
+-a---- tailwind.config.ts                
+-a---- temp_signup.txt                   
+-a---- training_batch_dependency_scan.txt
+-a---- training_completion_usage_scan.txt
+-a---- tsconfig.json                     
+-a---- tsconfig.tsbuildinfo              
+-a---- vercel.json                       
+-a---- verify-auth-routes.js             
+
+
+
+
+==================== package.json (name, scripts, dependencies) ====================
+{
+    "name":  "eduxellence-results",
+    "version":  "0.1.0",
+    "scripts":  {
+                    "dev":  "next dev",
+                    "build":  "next build",
+                    "start":  "next start",
+                    "lint":  "next lint",
+                    "type-check":  "tsc --noEmit",
+                    "db:generate":  "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID \u003e src/types/database.ts",
+                    "check-auth-pattern":  "grep -rn \"await supabase.auth.getUser()\" src/app src/lib --include=*.ts --include=*.tsx || echo \u0027Clean â€” no raw getUser() calls found\u0027",
+                    "test:e2e":  "playwright test"
+                },
+    "dependencies":  {
+                         "@google/generative-ai":  "^0.24.1",
+                         "@hookform/resolvers":  "^3.9.0",
+                         "@radix-ui/react-dialog":  "^1.1.17",
+                         "@radix-ui/react-dropdown-menu":  "^2.1.18",
+                         "@radix-ui/react-tabs":  "^1.1.15",
+                         "@react-pdf/renderer":  "^4.5.1",
+                         "@supabase/ssr":  "^0.5.0",
+                         "@supabase/supabase-js":  "^2.110.8",
+                         "@tanstack/react-query":  "^5.51.0",
+                         "@tanstack/react-table":  "^8.19.0",
+                         "chart.js":  "^4.4.3",
+                         "clsx":  "^2.1.1",
+                         "date-fns":  "^3.6.0",
+                         "file-saver":  "^2.0.5",
+                         "flutterwave-node-v3":  "^1.0.0",
+                         "jspdf":  "^2.5.1",
+                         "jszip":  "^3.10.1",
+                         "lucide-react":  "^0.417.0",
+                         "next":  "^15.3.8",
+                         "papaparse":  "^5.4.1",
+                         "qrcode.react":  "^4.2.0",
+                         "react":  "^18.3.1",
+                         "react-chartjs-2":  "^5.2.0",
+                         "react-dom":  "^18.3.1",
+                         "react-hook-form":  "^7.52.1",
+                         "react-hot-toast":  "^2.4.1",
+                         "recharts":  "^3.10.1",
+                         "resend":  "^6.18.0",
+                         "tailwind-merge":  "^2.4.0",
+                         "xlsx":  "^0.18.5",
+                         "zod":  "^3.23.8"
+                     },
+    "devDependencies":  {
+                            "@playwright/test":  "^1.63.0",
+                            "@types/file-saver":  "^2.0.7",
+                            "@types/node":  "^20.14.11",
+                            "@types/papaparse":  "^5.3.14",
+                            "@types/react":  "^18.3.3",
+                            "@types/react-dom":  "^18.3.0",
+                            "autoprefixer":  "^10.4.19",
+                            "dotenv":  "^18.0.1",
+                            "eslint":  "^8.57.0",
+                            "eslint-config-next":  "15.3.6",
+                            "postcss":  "^8.4.39",
+                            "tailwindcss":  "^3.4.6",
+                            "typescript":  "^5.5.3"
+                        }
+}
+
+==================== ROUTES / PAGES / API (file list) ====================
+\mobile\mobile\app\(app)\_layout.tsx
+\mobile\mobile\app\(app)\admin\academic-periods.tsx
+\mobile\mobile\app\(app)\admin\attendance-alerts.tsx
+\mobile\mobile\app\(app)\admin\classes.tsx
+\mobile\mobile\app\(app)\admin\fees\issue-invoices.tsx
+\mobile\mobile\app\(app)\admin\fees\payments.tsx
+\mobile\mobile\app\(app)\admin\index.tsx
+\mobile\mobile\app\(app)\admin\lock-results.tsx
+\mobile\mobile\app\(app)\admin\reports\[id].tsx
+\mobile\mobile\app\(app)\admin\reports\generate.tsx
+\mobile\mobile\app\(app)\admin\reports\index.tsx
+\mobile\mobile\app\(app)\admin\school-profile.tsx
+\mobile\mobile\app\(app)\admin\students.tsx
+\mobile\mobile\app\(app)\admin\students\[id].tsx
+\mobile\mobile\app\(app)\admin\subjects.tsx
+\mobile\mobile\app\(app)\admin\teachers.tsx
+\mobile\mobile\app\(app)\admin\teachers\new.tsx
+\mobile\mobile\app\(app)\announcements.tsx
+\mobile\mobile\app\(app)\index.tsx
+\mobile\mobile\app\(app)\notifications.tsx
+\mobile\mobile\app\(app)\parent\fees\[learnerId].tsx
+\mobile\mobile\app\(app)\parent\history\[learnerId].tsx
+\mobile\mobile\app\(app)\parent\homework\[learnerId].tsx
+\mobile\mobile\app\(app)\parent\index.tsx
+\mobile\mobile\app\(app)\parent\report\[learnerId].tsx
+\mobile\mobile\app\(app)\student\index.tsx
+\mobile\mobile\app\(app)\teacher\attendance.tsx
+\mobile\mobile\app\(app)\teacher\index.tsx
+\mobile\mobile\app\(app)\teacher\scores\grid.tsx
+\mobile\mobile\app\(app)\teacher\scores\index.tsx
+\mobile\mobile\app\(auth)\index.tsx
+\mobile\mobile\app\(auth)\login.tsx
+\mobile\mobile\app\(auth)\parent-access.tsx
+\mobile\mobile\app\_layout.tsx
+\src\app\(auth)\apply-representative\page.tsx
+\src\app\(auth)\forgot-password\page.tsx
+\src\app\(auth)\layout.tsx
+\src\app\(auth)\login\page.tsx
+\src\app\(auth)\reset-password\page.tsx
+\src\app\(auth)\set-password\page.tsx
+\src\app\(auth)\signup\page.tsx
+\src\app\(dashboard)\admin\page.tsx
+\src\app\(dashboard)\announcements\page.tsx
+\src\app\(dashboard)\attendance\page.tsx
+\src\app\(dashboard)\attendance\reports\page.tsx
+\src\app\(dashboard)\classes\[id]\page.tsx
+\src\app\(dashboard)\classes\actions.ts
+\src\app\(dashboard)\classes\new\page.tsx
+\src\app\(dashboard)\classes\page.tsx
+\src\app\(dashboard)\cohorts\[groupId]\bulk-register\page.tsx
+\src\app\(dashboard)\cohorts\[groupId]\register\actions.ts
+\src\app\(dashboard)\cohorts\[groupId]\register\page.tsx
+\src\app\(dashboard)\cohorts\[groupId]\upload-students\page.tsx
+\src\app\(dashboard)\cohorts\actions.ts
+\src\app\(dashboard)\cohorts\new\page.tsx
+\src\app\(dashboard)\cohorts\page.tsx
+\src\app\(dashboard)\courses\actions.ts
+\src\app\(dashboard)\courses\new\page.tsx
+\src\app\(dashboard)\courses\page.tsx
+\src\app\(dashboard)\dashboard\page.tsx
+\src\app\(dashboard)\departments\actions.ts
+\src\app\(dashboard)\departments\new\page.tsx
+\src\app\(dashboard)\departments\page.tsx
+\src\app\(dashboard)\executive\notifications\page.tsx
+\src\app\(dashboard)\executive\page.tsx
+\src\app\(dashboard)\faculties\actions.ts
+\src\app\(dashboard)\faculties\new\page.tsx
+\src\app\(dashboard)\faculties\page.tsx
+\src\app\(dashboard)\fees\issue-invoices\page.tsx
+\src\app\(dashboard)\fees\ledger\page.tsx
+\src\app\(dashboard)\fees\page.tsx
+\src\app\(dashboard)\fees\payments\page.tsx
+\src\app\(dashboard)\fees\structures\page.tsx
+\src\app\(dashboard)\finance-analytics\page.tsx
+\src\app\(dashboard)\getting-started\page.tsx
+\src\app\(dashboard)\homework\page.tsx
+\src\app\(dashboard)\layout.tsx
+\src\app\(dashboard)\lecturer\courses\[subjectId]\scores\page.tsx
+\src\app\(dashboard)\lecturer\courses\page.tsx
+\src\app\(dashboard)\notifications\actions.ts
+\src\app\(dashboard)\notifications\page.tsx
+\src\app\(dashboard)\parents\page.tsx
+\src\app\(dashboard)\programmes\actions.ts
+\src\app\(dashboard)\programmes\new\page.tsx
+\src\app\(dashboard)\programmes\page.tsx
+\src\app\(dashboard)\promotion\page.tsx
+\src\app\(dashboard)\promotion\rules\page.tsx
+\src\app\(dashboard)\psychomotor\page.tsx
+\src\app\(dashboard)\reports\[id]\actions.ts
+\src\app\(dashboard)\reports\[id]\ai-remarks-actions.ts
+\src\app\(dashboard)\reports\[id]\page.tsx
+\src\app\(dashboard)\reports\actions.ts
+\src\app\(dashboard)\reports\archive\page.tsx
+\src\app\(dashboard)\reports\generate\page.tsx
+\src\app\(dashboard)\reports\lock\page.tsx
+\src\app\(dashboard)\reports\page.tsx
+\src\app\(dashboard)\reports\trash\page.tsx
+\src\app\(dashboard)\results\review\page.tsx
+\src\app\(dashboard)\roles\page.tsx
+\src\app\(dashboard)\school-support\page.tsx
+\src\app\(dashboard)\scores\page.tsx
+\src\app\(dashboard)\settings\academic\actions.ts
+\src\app\(dashboard)\settings\academic\page.tsx
+\src\app\(dashboard)\settings\account\page.tsx
+\src\app\(dashboard)\settings\billing\actions.ts
+\src\app\(dashboard)\settings\branding\actions.ts
+\src\app\(dashboard)\settings\branding\page.tsx
+\src\app\(dashboard)\settings\domains\actions.ts
+\src\app\(dashboard)\settings\domains\page.tsx
+\src\app\(dashboard)\settings\institution\actions.ts
+\src\app\(dashboard)\settings\institution\page.tsx
+\src\app\(dashboard)\settings\layout.tsx
+\src\app\(dashboard)\settings\notifications\page.tsx
+\src\app\(dashboard)\settings\page.tsx
+\src\app\(dashboard)\settings\profile\actions.ts
+\src\app\(dashboard)\settings\profile\page.tsx
+\src\app\(dashboard)\settings\remarks\[id]\page.tsx
+\src\app\(dashboard)\settings\remarks\actions.ts
+\src\app\(dashboard)\settings\remarks\new\page.tsx
+\src\app\(dashboard)\settings\remarks\page.tsx
+\src\app\(dashboard)\settings\setup-wizard\page.tsx
+\src\app\(dashboard)\settings\subjects\[id]\page.tsx
+\src\app\(dashboard)\settings\subjects\actions.ts
+\src\app\(dashboard)\settings\subjects\new\page.tsx
+\src\app\(dashboard)\settings\subjects\page.tsx
+\src\app\(dashboard)\settings\teachers\actions.ts
+\src\app\(dashboard)\settings\teachers\index.ts
+\src\app\(dashboard)\settings\teachers\new\page.tsx
+\src\app\(dashboard)\settings\teachers\page.tsx
+\src\app\(dashboard)\settings\templates\[id]\page.tsx
+\src\app\(dashboard)\settings\templates\actions.ts
+\src\app\(dashboard)\settings\templates\new\page.tsx
+\src\app\(dashboard)\settings\templates\page.tsx
+\src\app\(dashboard)\setup-guide\page.tsx
+\src\app\(dashboard)\students\[id]\page.tsx
+\src\app\(dashboard)\students\actions.ts
+\src\app\(dashboard)\students\import\actions.ts
+\src\app\(dashboard)\students\import\page.tsx
+\src\app\(dashboard)\students\new\actions.ts
+\src\app\(dashboard)\students\new\page.tsx
+\src\app\(dashboard)\students\page.tsx
+\src\app\(dashboard)\teacher\actions.ts
+\src\app\(dashboard)\teacher\page.tsx
+\src\app\(dashboard)\tertiary\students\activation-slips\page.tsx
+\src\app\(dashboard)\training\batches\new\page.tsx
+\src\app\(dashboard)\training\batches\page.tsx
+\src\app\(dashboard)\training\completions\page.tsx
+\src\app\(dashboard)\training\enrolments\new\page.tsx
+\src\app\(dashboard)\training\enrolments\page.tsx
+\src\app\(dashboard)\training\learners\new\page.tsx
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx
+\src\app\(dashboard)\training\modules\new\page.tsx
+\src\app\(dashboard)\training\modules\page.tsx
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx
+\src\app\(dashboard)\training\my-modules\page.tsx
+\src\app\(dashboard)\training\programmes\new\page.tsx
+\src\app\(dashboard)\training\programmes\page.tsx
+\src\app\(student-portal)\portal\page.tsx
+\src\app\(super-admin)\analytics\page.tsx
+\src\app\(super-admin)\audit\page.tsx
+\src\app\(super-admin)\commissions\page.tsx
+\src\app\(super-admin)\domains-ssl\actions.ts
+\src\app\(super-admin)\domains-ssl\page.tsx
+\src\app\(super-admin)\founding-500\Founding500Client.tsx
+\src\app\(super-admin)\founding-500\page.tsx
+\src\app\(super-admin)\founding-institutions\page.tsx
+\src\app\(super-admin)\layout.tsx
+\src\app\(super-admin)\overview\page.tsx
+\src\app\(super-admin)\platform-announcements\page.tsx
+\src\app\(super-admin)\platform-settings\page.tsx
+\src\app\(super-admin)\platform-users\page.tsx
+\src\app\(super-admin)\representatives\[id]\page.tsx
+\src\app\(super-admin)\representatives\escalations\page.tsx
+\src\app\(super-admin)\representatives\feedback\page.tsx
+\src\app\(super-admin)\representatives\follow-ups\page.tsx
+\src\app\(super-admin)\representatives\leaderboard\[id]\page.tsx
+\src\app\(super-admin)\representatives\leaderboard\page.tsx
+\src\app\(super-admin)\representatives\page.tsx
+\src\app\(super-admin)\representatives\performance\page.tsx
+\src\app\(super-admin)\representatives\school-portfolios\page.tsx
+\src\app\(super-admin)\representatives\schools\[id]\page.tsx
+\src\app\(super-admin)\resources\page.tsx
+\src\app\(super-admin)\schools\[id]\actions.ts
+\src\app\(super-admin)\schools\[id]\page.tsx
+\src\app\(super-admin)\schools\page.tsx
+\src\app\(super-admin)\security\actions.ts
+\src\app\(super-admin)\security\page.tsx
+\src\app\(super-admin)\solo-teachers\[id]\actions.ts
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx
+\src\app\(super-admin)\solo-teachers\page.tsx
+\src\app\(super-admin)\support\page.tsx
+\src\app\(super-admin)\support\TicketQueueLoader.tsx
+\src\app\(super-admin)\team\page.tsx
+\src\app\(super-admin)\welcome\page.tsx
+\src\app\(super-admin)\withdrawals\page.tsx
+\src\app\access\layout.tsx
+\src\app\access\page.tsx
+\src\app\access-denied\page.tsx
+\src\app\api\admin\announcements\[id]\route.ts
+\src\app\api\admin\announcements\route.ts
+\src\app\api\admin\fees\account\route.ts
+\src\app\api\admin\fees\analytics\overview\route.ts
+\src\app\api\admin\fees\analytics\trends\route.ts
+\src\app\api\admin\fees\charge\route.ts
+\src\app\api\admin\fees\payment\[id]\void\route.ts
+\src\app\api\admin\fees\payment\route.ts
+\src\app\api\admin\finance\fee-structures\[id]\items\route.ts
+\src\app\api\admin\finance\fee-structures\[id]\route.ts
+\src\app\api\admin\finance\fee-structures\route.ts
+\src\app\api\admin\finance\invoices\bulk-issue\preview\route.ts
+\src\app\api\admin\finance\invoices\bulk-issue\route.ts
+\src\app\api\admin\finance\invoices\issue\route.ts
+\src\app\api\admin\finance\payments\[id]\allocate\route.ts
+\src\app\api\admin\finance\payments\[id]\void\route.ts
+\src\app\api\admin\finance\payments\route.ts
+\src\app\api\admin\finance\student-ledger\route.ts
+\src\app\api\admin\parents\[parentId]\regenerate\route.ts
+\src\app\api\admin\parents\[parentId]\toggle-active\route.ts
+\src\app\api\admin\parents\route.ts
+\src\app\api\admin\roles\[roleId]\permissions\route.ts
+\src\app\api\admin\roles\route.ts
+\src\app\api\admin\roles\seed-defaults\route.ts
+\src\app\api\admin\staff\assign-role\route.ts
+\src\app\api\admin\staff\route.ts
+\src\app\api\ai\remarks\principal\route.ts
+\src\app\api\ai\remarks\route.ts
+\src\app\api\announcements\active\route.ts
+\src\app\api\attendance\report\route.ts
+\src\app\api\attendance\route.ts
+\src\app\api\auth\logout\route.ts
+\src\app\api\auth\record-login\route.ts
+\src\app\api\billing\initiate\route.ts
+\src\app\api\billing\verify\page.tsx
+\src\app\api\billing\verify\VerifyContent.tsx
+\src\app\api\billing\verify-status\route.ts
+\src\app\api\cron\check-expirations\route.ts
+\src\app\api\cron\check-expirations\subscription-check\route.ts
+\src\app\api\cron\clean-trash\route.ts
+\src\app\api\cron\leaderboard-recognitions\route.ts
+\src\app\api\cron\leaderboard-snapshot\route.ts
+\src\app\api\cron\release-commissions\route.ts
+\src\app\api\cron\rep-alerts\route.ts
+\src\app\api\cron\weekly-brief\route.ts
+\src\app\api\domain-ratings\route.ts
+\src\app\api\domains\[id]\verify\route.ts
+\src\app\api\e2e-diagnostic\host\route.ts
+\src\app\api\executive\attendance-alerts\followup\route.ts
+\src\app\api\executive\attendance-alerts\route.ts
+\src\app\api\executive\class-health\route.ts
+\src\app\api\executive\defaulters\route.ts
+\src\app\api\executive\needs-attention\route.ts
+\src\app\api\executive\notification-preferences\route.ts
+\src\app\api\executive\overview\route.ts
+\src\app\api\executive\student-distribution\route.ts
+\src\app\api\executive\student-movement\route.ts
+\src\app\api\executive\weekly-briefs\route.ts
+\src\app\api\founding-500\initiate\route.ts
+\src\app\api\founding-500\status\route.ts
+\src\app\api\founding-institutions\apply\route.ts
+\src\app\api\health\route.ts
+\src\app\api\homework\route.ts
+\src\app\api\homework\submissions\route.ts
+\src\app\api\internal\payments\confirm\route.ts
+\src\app\api\notifications\[id]\read\route.ts
+\src\app\api\notifications\route.ts
+\src\app\api\parents\access\route.ts
+\src\app\api\parents\announcements\route.ts
+\src\app\api\parents\children\route.ts
+\src\app\api\parents\fees\route.ts
+\src\app\api\parents\history\route.ts
+\src\app\api\parents\homework\route.ts
+\src\app\api\parents\link\route.ts
+\src\app\api\parents\report\route.ts
+\src\app\api\platform-announcements\[id]\route.ts
+\src\app\api\platform-announcements\route.ts
+\src\app\api\platform-staff\[id]\route.ts
+\src\app\api\platform-staff\[id]\status\route.ts
+\src\app\api\platform-staff\analytics\route.ts
+\src\app\api\platform-staff\audit-log\route.ts
+\src\app\api\platform-staff\bank-accounts\[id]\verify\route.ts
+\src\app\api\platform-staff\commissions\[id]\action\route.ts
+\src\app\api\platform-staff\commissions\route.ts
+\src\app\api\platform-staff\escalations\route.ts
+\src\app\api\platform-staff\feature-overrides\route.ts
+\src\app\api\platform-staff\feedback\[id]\status\route.ts
+\src\app\api\platform-staff\feedback\route.ts
+\src\app\api\platform-staff\follow-ups\route.ts
+\src\app\api\platform-staff\founding-institutions\[id]\action\route.ts
+\src\app\api\platform-staff\founding-institutions\route.ts
+\src\app\api\platform-staff\leaderboard\[id]\detail\route.ts
+\src\app\api\platform-staff\leaderboard\[id]\history\route.ts
+\src\app\api\platform-staff\leaderboard\falling\route.ts
+\src\app\api\platform-staff\leaderboard\route.ts
+\src\app\api\platform-staff\leaderboard\weights\route.ts
+\src\app\api\platform-staff\needs-attention\route.ts
+\src\app\api\platform-staff\representatives\[id]\id-card\route.ts
+\src\app\api\platform-staff\representatives\[id]\photo\review\route.ts
+\src\app\api\platform-staff\representatives\[id]\portfolio\route.ts
+\src\app\api\platform-staff\representatives\[id]\route.ts
+\src\app\api\platform-staff\representatives\[id]\status\route.ts
+\src\app\api\platform-staff\representatives\management-summary\route.ts
+\src\app\api\platform-staff\representatives\portfolios\route.ts
+\src\app\api\platform-staff\representatives\route.ts
+\src\app\api\platform-staff\resource-categories\route.ts
+\src\app\api\platform-staff\resources\[id]\replace\route.ts
+\src\app\api\platform-staff\resources\[id]\route.ts
+\src\app\api\platform-staff\resources\route.ts
+\src\app\api\platform-staff\route.ts
+\src\app\api\platform-staff\schools\[id]\reassign\route.ts
+\src\app\api\platform-staff\schools\[id]\relationship\route.ts
+\src\app\api\platform-staff\schools\[id]\reopen-term\route.ts
+\src\app\api\platform-staff\schools\portfolios\route.ts
+\src\app\api\platform-staff\schools\unassigned\route.ts
+\src\app\api\platform-staff\search\route.ts
+\src\app\api\platform-staff\security-alerts\route.ts
+\src\app\api\platform-staff\seed-roles\route.ts
+\src\app\api\platform-staff\settings\logo\route.ts
+\src\app\api\platform-staff\withdrawals\[id]\action\route.ts
+\src\app\api\platform-staff\withdrawals\route.ts
+\src\app\api\platform-users\[id]\route.ts
+\src\app\api\platform-users\search\route.ts
+\src\app\api\promotion\confirm\route.ts
+\src\app\api\promotion\correct\route.ts
+\src\app\api\promotion\history\route.ts
+\src\app\api\promotion\preview\route.ts
+\src\app\api\promotion\rules\route.ts
+\src\app\api\reports\[learnerId]\page.tsx
+\src\app\api\reports\lock\route.ts
+\src\app\api\reports\route.ts
+\src\app\api\representatives\agreement\route.ts
+\src\app\api\representatives\apply\route.ts
+\src\app\api\representatives\bank-account\route.ts
+\src\app\api\representatives\escalations\route.ts
+\src\app\api\representatives\feedback\route.ts
+\src\app\api\representatives\follow-ups\route.ts
+\src\app\api\representatives\growth-status\route.ts
+\src\app\api\representatives\id-card\route.ts
+\src\app\api\representatives\leaderboard\category\route.ts
+\src\app\api\representatives\leaderboard\recognitions\route.ts
+\src\app\api\representatives\leaderboard\rising\route.ts
+\src\app\api\representatives\leaderboard\route.ts
+\src\app\api\representatives\leaderboard\summary\route.ts
+\src\app\api\representatives\me\route.ts
+\src\app\api\representatives\onboarding-status\route.ts
+\src\app\api\representatives\passport\route.ts
+\src\app\api\representatives\portfolio-summary\route.ts
+\src\app\api\representatives\record-referral\route.ts
+\src\app\api\representatives\resources\[id]\download\route.ts
+\src\app\api\representatives\resources\route.ts
+\src\app\api\representatives\schools\[id]\health\route.ts
+\src\app\api\representatives\schools\[id]\route.ts
+\src\app\api\representatives\schools\route.ts
+\src\app\api\representatives\withdrawals\route.ts
+\src\app\api\staff\create-teacher-account\route.ts
+\src\app\api\students\create-portal-account\route.ts
+\src\app\api\support\my-tickets\[id]\route.ts
+\src\app\api\support\my-tickets\route.ts
+\src\app\api\support\tickets\[id]\route.ts
+\src\app\api\support\tickets\[id]\status\route.ts
+\src\app\api\support\tickets\route.ts
+\src\app\api\teachers\template\route.ts
+\src\app\api\tertiary\billing\initiate\route.ts
+\src\app\api\tertiary\students\create-portal-account\route.ts
+\src\app\api\verify\[code]\route.ts
+\src\app\api\webhooks\flutterwave\route.ts
+\src\app\api\webhooks\new-signup\route.ts
+\src\app\api\webhooks\paystack\route.ts
+\src\app\api\webhooks\signup-notification\route.ts
+\src\app\api\workspaces\route.ts
+\src\app\auth\callback\route.ts
+\src\app\billing\verify\page.tsx
+\src\app\billing\verify\VerifyClient.tsx
+\src\app\billing\verify\VerifyContent.tsx
+\src\app\flyer\page.tsx
+\src\app\founding-500\enroll\EnrollClient.tsx
+\src\app\founding-500\enroll\page.tsx
+\src\app\founding-institutions\apply\ApplyClient.tsx
+\src\app\founding-institutions\apply\page.tsx
+\src\app\help\page.tsx
+\src\app\layout.tsx
+\src\app\logout\page.tsx
+\src\app\page.tsx
+\src\app\parent\dashboard\page.tsx
+\src\app\parent\fees\[learnerId]\page.tsx
+\src\app\parent\history\[learnerId]\page.tsx
+\src\app\parent\homework\[learnerId]\page.tsx
+\src\app\parent\page.tsx
+\src\app\parent\report\[learnerId]\page.tsx
+\src\app\pricing\higher-institutions\page.tsx
+\src\app\pricing\higher-institutions\PricingClient.tsx
+\src\app\rep\id-card\page.tsx
+\src\app\rep\leaderboard\page.tsx
+\src\app\rep\onboarding\OnboardingClient.tsx
+\src\app\rep\onboarding\page.tsx
+\src\app\rep\page.tsx
+\src\app\rep\resources\page.tsx
+\src\app\rep\resources\ResourceCentreClient.tsx
+\src\app\rep\schools\[id]\page.tsx
+\src\app\rep\schools\page.tsx
+\src\app\representative-program\page.tsx
+\src\app\student\layout.tsx
+\src\app\student\page.tsx
+\src\app\student\results\page.tsx
+\src\app\verify\[code]\page.tsx
+\src\app\workspaces\page.tsx
+
+==================== SUPABASE MIGRATIONS (file list) ====================
+
+Name                   Length
+----                   ------
+001_initial_schema.sql  23266
+
+
+
+
+==================== SUPABASE EDGE FUNCTIONS (file list) ====================
+
+==================== ENV VAR NAMES (no values) ====================
+--- .env.local
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_PROJECT_ID
+NEXT_PUBLIC_SITE_URL
+RESEND_API_KEY
+SUPABASE_WEBHOOK_SECRET
+PAYSTACK_SECRET_KEY
+FLW_SECRET_KEY
+NEXT_PUBLIC_TERTIARY_BILLING_ENABLED
+TERTIARY_BILLING_ENABLED
+--- .env.local.backup
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_PROJECT_ID
+NEXT_PUBLIC_SITE_URL
+RESEND_API_KEY
+SUPABASE_WEBHOOK_SECRET
+--- .env.local.example
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_PROJECT_ID
+NEXT_PUBLIC_APP_URL
+NEXT_PUBLIC_APP_NAME
+HUGGINGFACE_API_KEY
+HUGGINGFACE_MODEL
+
+==================== GIT LOG (last 40) ====================
+ea049c6 Payouts: verify step, amount_claimed as payout, approve via RPC, remove direct Mark Paid
+8ca048e new  and modified file
+3aae70e modified all files applied
+49cca5e commit all new and modified files
+b61495b modified files
+c4926bd add it
+12becb7 apply all
+3b67d44 update modified files
+2c6867d new files
+80c5e32 new and modified files
+04f9cb6 single file modified
+d0eab93 commit all modifications
+f61dc27 apply al new files
+d00054a Move E2E diagnostic route out of underscore folder; add URL update and gitignore for Playwright artifacts
+34da339 modified file
+5c72b7f apply all files
+9726fae Add Expo mobile app (admin, teacher, parent, student routes)
+74c3966 new files added
+dfc1844 changes
+09328f4 new files added
+ddc9253 corrected file
+7d3ebf8 new file
+be27497 commited
+bf29792 added
+8e0b4c3 retrofit all API routes with resilient auth helper (refresh token race fix)
+68e5344 new file
+113c964 modify the file
+ea10b6d modified
+b1918fe minor change
+f040cf1 modified
+76a8fb4 apply
+583779b changes made
+a0e69cf files corrected
+84aa084 new files committed
+a9f32cf new files added
+d4a7ce3 error fixed
+8856335 deleted
+553f0ae error log in middleware
+1865b40 fix: stop sharing auth cookies across subdomains
+8b80d3a all files modified
+
+==================== SUPABASE CLI ====================
+node.exe : [31mIPv6 is not supported on your current network[39m
+At C:\nvm4w\nodejs\supabase.ps1:16 char:5
++     & "$basedir/node$exe"  "$basedir/node_modules/supabase/dist/supab ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([31mIPv6 is no...nt network[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Run supabase link --project-ref dtqnsglzuarmtmewlbnh to setup IPv4 connection.
+[?25l[90m|[39m
+[35mΓÇó[39m  Fetching functions[1G[J[35mo[39m  Fetching functions[1G[J[35mO[39m  Fetching functions[1G[J[?25h
+  
+   ID | NAME | SLUG | STATUS | VERSION | UPDATED_AT (UTC) 
+  ----|------|------|--------|---------|------------------
+
+

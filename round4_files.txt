@@ -1,0 +1,2938 @@
+﻿
+
+######## mobile\mobile\app\(app)\teacher\attendance.tsx ########
+   1: import { useEffect, useState } from 'react'
+   2: import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native'
+   3: import { useLocalSearchParams, router } from 'expo-router'
+   4: import { useAuth } from '../../../src/lib/auth/AuthContext'
+   5: import { loadClassRosterForDate, submitAttendance, RosterEntry } from '../../../src/lib/supabase/queries/attendance'
+   6: import { useNetwork } from '../../../src/lib/network/NetworkContext'
+   7: import { enqueueAttendance } from '../../../src/lib/offline/attendanceQueue'
+   8: import { LoadingState, ErrorState } from '../../../src/components/ui'
+   9: 
+  10: const TODAY = new Date().toISOString().split('T')[0]
+  11: const STATUS_OPTIONS: RosterEntry['status'][] = ['present', 'absent', 'late']
+  12: 
+  13: export default function MarkAttendance() {
+  14:   const { profile } = useAuth()
+  15:   const { isOnline } = useNetwork()
+  16:   const { groupId, groupName, termId, sessionId } = useLocalSearchParams<{
+  17:     groupId: string; groupName: string; termId: string; sessionId: string
+  18:   }>()
+  19:   const [roster, setRoster] = useState<RosterEntry[]>([])
+  20:   const [loading, setLoading] = useState(true)
+  21:   const [error, setError] = useState<string | null>(null)
+  22:   const [saving, setSaving] = useState(false)
+  23: 
+  24:   useEffect(() => {
+  25:     if (!groupId) return
+  26:     loadClassRosterForDate(groupId, TODAY)
+  27:       .then(setRoster)
+  28:       .catch((e) => setError(e.message))
+  29:       .finally(() => setLoading(false))
+  30:   }, [groupId])
+  31: 
+  32:   function setStatus(learnerId: string, status: RosterEntry['status']) {
+  33:     setRoster((prev) => prev.map((r) => (r.learnerId === learnerId ? { ...r, status } : r)))
+  34:   }
+  35: 
+  36:   async function handleSubmit() {
+  37:     const unmarked = roster.filter((r) => !r.status)
+  38:     if (unmarked.length > 0) {
+  39:       Alert.alert(
+  40:         'Incomplete',
+  41:         `${unmarked.length} student(s) are not marked yet. Mark all students before saving.`
+  42:       )
+  43:       return
+  44:     }
+  45:     if (!profile || profile.kind !== 'staff' || !profile.organizationId || !termId || !sessionId || !groupId) {
+  46:       Alert.alert('Error', 'Missing required information. Please go back and try again.')
+  47:       return
+  48:     }
+  49: 
+  50:     setSaving(true)
+  51:     try {
+  52:       if (!isOnline) {
+  53:         await enqueueAttendance({
+  54:           organizationId: profile.organizationId, groupId, groupName: groupName ?? 'Class',
+  55:           termId, sessionId, date: TODAY,
+  56:           entries: roster.map((r) => ({ learnerId: r.learnerId, status: r.status! })),
+  57:         })
+  58:         Alert.alert('Saved Offline', 'No internet connection â€” attendance has been saved on this device and will sync automatically once you\'re back online.', [
+  59:           { text: 'OK', onPress: () => router.back() },
+  60:         ])
+  61:         return
+  62:       }
+  63: 
+  64:       await submitAttendance({
+  65:         organizationId: profile.organizationId, groupId, termId, sessionId, date: TODAY,
+  66:         entries: roster.map((r) => ({ learnerId: r.learnerId, status: r.status! })),
+  67:       })
+  68:       Alert.alert('Saved', 'Attendance recorded successfully.', [{ text: 'OK', onPress: () => router.back() }])
+  69:     } catch (e: any) {
+  70:       Alert.alert('Error', e?.message ?? 'Could not save attendance.')
+  71:     } finally {
+  72:       setSaving(false)
+  73:     }
+  74:   }
+  75: 
+  76:   // Parents never reach this screen (routing prevents it) â€” this guard just
+  77:   // satisfies the type system, since ParentProfile has no `organizationId`.
+  78:   if (!profile || profile.kind !== 'staff') {
+  79:     return <ErrorState message="This screen is not available for your account type." onRetry={() => {}} />
+  80:   }
+  81: 
+  82:   if (loading) return <LoadingState label="Loading class roster..." />
+  83:   if (error) return <ErrorState message={error} onRetry={() => { setLoading(true); setError(null) }} />
+  84: 
+  85:   return (
+  86:     <View style={styles.container}>
+  87:       <View style={styles.header}>
+  88:         <Text style={styles.title}>{groupName}</Text>
+  89:         <Text style={styles.date}>{TODAY}</Text>
+  90:       </View>
+  91: 
+  92:       <ScrollView contentContainerStyle={styles.list}>
+  93:         {roster.map((r) => (
+  94:           <View key={r.learnerId} style={styles.row}>
+  95:             <View style={styles.nameCol}>
+  96:               <Text style={styles.name}>{r.firstName} {r.lastName}</Text>
+  97:               {r.admissionNumber && <Text style={styles.admNo}>{r.admissionNumber}</Text>}
+  98:             </View>
+  99:             <View style={styles.statusButtons}>
+ 100:               {STATUS_OPTIONS.map((s) => (
+ 101:                 <Pressable
+ 102:                   key={s}
+ 103:                   style={[
+ 104:                     styles.statusButton,
+ 105:                     r.status === s && styles[`statusButton_${s}` as const],
+ 106:                   ]}
+ 107:                   onPress={() => setStatus(r.learnerId, s)}
+ 108:                 >
+ 109:                   <Text style={[styles.statusButtonText, r.status === s && styles.statusButtonTextActive]}>
+ 110:                     {s === 'present' ? 'P' : s === 'absent' ? 'A' : 'L'}
+ 111:                   </Text>
+ 112:                 </Pressable>
+ 113:               ))}
+ 114:             </View>
+ 115:           </View>
+ 116:         ))}
+ 117:       </ScrollView>
+ 118: 
+ 119:       <Pressable style={[styles.submitButton, saving && styles.submitDisabled]} onPress={handleSubmit} disabled={saving}>
+ 120:         <Text style={styles.submitText}>{saving ? 'Saving...' : 'Save Attendance'}</Text>
+ 121:       </Pressable>
+ 122:     </View>
+ 123:   )
+ 124: }
+ 125: 
+ 126: const styles = StyleSheet.create({
+ 127:   container: { flex: 1, backgroundColor: '#fff' },
+ 128:   header: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' },
+ 129:   title: { fontSize: 18, fontWeight: '700' },
+ 130:   date: { fontSize: 13, color: '#666', marginTop: 2 },
+ 131:   list: { padding: 16 },
+ 132:   row: {
+ 133:     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+ 134:     paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#f0f0f0',
+ 135:   },
+ 136:   nameCol: { flex: 1 },
+ 137:   name: { fontSize: 14, fontWeight: '500' },
+ 138:   admNo: { fontSize: 11, color: '#999' },
+ 139:   statusButtons: { flexDirection: 'row', gap: 6 },
+ 140:   statusButton: {
+ 141:     width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#ddd',
+ 142:     justifyContent: 'center', alignItems: 'center',
+ 143:   },
+ 144:   statusButton_present: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+ 145:   statusButton_absent: { backgroundColor: '#d92d20', borderColor: '#d92d20' },
+ 146:   statusButton_late: { backgroundColor: '#d97706', borderColor: '#d97706' },
+ 147:   statusButtonText: { fontSize: 13, fontWeight: '700', color: '#666' },
+ 148:   statusButtonTextActive: { color: '#fff' },
+ 149:   submitButton: { margin: 16, backgroundColor: '#1a56db', borderRadius: 8, padding: 14, alignItems: 'center' },
+ 150:   submitDisabled: { opacity: 0.6 },
+ 151:   submitText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+ 152: })
+
+######## src\lib\plans\gating.ts ########
+   1: import { createClient } from '@supabase/supabase-js'
+   2: import { getPlanConfig, PlanConfig } from './config'
+   3: 
+   4: function serviceClient() {
+   5:   return createClient(
+   6:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   7:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+   8:     { auth: { autoRefreshToken: false, persistSession: false } }
+   9:   )
+  10: }
+  11: 
+  12: // An "account" is either an institution (organization_id) or
+  13: // a solo teacher (userId, organization_id is null).
+  14: export type AccountRef =
+  15:   | { type: 'org'; orgId: string }
+  16:   | { type: 'solo'; userId: string }
+  17: 
+  18: interface UsageCounts {
+  19:   students: number
+  20:   teachers: number
+  21:   admins: number
+  22:   academicSessions: number
+  23:   classes: number
+  24:   subjects: number
+  25: }
+  26: 
+  27: export async function getUsageCounts(ref: AccountRef): Promise<UsageCounts> {
+  28:   const admin = serviceClient()
+  29: 
+  30:   if (ref.type === 'org') {
+  31:     const [
+  32:       { count: students },
+  33:       { count: teachers },
+  34:       { count: admins },
+  35:       { count: academicSessions },
+  36:       { count: classes },
+  37:       { count: subjects },
+  38:     ] = await Promise.all([
+  39:       admin.from('learners').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
+  40:       admin.from('users').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId).eq('role', 'teacher'),
+  41:       admin.from('users').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId).eq('role', 'admin'),
+  42:       admin.from('academic_sessions').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
+  43:       admin.from('groups').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
+  44:       admin.from('subjects').select('id', { count: 'exact', head: true }).eq('organization_id', ref.orgId),
+  45:     ])
+  46: 
+  47:     return {
+  48:       students: students ?? 0,
+  49:       teachers: teachers ?? 0,
+  50:       admins: admins ?? 0,
+  51:       academicSessions: academicSessions ?? 0,
+  52:       classes: classes ?? 0,
+  53:       subjects: subjects ?? 0,
+  54:     }
+  55:   }
+  56: 
+  57:   // Solo teacher: subjects/academic_sessions/groups are scoped directly
+  58:   // by instructor_id. learners has no instructor_id column, so it must
+  59:   // be counted via a join through groups (a student belongs to a group,
+  60:   // and a group belongs to the teacher).
+  61:   const [
+  62:     { count: academicSessions },
+  63:     { data: teacherGroups },
+  64:     { count: subjects },
+  65:   ] = await Promise.all([
+  66:     admin.from('academic_sessions').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
+  67:     admin.from('groups').select('id').eq('instructor_id', ref.userId),
+  68:     admin.from('subjects').select('id', { count: 'exact', head: true }).eq('instructor_id', ref.userId),
+  69:   ])
+  70: 
+  71:   const groupIds = (teacherGroups ?? []).map(g => g.id)
+  72: 
+  73:   const { count: students } = groupIds.length > 0
+  74:     ? await admin.from('learners').select('id', { count: 'exact', head: true }).in('group_id', groupIds)
+  75:     : { count: 0 }
+  76: 
+  77:   return {
+  78:     students: students ?? 0,
+  79:     teachers: 1, // Solo teacher counts as their own teacher
+  80:     admins: 1, // Solo teacher counts as their own admin
+  81:     academicSessions: academicSessions ?? 0,
+  82:     classes: groupIds.length,
+  83:     subjects: subjects ?? 0,
+  84:   }
+  85: }
+  86: 
+  87: function checkLimit(current: number, max: number | 'unlimited'): boolean {
+  88:   if (max === 'unlimited') return true
+  89:   return current < max
+  90: }
+  91: 
+  92: export interface GateResult {
+  93:   allowed: boolean
+  94:   reason?: string
+  95: }
+  96: 
+  97: export async function canAddStudent(
+  98:   plan: string,
+  99:   orgType: string | null,
+ 100:   ref: AccountRef
+ 101: ): Promise<GateResult> {
+ 102:   // Tertiary: max_students is a pricing-tier boundary, not an admission
+ 103:   // ceiling. No existing function treats it as a hard cap, so this must
+ 104:   // not either. Always allowed â€” billing separately reflects true headcount.
+ 105:   if (orgType === 'university') {
+ 106:     return { allowed: true }
+ 107:   }
+ 108: 
+ 109:   // â”€â”€ UNCHANGED existing school logic â”€â”€
+ 110:   const config = getPlanConfig(plan)
+ 111:   const usage = await getUsageCounts(ref)
+ 112: 
+ 113:   const maxStudents = (plan === 'free' && ref.type === 'solo') ? 10 : config.limits.maxStudents
+ 114: 
+ 115:   const allowed = checkLimit(usage.students, maxStudents)
+ 116:   return allowed
+ 117:     ? { allowed: true }
+ 118:     : { allowed: false, reason: `Student limit reached (${maxStudents} max on ${config.label} plan). Upgrade to add more students.` }
+ 119: }
+ 120: 
+ 121: export async function canAddTeacher(plan: string, ref: AccountRef): Promise<GateResult> {
+ 122:   const config = getPlanConfig(plan)
+ 123:   if (!config.features.teacherManagement) {
+ 124:     return { allowed: false, reason: `Teacher management is not available on the ${config.label} plan.` }
+ 125:   }
+ 126:   const usage = await getUsageCounts(ref)
+ 127:   const allowed = checkLimit(usage.teachers, config.limits.maxTeachers)
+ 128:   return allowed
+ 129:     ? { allowed: true }
+ 130:     : { allowed: false, reason: `Teacher limit reached (${config.limits.maxTeachers} max on ${config.label} plan).` }
+ 131: }
+ 132: 
+ 133: export async function canAddAdmin(plan: string, ref: AccountRef): Promise<GateResult> {
+ 134:   const config = getPlanConfig(plan)
+ 135:   const usage = await getUsageCounts(ref)
+ 136:   const allowed = checkLimit(usage.admins, config.limits.maxAdmins)
+ 137:   return allowed
+ 138:     ? { allowed: true }
+ 139:     : { allowed: false, reason: `Administrator limit reached (${config.limits.maxAdmins} max on ${config.label} plan).` }
+ 140: }
+ 141: 
+ 142: export async function canCreateAcademicSession(plan: string, ref: AccountRef): Promise<GateResult> {
+ 143:   const config = getPlanConfig(plan)
+ 144:   const usage = await getUsageCounts(ref)
+ 145:   const allowed = checkLimit(usage.academicSessions, config.limits.maxAcademicSessions)
+ 146:   return allowed
+ 147:     ? { allowed: true }
+ 148:     : { allowed: false, reason: `Academic session limit reached on the ${config.label} plan. Upgrade for unlimited sessions.` }
+ 149: }
+ 150: 
+ 151: export async function canCreateClass(plan: string, ref: AccountRef): Promise<GateResult> {
+ 152:   const config = getPlanConfig(plan)
+ 153:   const usage = await getUsageCounts(ref)
+ 154:   const allowed = checkLimit(usage.classes, config.limits.maxClasses)
+ 155:   return allowed
+ 156:     ? { allowed: true }
+ 157:     : { allowed: false, reason: `Class limit reached on the ${config.label} plan. Upgrade for unlimited classes.` }
+ 158: }
+ 159: 
+ 160: // âœ… NEW: Subject creation gate
+ 161: export async function canCreateSubject(plan: string, ref: AccountRef): Promise<GateResult> {
+ 162:   const config = getPlanConfig(plan)
+ 163:   const usage = await getUsageCounts(ref)
+ 164:   const allowed = checkLimit(usage.subjects, config.limits.maxSubjects)
+ 165:   return allowed
+ 166:     ? { allowed: true }
+ 167:     : { allowed: false, reason: `Subject limit reached (${config.limits.maxSubjects} max on ${config.label} plan). Upgrade for unlimited subjects.` }
+ 168: }
+ 169: 
+ 170: // Simple boolean feature check â€” for things like broadsheet
+ 171: // generation, portals, AI remarks, etc.
+ 172: export function hasFeature<K extends keyof PlanConfig['features']>(
+ 173:   plan: string,
+ 174:   feature: K
+ 175: ): boolean {
+ 176:   const config = getPlanConfig(plan)
+ 177:   const value = config.features[feature]
+ 178:   return typeof value === 'boolean' ? value : true // non-boolean features (tiered strings) are "available" at some level
+ 179: }
+ 180: 
+ 181: export function getApprovalWorkflow(plan: string) {
+ 182:   return getPlanConfig(plan).features.resultApprovalWorkflow
+ 183: }
+ 184: 
+ 185: export function getAuditLogLevel(plan: string) {
+ 186:   return getPlanConfig(plan).features.auditLogs
+ 187: }
+ 188: 
+ 189: export function getSupportLevel(plan: string) {
+ 190:   return getPlanConfig(plan).features.prioritySupport
+ 191: }
+
+######## src\lib\supabase\admin.ts ########
+   1: import { createClient } from '@supabase/supabase-js'
+   2: 
+   3: // SERVER-ONLY. Never import this in a client component or expose SUPABASE_SERVICE_ROLE_KEY
+   4: // to the browser. Used only for admin operations: creating parent auth identities and
+   5: // generating sign-in links.
+   6: export function createAdminClient() {
+   7:   return createClient(
+   8:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+   9:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  10:     { auth: { autoRefreshToken: false, persistSession: false } }
+  11:   )
+  12: }
+  13: 
+  14: export function generateAccessCode(): string {
+  15:   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no O/0/I/1 ambiguity
+  16:   let code = ''
+  17:   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  18:   return code
+  19: }
+
+######## src\components\settings\InstitutionSettings.tsx ########
+   1: 'use client'
+   2: 
+   3: import { useState, useEffect } from 'react'
+   4: import { useRouter } from 'next/navigation'
+   5: import Image from 'next/image'
+   6: import { createClient } from '@/lib/supabase/client'
+   7: import toast from 'react-hot-toast'
+   8: import { Building, Upload, X, Camera, Save, FileText, Users as UsersIcon, Palette, PenTool } from 'lucide-react'
+   9: 
+  10: // âœ… UPDATED: Added show_signatory_comment to the interface
+  11: interface Organization {
+  12:   id: string
+  13:   name: string
+  14:   school_name: string | null
+  15:   motto: string | null
+  16:   logo_url: string | null
+  17:   principal_name: string | null
+  18:   principal_title: string | null
+  19:   principal_signature_url: string | null
+  20:   teacher_signature_url: string | null
+  21:   address: string | null
+  22:   phone: string | null
+  23:   email: string | null
+  24:   website: string | null
+  25:   established_year: number | null
+  26:   colors: { primary: string; secondary: string } | null
+  27:   report_card_settings: {
+  28:     show_attendance: boolean
+  29:     show_remarks: boolean
+  30:     show_class_teacher_comment: boolean
+  31:     show_principal_signature: boolean
+  32:     show_school_seal: boolean
+  33:     grade_system: string
+  34:     pass_mark: number
+  35:     show_signatory_comment: boolean
+  36:   } | null
+  37: }
+  38: 
+  39: interface Props {
+  40:   organization: Organization
+  41:   userId: string
+  42: }
+  43: 
+  44: const KNOWN_TITLES = ['Principal', 'Head Teacher', 'Headmaster', 'Headmistress', 'Proprietor', 'Proprietress']
+  45: 
+  46: export default function InstitutionSettings({ organization, userId }: Props) {
+  47:   const router = useRouter()
+  48:   const supabase = createClient()
+  49:   const [loading, setLoading] = useState(false)
+  50:   const [uploading, setUploading] = useState(false)
+  51: 
+  52:   // Form state
+  53:   const [formData, setFormData] = useState({
+  54:     school_name: organization?.school_name || organization?.name || '',
+  55:     motto: organization?.motto || '',
+  56:     address: organization?.address || '',
+  57:     phone: organization?.phone || '',
+  58:     email: organization?.email || '',
+  59:     website: organization?.website || '',
+  60:     established_year: organization?.established_year || '',
+  61:     principal_name: organization?.principal_name || '',
+  62:     principal_title: organization?.principal_title || 'Principal',
+  63:     primary_color: organization?.colors?.primary || '#1a56db',
+  64:     secondary_color: organization?.colors?.secondary || '#0f766e',
+  65:     show_attendance: organization?.report_card_settings?.show_attendance ?? true,
+  66:     show_remarks: organization?.report_card_settings?.show_remarks ?? true,
+  67:     show_class_teacher_comment: organization?.report_card_settings?.show_class_teacher_comment ?? true,
+  68:     show_principal_signature: organization?.report_card_settings?.show_principal_signature ?? true,
+  69:     show_school_seal: organization?.report_card_settings?.show_school_seal ?? true,
+  70:     grade_system: organization?.report_card_settings?.grade_system || 'percentage',
+  71:     pass_mark: organization?.report_card_settings?.pass_mark || 40,
+  72:     show_signatory_comment: organization?.report_card_settings?.show_signatory_comment ?? true,
+  73:   })
+  74: 
+  75:   // âœ… Custom title state
+  76:   const [titleSelection, setTitleSelection] = useState(
+  77:     organization?.principal_title && !KNOWN_TITLES.includes(organization.principal_title)
+  78:       ? 'Other'
+  79:       : (organization?.principal_title || 'Principal')
+  80:   )
+  81:   const [customTitle, setCustomTitle] = useState(
+  82:     organization?.principal_title && !KNOWN_TITLES.includes(organization.principal_title)
+  83:       ? organization.principal_title
+  84:       : ''
+  85:   )
+  86: 
+  87:   const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logo_url || null)
+  88:   const [principalSigPreview, setPrincipalSigPreview] = useState<string | null>(organization?.principal_signature_url || null)
+  89:   const [teacherSigPreview, setTeacherSigPreview] = useState<string | null>(organization?.teacher_signature_url || null)
+  90: 
+  91:   // âœ… NEW: Signed URL state for signatures
+  92:   const [principalSigSignedUrl, setPrincipalSigSignedUrl] = useState<string | null>(null)
+  93:   const [teacherSigSignedUrl, setTeacherSigSignedUrl] = useState<string | null>(null)
+  94: 
+  95:   // âœ… NEW: Resolve signed URLs whenever the stored path changes
+  96:   useEffect(() => {
+  97:     async function resolveSignedUrls() {
+  98:       if (organization?.principal_signature_url) {
+  99:         const { data } = await supabase.storage
+ 100:           .from('signatures')
+ 101:           .createSignedUrl(organization.principal_signature_url, 300)
+ 102:         setPrincipalSigSignedUrl(data?.signedUrl ?? null)
+ 103:       }
+ 104:       if (organization?.teacher_signature_url) {
+ 105:         const { data } = await supabase.storage
+ 106:           .from('signatures')
+ 107:           .createSignedUrl(organization.teacher_signature_url, 300)
+ 108:         setTeacherSigSignedUrl(data?.signedUrl ?? null)
+ 109:       }
+ 110:     }
+ 111:     resolveSignedUrls()
+ 112:   }, [organization?.principal_signature_url, organization?.teacher_signature_url])
+ 113: 
+ 114:   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+ 115:     const { name, value, type } = e.target
+ 116:     setFormData(prev => ({
+ 117:       ...prev,
+ 118:       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+ 119:     }))
+ 120:   }
+ 121: 
+ 122:   // âœ… Custom title handlers
+ 123:   function handleTitleSelectionChange(e: React.ChangeEvent<HTMLSelectElement>) {
+ 124:     const value = e.target.value
+ 125:     setTitleSelection(value)
+ 126:     if (value === 'Other') {
+ 127:       setFormData(prev => ({ ...prev, principal_title: customTitle }))
+ 128:     } else {
+ 129:       setFormData(prev => ({ ...prev, principal_title: value }))
+ 130:     }
+ 131:   }
+ 132: 
+ 133:   function handleCustomTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
+ 134:     const value = e.target.value
+ 135:     setCustomTitle(value)
+ 136:     setFormData(prev => ({ ...prev, principal_title: value }))
+ 137:   }
+ 138: 
+ 139:   // âœ… NEW: Remove image handler
+ 140:   const handleRemoveImage = async (type: 'logo' | 'principal_sig' | 'teacher_sig') => {
+ 141:     const confirmed = window.confirm('Remove this image? This cannot be undone.')
+ 142:     if (!confirmed) return
+ 143: 
+ 144:     const columnMap = {
+ 145:       logo: 'logo_url',
+ 146:       principal_sig: 'principal_signature_url',
+ 147:       teacher_sig: 'teacher_signature_url',
+ 148:     }
+ 149:     const column = columnMap[type]
+ 150: 
+ 151:     const { error } = await supabase
+ 152:       .from('organizations')
+ 153:       .update({ [column]: null })
+ 154:       .eq('id', organization.id)
+ 155: 
+ 156:     if (error) {
+ 157:       toast.error('Failed to remove image')
+ 158:       return
+ 159:     }
+ 160: 
+ 161:     if (type === 'logo') setLogoPreview(null)
+ 162:     if (type === 'principal_sig') {
+ 163:       setPrincipalSigPreview(null)
+ 164:       setPrincipalSigSignedUrl(null)
+ 165:     }
+ 166:     if (type === 'teacher_sig') {
+ 167:       setTeacherSigPreview(null)
+ 168:       setTeacherSigSignedUrl(null)
+ 169:     }
+ 170: 
+ 171:     toast.success('Image removed')
+ 172:     router.refresh()
+ 173:   }
+ 174: 
+ 175:   const handleFileUpload = async (file: File, type: 'logo' | 'principal_sig' | 'teacher_sig') => {
+ 176:     if (!file) return
+ 177: 
+ 178:     setUploading(true)
+ 179:     const loadingToast = toast.loading(`Uploading ${type === 'logo' ? 'logo' : 'signature'}...`)
+ 180: 
+ 181:     try {
+ 182:       const fileExt = file.name.split('.').pop()
+ 183:       const fileName = `${type}_${Date.now()}.${fileExt}`
+ 184:       const filePath = `${organization.id}/${fileName}`
+ 185: 
+ 186:       console.log('Uploading to path:', filePath)
+ 187: 
+ 188:       const isSignature = type === 'principal_sig' || type === 'teacher_sig'
+ 189: 
+ 190:       // Upload to Supabase Storage
+ 191:       const { data: uploadData, error: uploadError } = await supabase.storage
+ 192:         .from(isSignature ? 'signatures' : 'institution-assets')
+ 193:         .upload(filePath, file, {
+ 194:           cacheControl: '3600',
+ 195:           upsert: true
+ 196:         })
+ 197: 
+ 198:       if (uploadError) {
+ 199:         console.error('Upload error:', uploadError)
+ 200:         toast.dismiss(loadingToast)
+ 201:         toast.error('Upload failed: ' + uploadError.message)
+ 202:         return
+ 203:       }
+ 204: 
+ 205:       console.log('Upload successful:', uploadData)
+ 206: 
+ 207:       // For logos: use public URL
+ 208:       // For signatures: store the path (signed URLs generated at render time)
+ 209:       let storeValue: string
+ 210:       let previewUrl: string
+ 211: 
+ 212:       if (isSignature) {
+ 213:         storeValue = filePath
+ 214:         // Generate an actual working signed URL for the immediate preview,
+ 215:         // instead of a public URL against a private bucket
+ 216:         const { data: signedData } = await supabase.storage.from('signatures').createSignedUrl(filePath, 300)
+ 217:         previewUrl = signedData?.signedUrl ?? ''
+ 218:       } else {
+ 219:         const { data: { publicUrl } } = supabase.storage
+ 220:           .from('institution-assets')
+ 221:           .getPublicUrl(filePath)
+ 222:         storeValue = publicUrl
+ 223:         previewUrl = publicUrl
+ 224:       }
+ 225: 
+ 226:       console.log('Store value:', storeValue)
+ 227: 
+ 228:       // Update organization
+ 229:       const updateData: any = {}
+ 230:       if (type === 'logo') {
+ 231:         updateData.logo_url = storeValue
+ 232:         setLogoPreview(previewUrl)
+ 233:       } else if (type === 'principal_sig') {
+ 234:         updateData.principal_signature_url = storeValue
+ 235:         setPrincipalSigPreview(previewUrl)
+ 236:         setPrincipalSigSignedUrl(previewUrl)
+ 237:       } else if (type === 'teacher_sig') {
+ 238:         updateData.teacher_signature_url = storeValue
+ 239:         setTeacherSigPreview(previewUrl)
+ 240:         setTeacherSigSignedUrl(previewUrl)
+ 241:       }
+ 242: 
+ 243:       const { error: updateError } = await supabase
+ 244:         .from('organizations')
+ 245:         .update(updateData)
+ 246:         .eq('id', organization.id)
+ 247: 
+ 248:       if (updateError) {
+ 249:         console.error('Update error:', updateError)
+ 250:         toast.dismiss(loadingToast)
+ 251:         toast.error('Failed to save: ' + updateError.message)
+ 252:         return
+ 253:       }
+ 254: 
+ 255:       toast.dismiss(loadingToast)
+ 256:       toast.success(`${type === 'logo' ? 'Logo' : 'Signature'} uploaded successfully!`)
+ 257:       router.refresh()
+ 258:     } catch (error) {
+ 259:       console.error('Upload error:', error)
+ 260:       toast.dismiss(loadingToast)
+ 261:       toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'))
+ 262:     } finally {
+ 263:       setUploading(false)
+ 264:     }
+ 265:   }
+ 266: 
+ 267:   const handleSubmit = async (e: React.FormEvent) => {
+ 268:     e.preventDefault()
+ 269:     setLoading(true)
+ 270: 
+ 271:     try {
+ 272:       const updateData = {
+ 273:         school_name: formData.school_name,
+ 274:         motto: formData.motto,
+ 275:         address: formData.address,
+ 276:         phone: formData.phone,
+ 277:         email: formData.email,
+ 278:         website: formData.website,
+ 279:         established_year: formData.established_year ? parseInt(formData.established_year as string) : null,
+ 280:         principal_name: formData.principal_name,
+ 281:         principal_title: formData.principal_title,
+ 282:         colors: {
+ 283:           primary: formData.primary_color,
+ 284:           secondary: formData.secondary_color
+ 285:         },
+ 286:         report_card_settings: {
+ 287:           show_attendance: formData.show_attendance,
+ 288:           show_remarks: formData.show_remarks,
+ 289:           show_class_teacher_comment: formData.show_class_teacher_comment,
+ 290:           show_signatory_comment: formData.show_signatory_comment,
+ 291:           show_principal_signature: formData.show_principal_signature,
+ 292:           show_school_seal: formData.show_school_seal,
+ 293:           grade_system: formData.grade_system,
+ 294:           pass_mark: parseInt(formData.pass_mark as unknown as string) || 40
+ 295:         }
+ 296:       }
+ 297: 
+ 298:       const { error } = await supabase
+ 299:         .from('organizations')
+ 300:         .update(updateData)
+ 301:         .eq('id', organization.id)
+ 302: 
+ 303:       if (error) throw error
+ 304: 
+ 305:       toast.success('Settings saved successfully!')
+ 306:       router.refresh()
+ 307:     } catch (error) {
+ 308:       console.error('Save error:', error)
+ 309:       toast.error('Failed to save settings')
+ 310:     } finally {
+ 311:       setLoading(false)
+ 312:     }
+ 313:   }
+ 314: 
+ 315:   return (
+ 316:     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+ 317:       {/* Basic Information */}
+ 318:       <div className="card p-6">
+ 319:         <h2 className="font-semibold text-sm text-ink mb-4 flex items-center gap-2">
+ 320:           <Building size={16} className="text-brand-500" />
+ 321:           School Information
+ 322:         </h2>
+ 323:         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ 324:           <div className="md:col-span-2">
+ 325:             <label className="block text-xs font-medium text-ink mb-1">School Name *</label>
+ 326:             <input
+ 327:               type="text"
+ 328:               name="school_name"
+ 329:               value={formData.school_name}
+ 330:               onChange={handleChange}
+ 331:               className="input"
+ 332:               placeholder="e.g. Sunshine International School"
+ 333:               required
+ 334:             />
+ 335:           </div>
+ 336:           <div className="md:col-span-2">
+ 337:             <label className="block text-xs font-medium text-ink mb-1">Motto</label>
+ 338:             <input
+ 339:               type="text"
+ 340:               name="motto"
+ 341:               value={formData.motto}
+ 342:               onChange={handleChange}
+ 343:               className="input"
+ 344:               placeholder="e.g. Excellence Through Knowledge"
+ 345:             />
+ 346:           </div>
+ 347:           <div>
+ 348:             <label className="block text-xs font-medium text-ink mb-1">Address</label>
+ 349:             <input
+ 350:               type="text"
+ 351:               name="address"
+ 352:               value={formData.address}
+ 353:               onChange={handleChange}
+ 354:               className="input"
+ 355:               placeholder="e.g. 123 Main Street, Lagos"
+ 356:             />
+ 357:           </div>
+ 358:           <div>
+ 359:             <label className="block text-xs font-medium text-ink mb-1">Established Year</label>
+ 360:             <input
+ 361:               type="number"
+ 362:               name="established_year"
+ 363:               value={formData.established_year}
+ 364:               onChange={handleChange}
+ 365:               className="input"
+ 366:               placeholder="e.g. 2010"
+ 367:               min={1900}
+ 368:               max={new Date().getFullYear()}
+ 369:             />
+ 370:           </div>
+ 371:           <div>
+ 372:             <label className="block text-xs font-medium text-ink mb-1">Phone</label>
+ 373:             <input
+ 374:               type="tel"
+ 375:               name="phone"
+ 376:               value={formData.phone}
+ 377:               onChange={handleChange}
+ 378:               className="input"
+ 379:               placeholder="e.g. 08012345678"
+ 380:             />
+ 381:           </div>
+ 382:           <div>
+ 383:             <label className="block text-xs font-medium text-ink mb-1">Email</label>
+ 384:             <input
+ 385:               type="email"
+ 386:               name="email"
+ 387:               value={formData.email}
+ 388:               onChange={handleChange}
+ 389:               className="input"
+ 390:               placeholder="e.g. school@email.com"
+ 391:             />
+ 392:           </div>
+ 393:           <div className="md:col-span-2">
+ 394:             <label className="block text-xs font-medium text-ink mb-1">Website</label>
+ 395:             <input
+ 396:               type="url"
+ 397:               name="website"
+ 398:               value={formData.website}
+ 399:               onChange={handleChange}
+ 400:               className="input"
+ 401:               placeholder="e.g. https://school.com"
+ 402:             />
+ 403:           </div>
+ 404:         </div>
+ 405:       </div>
+ 406: 
+ 407:       {/* Branding & Colors */}
+ 408:       <div className="card p-6">
+ 409:         <h2 className="font-semibold text-sm text-ink mb-4 flex items-center gap-2">
+ 410:           <Palette size={16} className="text-brand-500" />
+ 411:           Branding & Colors
+ 412:         </h2>
+ 413:         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ 414:           <div>
+ 415:             <label className="block text-xs font-medium text-ink mb-1">Primary Color</label>
+ 416:             <div className="flex gap-2 items-center">
+ 417:               <input
+ 418:                 type="color"
+ 419:                 name="primary_color"
+ 420:                 value={formData.primary_color}
+ 421:                 onChange={handleChange}
+ 422:                 className="w-12 h-12 rounded border border-surface-200 cursor-pointer"
+ 423:               />
+ 424:               <input
+ 425:                 type="text"
+ 426:                 name="primary_color"
+ 427:                 value={formData.primary_color}
+ 428:                 onChange={handleChange}
+ 429:                 className="input flex-1 font-mono"
+ 430:               />
+ 431:             </div>
+ 432:           </div>
+ 433:           <div>
+ 434:             <label className="block text-xs font-medium text-ink mb-1">Secondary Color</label>
+ 435:             <div className="flex gap-2 items-center">
+ 436:               <input
+ 437:                 type="color"
+ 438:                 name="secondary_color"
+ 439:                 value={formData.secondary_color}
+ 440:                 onChange={handleChange}
+ 441:                 className="w-12 h-12 rounded border border-surface-200 cursor-pointer"
+ 442:               />
+ 443:               <input
+ 444:                 type="text"
+ 445:                 name="secondary_color"
+ 446:                 value={formData.secondary_color}
+ 447:                 onChange={handleChange}
+ 448:                 className="input flex-1 font-mono"
+ 449:               />
+ 450:             </div>
+ 451:           </div>
+ 452:         </div>
+ 453:       </div>
+ 454: 
+ 455:       {/* Logo Upload */}
+ 456:       <div className="card p-6">
+ 457:         <h2 className="font-semibold text-sm text-ink mb-4 flex items-center gap-2">
+ 458:           <Camera size={16} className="text-brand-500" />
+ 459:           School Logo
+ 460:         </h2>
+ 461:         <div className="flex items-center gap-6">
+ 462:           <div className="w-32 h-32 rounded-lg border-2 border-dashed border-surface-300 flex items-center justify-center overflow-hidden bg-surface-50">
+ 463:             {logoPreview ? (
+ 464:               <img
+ 465:                 src={logoPreview}
+ 466:                 alt="School Logo"
+ 467:                 className="w-full h-full object-contain"
+ 468:               />
+ 469:             ) : (
+ 470:               <Building size={32} className="text-ink-faint" />
+ 471:             )}
+ 472:           </div>
+ 473:           <div>
+ 474:             <div className="flex gap-2">
+ 475:               <label className="btn-secondary btn-sm btn cursor-pointer">
+ 476:                 <Upload size={13} />
+ 477:                 Upload Logo
+ 478:                 <input
+ 479:                   type="file"
+ 480:                   accept="image/*"
+ 481:                   className="hidden"
+ 482:                   onChange={(e) => {
+ 483:                     const file = e.target.files?.[0]
+ 484:                     if (file) {
+ 485:                       const previewUrl = URL.createObjectURL(file)
+ 486:                       setLogoPreview(previewUrl)
+ 487:                       handleFileUpload(file, 'logo')
+ 488:                     }
+ 489:                   }}
+ 490:                   disabled={uploading}
+ 491:                 />
+ 492:               </label>
+ 493:               {logoPreview && (
+ 494:                 <button
+ 495:                   type="button"
+ 496:                   onClick={() => handleRemoveImage('logo')}
+ 497:                   className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+ 498:                 >
+ 499:                   <X size={13} /> Remove
+ 500:                 </button>
+ 501:               )}
+ 502:             </div>
+ 503:             <p className="text-xs text-ink-muted mt-2">
+ 504:               Recommended: Square image, PNG or JPG, max 2MB
+ 505:             </p>
+ 506:           </div>
+ 507:         </div>
+ 508:       </div>
+ 509: 
+ 510:       {/* Signatures */}
+ 511:       <div className="card p-6">
+ 512:         <h2 className="font-semibold text-sm text-ink mb-4 flex items-center gap-2">
+ 513:           <PenTool size={16} className="text-brand-500" />
+ 514:           Signatures
+ 515:         </h2>
+ 516:         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+ 517:           {/* Principal Signature */}
+ 518:           <div>
+ 519:             <label className="block text-xs font-medium text-ink mb-2">Principal's Signature</label>
+ 520:             <div className="flex items-center gap-4">
+ 521:               <div className="w-24 h-16 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-white">
+ 522:                 {principalSigPreview?.startsWith('blob:') || principalSigPreview?.startsWith('http') ? (
+ 523:                   <img
+ 524:                     src={principalSigPreview}
+ 525:                     alt="Principal Signature"
+ 526:                     className="w-full h-full object-contain"
+ 527:                   />
+ 528:                 ) : principalSigSignedUrl ? (
+ 529:                   <img
+ 530:                     src={principalSigSignedUrl}
+ 531:                     alt="Principal Signature"
+ 532:                     className="w-full h-full object-contain"
+ 533:                   />
+ 534:                 ) : (
+ 535:                   <span className="text-xs text-ink-faint">No signature</span>
+ 536:                 )}
+ 537:               </div>
+ 538:               <div>
+ 539:                 <div className="flex gap-2">
+ 540:                   <label className="btn-secondary btn-sm btn cursor-pointer">
+ 541:                     <Upload size={13} />
+ 542:                     Upload
+ 543:                     <input
+ 544:                       type="file"
+ 545:                       accept="image/*"
+ 546:                       className="hidden"
+ 547:                       onChange={(e) => {
+ 548:                         const file = e.target.files?.[0]
+ 549:                         if (file) {
+ 550:                           const previewUrl = URL.createObjectURL(file)
+ 551:                           setPrincipalSigPreview(previewUrl)
+ 552:                           handleFileUpload(file, 'principal_sig')
+ 553:                         }
+ 554:                       }}
+ 555:                       disabled={uploading}
+ 556:                     />
+ 557:                   </label>
+ 558:                   {principalSigPreview && (
+ 559:                     <button
+ 560:                       type="button"
+ 561:                       onClick={() => handleRemoveImage('principal_sig')}
+ 562:                       className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+ 563:                     >
+ 564:                       <X size={13} /> Remove
+ 565:                     </button>
+ 566:                   )}
+ 567:                 </div>
+ 568:                 <p className="text-xs text-ink-muted mt-1">
+ 569:                   Upload principal's signature image
+ 570:                 </p>
+ 571:               </div>
+ 572:             </div>
+ 573:           </div>
+ 574: 
+ 575:           {/* Teacher Signature */}
+ 576:           <div>
+ 577:             <label className="block text-xs font-medium text-ink mb-2">Teacher's Signature (Default)</label>
+ 578:             <div className="flex items-center gap-4">
+ 579:               <div className="w-24 h-16 rounded border border-surface-200 flex items-center justify-center overflow-hidden bg-white">
+ 580:                 {teacherSigPreview?.startsWith('blob:') || teacherSigPreview?.startsWith('http') ? (
+ 581:                   <img
+ 582:                     src={teacherSigPreview}
+ 583:                     alt="Teacher Signature"
+ 584:                     className="w-full h-full object-contain"
+ 585:                   />
+ 586:                 ) : teacherSigSignedUrl ? (
+ 587:                   <img
+ 588:                     src={teacherSigSignedUrl}
+ 589:                     alt="Teacher Signature"
+ 590:                     className="w-full h-full object-contain"
+ 591:                   />
+ 592:                 ) : (
+ 593:                   <span className="text-xs text-ink-faint">No signature</span>
+ 594:                 )}
+ 595:               </div>
+ 596:               <div>
+ 597:                 <div className="flex gap-2">
+ 598:                   <label className="btn-secondary btn-sm btn cursor-pointer">
+ 599:                     <Upload size={13} />
+ 600:                     Upload
+ 601:                     <input
+ 602:                       type="file"
+ 603:                       accept="image/*"
+ 604:                       className="hidden"
+ 605:                       onChange={(e) => {
+ 606:                         const file = e.target.files?.[0]
+ 607:                         if (file) {
+ 608:                           const previewUrl = URL.createObjectURL(file)
+ 609:                           setTeacherSigPreview(previewUrl)
+ 610:                           handleFileUpload(file, 'teacher_sig')
+ 611:                         }
+ 612:                       }}
+ 613:                       disabled={uploading}
+ 614:                     />
+ 615:                   </label>
+ 616:                   {teacherSigPreview && (
+ 617:                     <button
+ 618:                       type="button"
+ 619:                       onClick={() => handleRemoveImage('teacher_sig')}
+ 620:                       className="btn-secondary btn-sm btn text-red-600 hover:bg-red-50"
+ 621:                     >
+ 622:                       <X size={13} /> Remove
+ 623:                     </button>
+ 624:                   )}
+ 625:                 </div>
+ 626:                 <p className="text-xs text-ink-muted mt-1">
+ 627:                   Default signature for all teachers
+ 628:                 </p>
+ 629:               </div>
+ 630:             </div>
+ 631:           </div>
+ 632:         </div>
+ 633: 
+ 634:         {/* Principal's Name + Title */}
+ 635:         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+ 636:           <div>
+ 637:             <label className="block text-xs font-medium text-ink mb-1">Principal's Name (for reports)</label>
+ 638:             <input
+ 639:               type="text"
+ 640:               name="principal_name"
+ 641:               value={formData.principal_name}
+ 642:               onChange={handleChange}
+ 643:               className="input"
+ 644:               placeholder="e.g. Dr. John Doe"
+ 645:             />
+ 646:           </div>
+ 647:           <div>
+ 648:             <label className="block text-xs font-medium text-ink mb-1">Title</label>
+ 649:             <select
+ 650:               name="principal_title_selection"
+ 651:               value={titleSelection}
+ 652:               onChange={handleTitleSelectionChange}
+ 653:               className="input"
+ 654:             >
+ 655:               <option value="Principal">Principal</option>
+ 656:               <option value="Head Teacher">Head Teacher</option>
+ 657:               <option value="Headmaster">Headmaster</option>
+ 658:               <option value="Headmistress">Headmistress</option>
+ 659:               <option value="Proprietor">Proprietor</option>
+ 660:               <option value="Proprietress">Proprietress</option>
+ 661:               <option value="Other">Other (specify)</option>
+ 662:             </select>
+ 663:             {titleSelection === 'Other' && (
+ 664:               <input
+ 665:                 type="text"
+ 666:                 value={customTitle}
+ 667:                 onChange={handleCustomTitleChange}
+ 668:                 className="input mt-2"
+ 669:                 placeholder="e.g. Rector, Director, Chief Executive"
+ 670:                 required
+ 671:               />
+ 672:             )}
+ 673:           </div>
+ 674:         </div>
+ 675:       </div>
+ 676: 
+ 677:       {/* Report Card Settings */}
+ 678:       <div className="card p-6">
+ 679:         <h2 className="font-semibold text-sm text-ink mb-4 flex items-center gap-2">
+ 680:           <FileText size={16} className="text-brand-500" />
+ 681:           Report Card Settings
+ 682:         </h2>
+ 683:         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ 684:           <div>
+ 685:             <label className="block text-xs font-medium text-ink mb-1">Grade System</label>
+ 686:             <select
+ 687:               name="grade_system"
+ 688:               value={formData.grade_system}
+ 689:               onChange={handleChange}
+ 690:               className="input"
+ 691:             >
+ 692:               <option value="percentage">Percentage (0-100)</option>
+ 693:               <option value="letter">Letter Grades (A-F)</option>
+ 694:               <option value="gpa">GPA (0.0-5.0)</option>
+ 695:             </select>
+ 696:           </div>
+ 697:           <div>
+ 698:             <label className="block text-xs font-medium text-ink mb-1">Pass Mark</label>
+ 699:             <input
+ 700:               type="number"
+ 701:               name="pass_mark"
+ 702:               value={formData.pass_mark}
+ 703:               onChange={handleChange}
+ 704:               className="input"
+ 705:               min={0}
+ 706:               max={100}
+ 707:             />
+ 708:           </div>
+ 709:         </div>
+ 710: 
+ 711:         <div className="mt-4">
+ 712:           <h3 className="text-xs font-medium text-ink mb-2">Display Options</h3>
+ 713:           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+ 714:             <label className="flex items-center gap-2 cursor-pointer">
+ 715:               <input
+ 716:                 type="checkbox"
+ 717:                 name="show_attendance"
+ 718:                 checked={formData.show_attendance}
+ 719:                 onChange={handleChange}
+ 720:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 721:               />
+ 722:               <span className="text-sm text-ink">Show Attendance</span>
+ 723:             </label>
+ 724:             <label className="flex items-center gap-2 cursor-pointer">
+ 725:               <input
+ 726:                 type="checkbox"
+ 727:                 name="show_remarks"
+ 728:                 checked={formData.show_remarks}
+ 729:                 onChange={handleChange}
+ 730:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 731:               />
+ 732:               <span className="text-sm text-ink">Show Teacher Remarks</span>
+ 733:             </label>
+ 734:             <label className="flex items-center gap-2 cursor-pointer">
+ 735:               <input
+ 736:                 type="checkbox"
+ 737:                 name="show_class_teacher_comment"
+ 738:                 checked={formData.show_class_teacher_comment}
+ 739:                 onChange={handleChange}
+ 740:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 741:               />
+ 742:               <span className="text-sm text-ink">Show Class Teacher Comment</span>
+ 743:             </label>
+ 744:             <label className="flex items-center gap-2 cursor-pointer">
+ 745:               <input
+ 746:                 type="checkbox"
+ 747:                 name="show_signatory_comment"
+ 748:                 checked={formData.show_signatory_comment}
+ 749:                 onChange={handleChange}
+ 750:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 751:               />
+ 752:               <span className="text-sm text-ink">Show {formData.principal_title || 'Principal'}'s Comment</span>
+ 753:             </label>
+ 754:             <label className="flex items-center gap-2 cursor-pointer">
+ 755:               <input
+ 756:                 type="checkbox"
+ 757:                 name="show_principal_signature"
+ 758:                 checked={formData.show_principal_signature}
+ 759:                 onChange={handleChange}
+ 760:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 761:               />
+ 762:               <span className="text-sm text-ink">Show Principal Signature</span>
+ 763:             </label>
+ 764:             <label className="flex items-center gap-2 cursor-pointer">
+ 765:               <input
+ 766:                 type="checkbox"
+ 767:                 name="show_school_seal"
+ 768:                 checked={formData.show_school_seal}
+ 769:                 onChange={handleChange}
+ 770:                 className="w-4 h-4 rounded border-surface-300 text-brand-500"
+ 771:               />
+ 772:               <span className="text-sm text-ink">Show School Seal</span>
+ 773:             </label>
+ 774:           </div>
+ 775:         </div>
+ 776:       </div>
+ 777: 
+ 778:       <div className="flex gap-3">
+ 779:         <button
+ 780:           type="submit"
+ 781:           disabled={loading || uploading}
+ 782:           className="btn-primary btn flex items-center gap-2"
+ 783:         >
+ 784:           <Save size={15} />
+ 785:           {loading ? 'Saving...' : 'Save All Settings'}
+ 786:         </button>
+ 787:         {uploading && (
+ 788:           <span className="text-xs text-ink-muted flex items-center">Uploading files...</span>
+ 789:         )}
+ 790:       </div>
+ 791:     </form>
+ 792:   )
+ 793: }
+
+######## src\app\(dashboard)\students\actions.ts ########
+   1: 'use server'
+   2: 
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { revalidatePath } from 'next/cache'
+   5: import { redirect } from 'next/navigation'
+   6: import { isRedirectError } from 'next/dist/client/components/redirect-error'
+   7: import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+   8: import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+   9: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+  10: 
+  11: export async function deleteStudent(formData: FormData) {
+  12:   const supabase = await createClient()
+  13:   const { user } = await getAuthenticatedUser(supabase)
+  14:   if (!user) redirect('/login')
+  15: 
+  16:   // âœ… Subscription gate â€” expired accounts cannot delete students
+  17:   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+  18:   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+  19: 
+  20:   const id = formData.get('id') as string
+  21:   if (!id) {
+  22:     redirect('/students?error=no_id')
+  23:   }
+  24: 
+  25:   try {
+  26:     const { data: existing } = await supabase
+  27:       .from('learners').select('id, status').eq('id', id).maybeSingle()
+  28: 
+  29:     if (!existing) redirect('/students?error=not_found')
+  30:     if (existing.status === 'archived') redirect('/students?success=deleted')
+  31: 
+  32:     // Soft-delete only: scores, reports, attendance, fee accounts, and
+  33:     // parent links are never touched, so all history stays intact. This
+  34:     // replaces the previous hard delete entirely â€” nothing under this
+  35:     // learner_id is deleted anymore.
+  36:     const { error: archiveError } = await supabase
+  37:       .from('learners')
+  38:       .update({
+  39:         status: 'archived',
+  40:         is_active: false,
+  41:         status_reason: 'Removed via student list',
+  42:         status_effective_date: new Date().toISOString().split('T')[0],
+  43:         status_changed_by: user.id,
+  44:         status_changed_at: new Date().toISOString(),
+  45:       })
+  46:       .eq('id', id)
+  47: 
+  48:     if (archiveError) {
+  49:       console.error('Error archiving student:', archiveError)
+  50:       redirect('/students?error=delete_failed')
+  51:     }
+  52: 
+  53:     await supabase.from('audit_logs').insert({
+  54:       user_id: user.id,
+  55:       action: 'student_archived',
+  56:       table_name: 'learners',
+  57:       record_id: id,
+  58:       new_data: { status: 'archived' },
+  59:     })
+  60: 
+  61:     revalidatePath('/students')
+  62:     redirect('/students?success=deleted')
+  63:   } catch (error) {
+  64:     if (isRedirectError(error)) {
+  65:       throw error
+  66:     }
+  67:     console.error('Unexpected error archiving student:', error)
+  68:     redirect('/students?error=unexpected')
+  69:   }
+  70: }
+  71: 
+  72: // Full lifecycle action â€” withdraw/transfer/graduate/suspend with reason
+  73: // and effective date, per the approved student-lifecycle requirement.
+  74: // Separate from deleteStudent (which is the "remove from list" quick-action);
+  75: // this is the deliberate status-change path with full context.
+  76: export async function updateStudentStatus(formData: FormData) {
+  77:   const supabase = await createClient()
+  78:   const { user } = await getAuthenticatedUser(supabase)
+  79:   if (!user) redirect('/login')
+  80: 
+  81:   const id = formData.get('id') as string
+  82:   const status = formData.get('status') as string
+  83:   const reason = (formData.get('reason') as string)?.trim() || null
+  84:   const effectiveDate = (formData.get('effective_date') as string) || new Date().toISOString().split('T')[0]
+  85:   const destinationSchool = (formData.get('destination_school') as string)?.trim() || null
+  86: 
+  87:   const validStatuses = ['active', 'withdrawn', 'transferred', 'graduated', 'suspended']
+  88:   if (!id || !validStatuses.includes(status)) {
+  89:     redirect(`/students/${id}?error=invalid_status`)
+  90:   }
+  91: 
+  92:   const { data: existing } = await supabase
+  93:     .from('learners').select('id, status').eq('id', id).maybeSingle()
+  94:   if (!existing) redirect('/students?error=not_found')
+  95: 
+  96:   const { error } = await supabase
+  97:     .from('learners')
+  98:     .update({
+  99:       status,
+ 100:       is_active: status === 'active',
+ 101:       status_reason: reason,
+ 102:       status_effective_date: effectiveDate,
+ 103:       status_changed_by: user.id,
+ 104:       status_changed_at: new Date().toISOString(),
+ 105:       destination_school: status === 'transferred' ? destinationSchool : null,
+ 106:     })
+ 107:     .eq('id', id)
+ 108: 
+ 109:   if (error) {
+ 110:     console.error('Error updating student status:', error)
+ 111:     redirect(`/students/${id}?error=status_update_failed`)
+ 112:   }
+ 113: 
+ 114:   await supabase.from('audit_logs').insert({
+ 115:     user_id: user.id,
+ 116:     action: 'student_status_changed',
+ 117:     table_name: 'learners',
+ 118:     record_id: id,
+ 119:     new_data: { previous_status: existing.status, new_status: status, reason, effective_date: effectiveDate },
+ 120:   })
+ 121: 
+ 122:   revalidatePath('/students')
+ 123:   revalidatePath(`/students/${id}`)
+ 124:   redirect(`/students/${id}?success=status_updated`)
+ 125: }
+ 126: 
+ 127: // âœ… NEW: Create a single student
+ 128: export async function createStudent(formData: FormData) {
+ 129:   const supabase = await createClient()
+ 130:   const { user } = await getAuthenticatedUser(supabase)
+ 131:   if (!user) redirect('/login')
+ 132: 
+ 133:   // âœ… Subscription gate â€” expired accounts cannot create students
+ 134:   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+ 135:   if (!allowed) redirect(`/settings?tab=billing&error=${encodeURIComponent(message!)}`)
+ 136: 
+ 137:   // âœ… PLAN LIMIT GATE: Check maxStudents limit
+ 138:   const limitCheck = await checkPlanLimit(supabase, user.id, 'maxStudents')
+ 139:   if (!limitCheck.allowed) {
+ 140:     redirect(`/students/new?error=${encodeURIComponent(limitCheck.message!)}`)
+ 141:   }
+ 142: 
+ 143:   const { data: profile } = await supabase
+ 144:     .from('users').select('organization_id').eq('id', user.id).single()
+ 145: 
+ 146:   const groupId = formData.get('group_id') as string
+ 147:   const firstName = formData.get('first_name') as string
+ 148:   const lastName = formData.get('last_name') as string
+ 149: 
+ 150:   if (!groupId) redirect('/students/new?error=no_class')
+ 151:   if (!firstName?.trim() || !lastName?.trim()) redirect('/students/new?error=missing_name')
+ 152: 
+ 153:   const { error } = await supabase.from('learners').insert({
+ 154:     organization_id: profile?.organization_id ?? null,
+ 155:     group_id: groupId,
+ 156:     first_name: firstName.trim(),
+ 157:     last_name: lastName.trim(),
+ 158:     other_names: (formData.get('other_names') as string)?.trim() || null,
+ 159:     admission_number: (formData.get('admission_number') as string)?.trim() || null,
+ 160:     gender: (formData.get('gender') as string) || null,
+ 161:     date_of_birth: (formData.get('date_of_birth') as string) || null,
+ 162:     guardian_name: (formData.get('guardian_name') as string)?.trim() || null,
+ 163:     guardian_phone: (formData.get('guardian_phone') as string)?.trim() || null,
+ 164:     email: (formData.get('email') as string)?.trim() || null,
+ 165:     phone: (formData.get('phone') as string)?.trim() || null,
+ 166:     enrollment_date: new Date().toISOString().split('T')[0],
+ 167:     is_active: true,
+ 168:   })
+ 169: 
+ 170:   if (error) {
+ 171:     console.error('Error creating student:', error)
+ 172:     if (error.code === '23505') redirect(`/students/new?error=${encodeURIComponent('Admission number already exists')}`)
+ 173:     redirect(`/students/new?error=${encodeURIComponent('Failed to add student')}`)
+ 174:   }
+ 175: 
+ 176:   revalidatePath('/students')
+ 177:   redirect(`/students?class=${groupId}&success=added`)
+ 178: }
+ 179: 
+ 180: // âœ… UPDATED: Import multiple students with subscription guard
+ 181: export async function importStudents(formData: FormData) {
+ 182:   const supabase = await createClient()
+ 183:   const { user } = await getAuthenticatedUser(supabase)
+ 184:   if (!user) return { success: false, message: 'Not authenticated', imported: 0, failed: 0 }
+ 185: 
+ 186:   // âœ… SUBSCRIPTION GATE: Check active subscription before importing students
+ 187:   const { allowed, message } = await requireActiveSubscription(supabase, user.id)
+ 188:   if (!allowed) return { success: false, message: message!, imported: 0, failed: 0 }
+ 189: 
+ 190:   // âœ… PLAN LIMIT GATE: Check maxStudents limit before importing
+ 191:   const limitCheck = await checkPlanLimit(supabase, user.id, 'maxStudents')
+ 192:   if (!limitCheck.allowed) {
+ 193:     return { success: false, message: limitCheck.message!, imported: 0, failed: 0 }
+ 194:   }
+ 195: 
+ 196:   const groupId = formData.get('group_id') as string
+ 197:   const rowsJson = formData.get('rows') as string
+ 198:   if (!groupId || !rowsJson) return { success: false, message: 'Missing data', imported: 0, failed: 0 }
+ 199: 
+ 200:   let rows: any[]
+ 201:   try {
+ 202:     rows = JSON.parse(rowsJson)
+ 203:   } catch {
+ 204:     return { success: false, message: 'Invalid data format', imported: 0, failed: 0 }
+ 205:   }
+ 206: 
+ 207:   if (rows.length === 0) return { success: false, message: 'No valid rows to import', imported: 0, failed: 0 }
+ 208:   if (rows.length > 500) return { success: false, message: 'Maximum 500 students per import', imported: 0, failed: 0 }
+ 209: 
+ 210:   const { data: profile } = await supabase
+ 211:     .from('users').select('organization_id').eq('id', user.id).single()
+ 212: 
+ 213:   // Confirm this class actually belongs to the requester
+ 214:   const { data: group } = await supabase
+ 215:     .from('groups').select('id, instructor_id, organization_id').eq('id', groupId).single()
+ 216: 
+ 217:   if (!group) return { success: false, message: 'Class not found', imported: 0, failed: 0 }
+ 218: 
+ 219:   if (profile?.organization_id) {
+ 220:     if (group.organization_id !== profile.organization_id) {
+ 221:       return { success: false, message: 'Class does not belong to your organization', imported: 0, failed: 0 }
+ 222:     }
+ 223:   } else if (group.instructor_id !== user.id) {
+ 224:     return { success: false, message: 'Class does not belong to you', imported: 0, failed: 0 }
+ 225:   }
+ 226: 
+ 227:   // Get current student count to check if we can import all rows
+ 228:   const { count: currentStudentCount } = await supabase
+ 229:     .from('learners')
+ 230:     .select('*', { count: 'exact', head: true })
+ 231:     .eq('organization_id', profile?.organization_id ?? null)
+ 232: 
+ 233:   // Re-check limit with current count + rows.length
+ 234:   const planConfig = await checkPlanLimit(supabase, user.id, 'maxStudents')
+ 235:   if (!planConfig.allowed) {
+ 236:     return { success: false, message: planConfig.message!, imported: 0, failed: 0 }
+ 237:   }
+ 238: 
+ 239:   let success = 0
+ 240:   let failed = 0
+ 241: 
+ 242:   const batches = []
+ 243:   for (let i = 0; i < rows.length; i += 50) batches.push(rows.slice(i, i + 50))
+ 244: 
+ 245:   for (const batch of batches) {
+ 246:     const inserts = batch.map((r: any) => ({
+ 247:       organization_id: profile?.organization_id ?? null,
+ 248:       group_id: groupId,
+ 249:       first_name: r.first_name?.trim(),
+ 250:       last_name: r.last_name?.trim(),
+ 251:       other_names: r.other_names?.trim() || null,
+ 252:       admission_number: r.admission_number?.trim() || null,
+ 253:       gender: r.gender || null,
+ 254:       date_of_birth: r.date_of_birth || null,
+ 255:       guardian_name: r.guardian_name?.trim() || null,
+ 256:       guardian_phone: r.guardian_phone?.trim() || null,
+ 257:       email: r.email?.trim() || null,
+ 258:       enrollment_date: new Date().toISOString().split('T')[0],
+ 259:       is_active: true,
+ 260:     }))
+ 261: 
+ 262:     const { data, error } = await supabase.from('learners').insert(inserts).select()
+ 263:     if (error) {
+ 264:       console.error('Batch import error:', error)
+ 265:       failed += batch.length
+ 266:     } else {
+ 267:       success += data?.length ?? batch.length
+ 268:     }
+ 269:   }
+ 270: 
+ 271:   revalidatePath('/students')
+ 272:   return { success: true, imported: success, failed }
+ 273: }
+
+######## src\app\(auth)\signup\page.tsx ########
+   1: 'use client'
+   2: 
+   3: import { Suspense, useState } from 'react'
+   4: import { useRouter } from 'next/navigation'
+   5: import { useSearchParams } from 'next/navigation'
+   6: import Link from 'next/link'
+   7: import { useForm } from 'react-hook-form'
+   8: import { zodResolver } from '@hookform/resolvers/zod'
+   9: import { z } from 'zod'
+  10: import toast from 'react-hot-toast'
+  11: import { createClient } from '@/lib/supabase/client'
+  12: import { Eye, EyeOff } from 'lucide-react'
+  13: 
+  14: const NIGERIAN_STATES = [
+  15:   'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue',
+  16:   'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu',
+  17:   'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi',
+  18:   'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun',
+  19:   'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
+  20: ]
+  21: 
+  22: const schema = z.object({
+  23:   name:             z.string().min(2, 'Enter your full name'),
+  24:   email:            z.string().email('Enter a valid email'),
+  25:   password:         z.string().min(8, 'Password must be at least 8 characters'),
+  26:   confirmPassword:  z.string().min(8, 'Please confirm your password'),
+  27:   account_type:     z.enum(['individual', 'organization', 'representative']),
+  28:   org_name:         z.string().optional(),
+  29:   org_type:         z.enum(['school', 'university', 'centre']).optional(),
+  30:   rep_phone:        z.string().optional(),
+  31:   rep_state:        z.string().optional(),
+  32:   referral_code:    z.string().optional(),
+  33: }).refine(data => data.password === data.confirmPassword, {
+  34:   message: "Passwords don't match",
+  35:   path: ['confirmPassword'],
+  36: }).refine(data => {
+  37:   if (data.account_type === 'organization' && !data.org_name?.trim()) {
+  38:     return false
+  39:   }
+  40:   return true
+  41: }, {
+  42:   message: 'School name is required',
+  43:   path: ['org_name'],
+  44: }).refine(data => {
+  45:   if (data.account_type === 'representative' && !data.rep_state) {
+  46:     return false
+  47:   }
+  48:   return true
+  49: }, {
+  50:   message: 'Select your state',
+  51:   path: ['rep_state'],
+  52: })
+  53: 
+  54: type FormData = z.infer<typeof schema>
+  55: 
+  56: export default function SignupPage() {
+  57:   return (
+  58:     <Suspense fallback={null}>
+  59:       <SignupForm />
+  60:     </Suspense>
+  61:   )
+  62: }
+  63: 
+  64: function SignupForm() {
+  65:   const router = useRouter()
+  66:   const searchParams = useSearchParams()
+  67:   const referralCode = searchParams.get('ref')
+  68:   const [loading, setLoading] = useState(false)
+  69:   const [step, setStep] = useState<1 | 2>(1)
+  70:   const [showPassword, setShowPassword] = useState(false)
+  71:   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  72: 
+  73:   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
+  74:     resolver: zodResolver(schema),
+  75:     defaultValues: { account_type: 'individual', org_type: 'school', referral_code: referralCode ?? '' },
+  76:   })
+  77: 
+  78:   const accountType = watch('account_type')
+  79:   const password = watch('password')
+  80:   const confirmPassword = watch('confirmPassword')
+  81: 
+  82:   async function onSubmit(data: FormData) {
+  83:     setLoading(true)
+  84:     try {
+  85:       const supabase = createClient()
+  86: 
+  87:       const metadata: Record<string, string> = {
+  88:         name: data.name.trim(),
+  89:         role:
+  90:           data.account_type === 'organization'
+  91:             ? 'admin'
+  92:             : data.account_type === 'representative'
+  93:             ? 'representative'
+  94:             : 'teacher',
+  95:       }
+  96: 
+  97:       if (data.account_type === 'organization' && data.org_name) {
+  98:         metadata.organization_name = data.org_name.trim()
+  99:         metadata.organization_type = data.org_type ?? 'school'
+ 100:       }
+ 101: 
+ 102:       const { data: authData, error: authError } = await supabase.auth.signUp({
+ 103:         email: data.email.trim(),
+ 104:         password: data.password,
+ 105:         options: { data: metadata },
+ 106:       })
+ 107: 
+ 108:       if (authError) throw new Error(authError.message)
+ 109:       if (!authData.user) throw new Error('Signup failed â€” please try again')
+ 110: 
+ 111:       const submittedReferralCode = data.referral_code?.trim()
+ 112:       if (submittedReferralCode) {
+ 113:         await fetch('/api/representatives/record-referral', {
+ 114:           method: 'POST',
+ 115:           headers: { 'Content-Type': 'application/json' },
+ 116:           body: JSON.stringify({ referralCode: submittedReferralCode, userId: authData.user.id }),
+ 117:         }).catch(() => {}) // non-fatal â€” never block signup on this
+ 118:       }
+ 119: 
+ 120:       if (authData.session === null && authData.user.identities?.length === 0) {
+ 121:         toast.error('An account with this email already exists.')
+ 122:         return
+ 123:       }
+ 124: 
+ 125:       if (authData.session === null) {
+ 126:         // Email confirmation required â€” we can't call the representative
+ 127:         // apply endpoint yet because there's no active session to authenticate it.
+ 128:         if (data.account_type === 'representative') {
+ 129:           toast.success('Account created! Confirm your email, then log in and visit "Apply to become a Representative" to finish setup.')
+ 130:         } else {
+ 131:           toast.success('Account created! Check your email to confirm before logging in.')
+ 132:         }
+ 133:         router.push('/login?msg=confirm_email')
+ 134:         return
+ 135:       }
+ 136: 
+ 137:       // Session exists immediately (no email confirmation required) â€”
+ 138:       // safe to complete the representative application right now.
+ 139:       if (data.account_type === 'representative') {
+ 140:         const repRes = await fetch('/api/representatives/apply', {
+ 141:           method: 'POST',
+ 142:           headers: { 'Content-Type': 'application/json' },
+ 143:           body: JSON.stringify({
+ 144:             fullName: data.name.trim(),
+ 145:             email: data.email.trim(),
+ 146:             phone: data.rep_phone?.trim() || undefined,
+ 147:             state: data.rep_state,
+ 148:           }),
+ 149:         })
+ 150:         const repResult = await repRes.json()
+ 151: 
+ 152:         if (!repRes.ok) {
+ 153:           // Account was created successfully even if the rep application failed â€”
+ 154:           // don't lose that. Send them to apply-representative to retry manually.
+ 155:           toast.error(repResult.error || 'Account created, but representative application failed. Try again from your dashboard.')
+ 156:           router.push('/apply-representative')
+ 157:           return
+ 158:         }
+ 159: 
+ 160:         toast.success(`Welcome! Your referral code is ${repResult.referralCode}.`)
+ 161:         router.push('/rep')
+ 162:         return
+ 163:       }
+ 164: 
+ 165:       toast.success(
+ 166:         data.account_type === 'organization'
+ 167:           ? `Welcome! Your school "${data.org_name}" has been set up.`
+ 168:           : 'Account created! Welcome to Eduxellence.'
+ 169:       )
+ 170:       router.push('/getting-started')
+ 171: 
+ 172:     } catch (err: unknown) {
+ 173:       console.error('Signup error:', err)
+ 174:       toast.error(err instanceof Error ? err.message : 'Signup failed')
+ 175:     } finally {
+ 176:       setLoading(false)
+ 177:     }
+ 178:   }
+ 179: 
+ 180:   return (
+ 181:     <div className="card p-8 max-w-md mx-auto">
+ 182:       <h2 className="text-lg font-semibold text-ink mb-1">Create your free account</h2>
+ 183:       <p className="text-sm text-ink-muted mb-6">
+ 184:         Already have an account?{' '}
+ 185:         <Link href="/login" className="text-brand-500 hover:underline font-medium">Sign in</Link>
+ 186:       </p>
+ 187: 
+ 188:       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+ 189: 
+ 190:         {step === 1 && (
+ 191:           <>
+ 192:             <div>
+ 193:               <label className="block text-sm font-medium text-ink mb-2">I am signing up as</label>
+ 194:               <div className="grid grid-cols-3 gap-2">
+ 195:                 {[
+ 196:                   { value: 'individual',     label: 'ðŸ‘¤ Individual Teacher' },
+ 197:                   { value: 'organization',   label: 'ðŸ« School / Institution' },
+ 198:                   { value: 'representative', label: 'ðŸ¤ Representative' },
+ 199:                 ].map(opt => (
+ 200:                   <label
+ 201:                     key={opt.value}
+ 202:                     className={`flex items-center justify-center gap-2 p-3 border rounded cursor-pointer text-xs font-medium text-center transition-colors
+ 203:                       ${accountType === opt.value
+ 204:                         ? 'border-brand-500 bg-brand-50 text-brand-700'
+ 205:                         : 'border-surface-200 text-ink-muted hover:border-brand-300'
+ 206:                       }`}
+ 207:                   >
+ 208:                     <input type="radio" value={opt.value} {...register('account_type')} className="sr-only" />
+ 209:                     {opt.label}
+ 210:                   </label>
+ 211:                 ))}
+ 212:               </div>
+ 213:             </div>
+ 214: 
+ 215:             <div>
+ 216:               <label className="block text-sm font-medium text-ink mb-1">Full name</label>
+ 217:               <input type="text" placeholder="Amara Okafor" className="input" {...register('name')} />
+ 218:               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
+ 219:             </div>
+ 220: 
+ 221:             <div>
+ 222:               <label className="block text-sm font-medium text-ink mb-1">Email address</label>
+ 223:               <input type="email" placeholder="you@school.com" className="input" {...register('email')} />
+ 224:               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
+ 225:             </div>
+ 226: 
+ 227:             <div>
+ 228:               <label className="block text-sm font-medium text-ink mb-1">Password</label>
+ 229:               <div className="relative">
+ 230:                 <input
+ 231:                   type={showPassword ? 'text' : 'password'}
+ 232:                   placeholder="At least 8 characters"
+ 233:                   className="input pr-10"
+ 234:                   {...register('password')}
+ 235:                 />
+ 236:                 <button
+ 237:                   type="button"
+ 238:                   onClick={() => setShowPassword(!showPassword)}
+ 239:                   className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+ 240:                 >
+ 241:                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+ 242:                 </button>
+ 243:               </div>
+ 244:               {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
+ 245:             </div>
+ 246: 
+ 247:             <div>
+ 248:               <label className="block text-sm font-medium text-ink mb-1">Confirm Password</label>
+ 249:               <div className="relative">
+ 250:                 <input
+ 251:                   type={showConfirmPassword ? 'text' : 'password'}
+ 252:                   placeholder="Confirm your password"
+ 253:                   className="input pr-10"
+ 254:                   {...register('confirmPassword')}
+ 255:                 />
+ 256:                 <button
+ 257:                   type="button"
+ 258:                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+ 259:                   className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition-colors"
+ 260:                 >
+ 261:                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+ 262:                 </button>
+ 263:               </div>
+ 264:               {errors.confirmPassword && (
+ 265:                 <p className="text-xs text-red-500 mt-1">{errors.confirmPassword.message}</p>
+ 266:               )}
+ 267:               {password && confirmPassword && password !== confirmPassword && (
+ 268:                 <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+ 269:               )}
+ 270:               {password && confirmPassword && password === confirmPassword && (
+ 271:                 <p className="text-xs text-green-500 mt-1">âœ“ Passwords match</p>
+ 272:               )}
+ 273:             </div>
+ 274: 
+ 275:             {/* â”€â”€ Referral code field (visible for everyone except representatives) â”€â”€ */}
+ 276:             {accountType !== 'representative' && (
+ 277:               <div>
+ 278:                 <label className="block text-sm font-medium text-ink mb-1">
+ 279:                   Referral code <span className="text-ink-faint font-normal">(optional)</span>
+ 280:                 </label>
+ 281:                 <input
+ 282:                   type="text"
+ 283:                   placeholder="e.g. JEREMI-BAU-927"
+ 284:                   className="input"
+ 285:                   {...register('referral_code')}
+ 286:                 />
+ 287:                 <p className="text-xs text-ink-faint mt-1">
+ 288:                   Were you referred by someone? Enter their code here.
+ 289:                 </p>
+ 290:               </div>
+ 291:             )}
+ 292: 
+ 293:             {accountType === 'representative' && (
+ 294:               <>
+ 295:                 <div>
+ 296:                   <label className="block text-sm font-medium text-ink mb-1">Phone number</label>
+ 297:                   <input type="tel" placeholder="08012345678" className="input" {...register('rep_phone')} />
+ 298:                 </div>
+ 299:                 <div>
+ 300:                   <label className="block text-sm font-medium text-ink mb-1">State</label>
+ 301:                   <select className="input" {...register('rep_state')} defaultValue="">
+ 302:                     <option value="" disabled>Select your state</option>
+ 303:                     {NIGERIAN_STATES.map((s) => (
+ 304:                       <option key={s} value={s}>{s}</option>
+ 305:                     ))}
+ 306:                   </select>
+ 307:                   {errors.rep_state && <p className="text-xs text-red-500 mt-1">{errors.rep_state.message}</p>}
+ 308:                 </div>
+ 309:                 <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">
+ 310:                   You&apos;ll get a referral code and a dashboard to track referrals and commission.
+ 311:                 </div>
+ 312:               </>
+ 313:             )}
+ 314: 
+ 315:             {accountType === 'organization' ? (
+ 316:               <button
+ 317:                 type="button"
+ 318:                 onClick={async () => {
+ 319:                   const valid = await trigger(['name', 'email', 'password', 'confirmPassword', 'account_type'])
+ 320:                   if (valid) setStep(2)
+ 321:                 }}
+ 322:                 className="btn-primary btn mt-2"
+ 323:               >
+ 324:                 Next: Set up your school â†’
+ 325:               </button>
+ 326:             ) : (
+ 327:               <>
+ 328:                 {accountType === 'individual' && (
+ 329:                   <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
+ 330:                     Individual teachers get <strong>1 class, up to 30 students</strong>, and Excel/CSV exports free.
+ 331:                   </div>
+ 332:                 )}
+ 333:                 <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+ 334:                   {loading
+ 335:                     ? 'Creating accountâ€¦'
+ 336:                     : accountType === 'representative'
+ 337:                     ? 'Create account & apply'
+ 338:                     : 'Create free account'}
+ 339:                 </button>
+ 340:               </>
+ 341:             )}
+ 342:           </>
+ 343:         )}
+ 344: 
+ 345:         {step === 2 && (
+ 346:           <>
+ 347:             <div className="flex items-center gap-2 mb-2">
+ 348:               <button type="button" onClick={() => setStep(1)} className="text-ink-muted hover:text-ink text-sm">
+ 349:                 â† Back
+ 350:               </button>
+ 351:               <span className="text-sm font-medium text-ink">School details</span>
+ 352:             </div>
+ 353: 
+ 354:             <div>
+ 355:               <label className="block text-sm font-medium text-ink mb-1">School / Institution name *</label>
+ 356:               <input
+ 357:                 type="text"
+ 358:                 placeholder="Greenfield Academy"
+ 359:                 className="input"
+ 360:                 {...register('org_name')}
+ 361:               />
+ 362:               {errors.org_name && <p className="text-xs text-red-500 mt-1">{errors.org_name.message}</p>}
+ 363:             </div>
+ 364: 
+ 365:             <div>
+ 366:               <label className="block text-sm font-medium text-ink mb-1">Institution type</label>
+ 367:               <select className="input" {...register('org_type')}>
+ 368:                 <option value="school">School (Nursery / Primary / Secondary)</option>
+ 369:                 <option value="university">University / Polytechnic / College</option>
+ 370:                 <option value="centre">Tutorial Centre / Training Institute</option>
+ 371:               </select>
+ 372:             </div>
+ 373: 
+ 374:             <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">
+ 375:               <p className="font-semibold mb-1">What you get as admin:</p>
+ 376:               <ul className="flex flex-col gap-0.5 list-disc list-inside">
+ 377:                 <li>Create and manage all classes</li>
+ 378:                 <li>Invite teachers to your school</li>
+ 379:                 <li>Set school logo, motto & signatures</li>
+ 380:                 <li>Generate branded PDF report cards</li>
+ 381:                 <li>View all scores and reports</li>
+ 382:               </ul>
+ 383:             </div>
+ 384: 
+ 385:             <div className="bg-surface-50 border border-surface-200 rounded p-3 text-xs text-ink-muted">
+ 386:               Starts on <strong>Free plan</strong> â€” 1 class, up to 30 students. Have a referral code from a rep? Enter it on the previous step and we'll follow up about Founding 500 access. Upgrade anytime from Settings.
+ 387:             </div>
+ 388: 
+ 389:             <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+ 390:               {loading ? 'Setting up your schoolâ€¦' : 'Create school account'}
+ 391:             </button>
+ 392:           </>
+ 393:         )}
+ 394:       </form>
+ 395:     </div>
+ 396:   )
+ 397: }
+
+######## src\app\(dashboard)\settings\teachers\actions.ts ########
+   1: 'use server'
+   2: 
+   3: import { createClient } from '@/lib/supabase/server'
+   4: import { createClient as createServiceClient } from '@supabase/supabase-js'
+   5: import { revalidatePath } from 'next/cache'
+   6: import { redirect } from 'next/navigation'
+   7: import { hasFeature, canAddTeacher } from '@/lib/plans/gating'
+   8: import { getPlanConfig } from '@/lib/plans/config'
+   9: import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+  10: import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+  11: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+  12: 
+  13: // Check if user is an institution
+  14: async function checkInstitutionAccess() {
+  15:   const supabase = await createClient()
+  16:   const { user } = await getAuthenticatedUser(supabase)
+  17:   if (!user) redirect('/login')
+  18: 
+  19:   const { data: profile } = await supabase
+  20:     .from('users')
+  21:     .select('organization_id, role')
+  22:     .eq('id', user.id)
+  23:     .single()
+  24: 
+  25:   // Only institutions can manage teachers
+  26:   if (!profile?.organization_id) {
+  27:     redirect('/dashboard')
+  28:   }
+  29: 
+  30:   return { user, profile }
+  31: }
+  32: 
+  33: // âœ… UPDATED: Create teacher function with subscription guard and principal support
+  34: interface CreateTeacherInput {
+  35:   name: string
+  36:   email: string
+  37:   phone: string
+  38:   role: 'teacher' | 'lecturer' | 'assistant' | 'principal'
+  39:   password: string
+  40:   signatureUrl: string | null
+  41:   selectedClasses: string[]
+  42:   selectedSubjects: string[]
+  43:   isClassTeacher: boolean
+  44:   classTeacherOf: string
+  45:   subjectGroupMap: Record<string, string>
+  46: }
+  47: 
+  48: export async function createTeacher(input: CreateTeacherInput) {
+  49:   const supabase = await createClient()
+  50:   
+  51:   // âœ… Get authenticated user
+  52:   const { user: adminUser } = await getAuthenticatedUser(supabase)
+  53:   if (!adminUser) return { error: 'Not authenticated' }
+  54: 
+  55:   // âœ… SUBSCRIPTION GATE: Check active subscription before creating teacher
+  56:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+  57:   if (!allowed) return { error: message }
+  58: 
+  59:   // âœ… PLAN LIMIT GATE: Check maxTeachers limit
+  60:   const limitCheck = await checkPlanLimit(supabase, adminUser.id, 'maxTeachers')
+  61:   if (!limitCheck.allowed) {
+  62:     return { error: limitCheck.message }
+  63:   }
+  64: 
+  65:   const { profile } = await checkInstitutionAccess()
+  66:   const orgId = profile?.organization_id
+  67: 
+  68:   if (!orgId) {
+  69:     return { error: 'Not authorized' }
+  70:   }
+  71: 
+  72:   // âœ… Check teacher management feature
+  73:   const { data: org } = await supabase
+  74:     .from('organizations').select('subscription_plan').eq('id', orgId).single()
+  75:   const plan = org?.subscription_plan ?? 'free'
+  76: 
+  77:   if (!hasFeature(plan, 'teacherManagement')) {
+  78:     return { error: 'Teacher management is not available on your current plan. Please upgrade to add teachers.' }
+  79:   }
+  80: 
+  81:   // âœ… GATE: Check numeric teacher limit before creating
+  82:   const gate = await canAddTeacher(plan, { type: 'org', orgId })
+  83:   if (!gate.allowed) {
+  84:     return { error: gate.reason }
+  85:   }
+  86: 
+  87:   const adminClient = createServiceClient(
+  88:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  89:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  90:     { auth: { autoRefreshToken: false, persistSession: false } }
+  91:   )
+  92: 
+  93:   const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+  94:     email: input.email.trim(),
+  95:     password: input.password,
+  96:     email_confirm: true,
+  97:     user_metadata: { name: input.name.trim(), role: input.role, organization_id: orgId },
+  98:   })
+  99: 
+ 100:   if (createError || !newUser.user) {
+ 101:     return { error: createError?.message ?? 'Failed to create teacher account' }
+ 102:   }
+ 103: 
+ 104:   const userId = newUser.user.id
+ 105: 
+ 106:   const { error: updateError } = await adminClient
+ 107:     .from('users')
+ 108:     .update({
+ 109:       name: input.name.trim(),
+ 110:       phone: input.phone || null,
+ 111:       signature_url: input.signatureUrl || null,
+ 112:       organization_id: orgId,
+ 113:       role: input.role,
+ 114:     })
+ 115:     .eq('id', userId)
+ 116: 
+ 117:   if (updateError) {
+ 118:     console.error('User update error:', updateError)
+ 119:   }
+ 120: 
+ 121:   // âœ… If role is principal, skip assignment creation
+ 122:   if (input.role === 'principal') {
+ 123:     revalidatePath('/settings/teachers')
+ 124:     return { success: true, teacherName: input.name }
+ 125:   }
+ 126: 
+ 127:   const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string; organization_id: string }[] = []
+ 128: 
+ 129:   if (input.isClassTeacher && input.classTeacherOf) {
+ 130:     assignments.push({
+ 131:       teacher_id: userId,
+ 132:       class_id: input.classTeacherOf,
+ 133:       role: 'class_teacher',
+ 134:       organization_id: orgId,
+ 135:     })
+ 136:   }
+ 137: 
+ 138:   input.selectedSubjects.forEach(subjectId => {
+ 139:     assignments.push({
+ 140:       teacher_id: userId,
+ 141:       class_id: input.subjectGroupMap[subjectId],
+ 142:       subject_id: subjectId,
+ 143:       role: 'subject_teacher',
+ 144:       organization_id: orgId,
+ 145:     })
+ 146:   })
+ 147: 
+ 148:   if (assignments.length > 0) {
+ 149:     const { error: assignError } = await adminClient
+ 150:       .from('teacher_assignments')
+ 151:       .insert(assignments)
+ 152:     if (assignError) console.error('Assignment error:', assignError)
+ 153:   }
+ 154: 
+ 155:   revalidatePath('/settings/teachers')
+ 156:   return { success: true, teacherName: input.name }
+ 157: }
+ 158: 
+ 159: // Get all teachers in an organization
+ 160: // Valid roles: teacher, lecturer, assistant, principal
+ 161: // class_teacher is NOT a users.role - it's stored in teacher_assignments
+ 162: export async function getTeachers() {
+ 163:   const { profile } = await checkInstitutionAccess()
+ 164:   const supabase = await createClient()
+ 165: 
+ 166:   const { data: teachers } = await supabase
+ 167:     .from('users')
+ 168:     .select(`
+ 169:       id, name, email, role,
+ 170:       teacher_assignments(
+ 171:         id,
+ 172:         class_id,
+ 173:         subject_id,
+ 174:         role,
+ 175:         groups:class_id(id, name),
+ 176:         subjects:subject_id(id, name)
+ 177:       )
+ 178:     `)
+ 179:     .eq('organization_id', profile?.organization_id)
+ 180:     .in('role', ['teacher', 'lecturer', 'assistant', 'principal'])
+ 181:     .order('name')
+ 182: 
+ 183:   return teachers || []
+ 184: }
+ 185: 
+ 186: // Assign teacher to class/subject
+ 187: export async function assignTeacher(formData: FormData) {
+ 188:   const supabase = await createClient()
+ 189:   
+ 190:   // âœ… Get authenticated user
+ 191:   const { user: adminUser } = await getAuthenticatedUser(supabase)
+ 192:   if (!adminUser) return { error: 'Not authenticated' }
+ 193: 
+ 194:   // âœ… SUBSCRIPTION GATE: Check active subscription before assigning teacher
+ 195:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+ 196:   if (!allowed) return { error: message }
+ 197: 
+ 198:   const { profile } = await checkInstitutionAccess()
+ 199:   const orgId = profile?.organization_id
+ 200: 
+ 201:   const teacherId = formData.get('teacher_id') as string
+ 202:   const classId = formData.get('class_id') as string || null
+ 203:   const subjectId = formData.get('subject_id') as string || null
+ 204:   const role = formData.get('role') as string || 'subject_teacher'
+ 205: 
+ 206:   if (!teacherId) {
+ 207:     console.error('Teacher ID is required')
+ 208:     return
+ 209:   }
+ 210: 
+ 211:   if (!classId && !subjectId) {
+ 212:     console.error('Must assign to at least one class or subject')
+ 213:     return
+ 214:   }
+ 215: 
+ 216:   // âœ… GATE: Check if teacher management is available on this plan
+ 217:   const { data: org } = await supabase
+ 218:     .from('organizations').select('subscription_plan').eq('id', orgId).single()
+ 219:   const plan = org?.subscription_plan ?? 'free'
+ 220: 
+ 221:   if (!hasFeature(plan, 'teacherManagement')) {
+ 222:     console.error('Teacher management not available on this plan')
+ 223:     return
+ 224:   }
+ 225: 
+ 226:   // Check if assignment already exists
+ 227:   const { data: existing } = await supabase
+ 228:     .from('teacher_assignments')
+ 229:     .select('id')
+ 230:     .eq('teacher_id', teacherId)
+ 231:     .eq('class_id', classId)
+ 232:     .eq('subject_id', subjectId)
+ 233:     .eq('is_active', true)
+ 234:     .maybeSingle()
+ 235: 
+ 236:   if (existing) {
+ 237:     console.error('Assignment already exists')
+ 238:     return
+ 239:   }
+ 240: 
+ 241:   // Insert the assignment
+ 242:   const { error } = await supabase
+ 243:     .from('teacher_assignments')
+ 244:     .insert({
+ 245:       organization_id: orgId,
+ 246:       teacher_id: teacherId,
+ 247:       class_id: classId,
+ 248:       subject_id: subjectId,
+ 249:       role: role,
+ 250:       is_active: true,
+ 251:     })
+ 252: 
+ 253:   if (error) {
+ 254:     console.error('Assignment error:', error)
+ 255:     return
+ 256:   }
+ 257: 
+ 258:   // If assigning as class teacher, update the groups table
+ 259:   if (role === 'class_teacher' && classId) {
+ 260:     await supabase
+ 261:       .from('groups')
+ 262:       .update({ teacher_id: teacherId })
+ 263:       .eq('id', classId)
+ 264:   }
+ 265:   
+ 266:   // If assigning as subject teacher, update the subjects table
+ 267:   if (role === 'subject_teacher' && subjectId) {
+ 268:     await supabase
+ 269:       .from('subjects')
+ 270:       .update({ teacher_id: teacherId })
+ 271:       .eq('id', subjectId)
+ 272:   }
+ 273: 
+ 274:   revalidatePath('/settings/teachers')
+ 275: }
+ 276: 
+ 277: // Remove teacher assignment
+ 278: export async function removeAssignment(formData: FormData) {
+ 279:   const supabase = await createClient()
+ 280:   
+ 281:   // âœ… Get authenticated user
+ 282:   const { user: adminUser } = await getAuthenticatedUser(supabase)
+ 283:   if (!adminUser) return { error: 'Not authenticated' }
+ 284: 
+ 285:   // âœ… SUBSCRIPTION GATE: Check active subscription before removing assignment
+ 286:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+ 287:   if (!allowed) return { error: message }
+ 288: 
+ 289:   await checkInstitutionAccess()
+ 290: 
+ 291:   const assignmentId = formData.get('assignment_id') as string
+ 292:   if (!assignmentId) return
+ 293: 
+ 294:   // Get the assignment details first
+ 295:   const { data: assignment } = await supabase
+ 296:     .from('teacher_assignments')
+ 297:     .select('class_id, subject_id, role')
+ 298:     .eq('id', assignmentId)
+ 299:     .single()
+ 300: 
+ 301:   // Delete the assignment
+ 302:   await supabase
+ 303:     .from('teacher_assignments')
+ 304:     .delete()
+ 305:     .eq('id', assignmentId)
+ 306: 
+ 307:   // If it was a class teacher assignment, remove from groups
+ 308:   if (assignment?.role === 'class_teacher' && assignment.class_id) {
+ 309:     await supabase
+ 310:       .from('groups')
+ 311:       .update({ teacher_id: null })
+ 312:       .eq('id', assignment.class_id)
+ 313:   }
+ 314: 
+ 315:   // If it was a subject teacher assignment, remove from subjects
+ 316:   if (assignment?.role === 'subject_teacher' && assignment.subject_id) {
+ 317:     await supabase
+ 318:       .from('subjects')
+ 319:       .update({ teacher_id: null })
+ 320:       .eq('id', assignment.subject_id)
+ 321:   }
+ 322: 
+ 323:   revalidatePath('/settings/teachers')
+ 324: }
+ 325: 
+ 326: // âœ… UPDATED: Bulk upload teachers via CSV with proper auth creation and subscription gate
+ 327: export async function uploadTeachers(formData: FormData) {
+ 328:   const { profile } = await checkInstitutionAccess()
+ 329:   const supabase = await createClient()
+ 330:   const orgId = profile?.organization_id
+ 331: 
+ 332:   // âœ… SUBSCRIPTION GATE: Check active subscription before uploading teachers
+ 333:   const { user } = await getAuthenticatedUser(supabase)
+ 334:   const { allowed, message } = await requireActiveSubscription(supabase, user!.id)
+ 335:   if (!allowed) {
+ 336:     console.error('Blocked teacher upload â€” subscription expired:', message)
+ 337:     return
+ 338:   }
+ 339: 
+ 340:   // âœ… PLAN LIMIT GATE: Check maxTeachers limit before uploading
+ 341:   const limitCheck = await checkPlanLimit(supabase, user!.id, 'maxTeachers')
+ 342:   if (!limitCheck.allowed) {
+ 343:     console.error('Blocked teacher upload â€” plan limit reached:', limitCheck.message)
+ 344:     return
+ 345:   }
+ 346: 
+ 347:   // âœ… GATE: Check teacher management feature availability
+ 348:   const { data: org } = await supabase
+ 349:     .from('organizations').select('subscription_plan').eq('id', orgId).single()
+ 350:   const plan = org?.subscription_plan ?? 'free'
+ 351: 
+ 352:   if (!hasFeature(plan, 'teacherManagement')) {
+ 353:     console.error('Teacher management not available on this plan')
+ 354:     return
+ 355:   }
+ 356: 
+ 357:   const adminClient = createServiceClient(
+ 358:     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+ 359:     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+ 360:     { auth: { autoRefreshToken: false, persistSession: false } }
+ 361:   )
+ 362: 
+ 363:   const file = formData.get('file') as File
+ 364:   if (!file) {
+ 365:     console.error('No file uploaded')
+ 366:     return
+ 367:   }
+ 368: 
+ 369:   try {
+ 370:     const text = await file.text()
+ 371:     const lines = text.split('\n').filter(line => line.trim())
+ 372: 
+ 373:     const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+ 374:     const nameIndex = headers.indexOf('name')
+ 375:     const emailIndex = headers.indexOf('email')
+ 376:     const roleIndex = headers.indexOf('role')
+ 377:     const classIndex = headers.indexOf('class_name')
+ 378:     const subjectIndex = headers.indexOf('subject_name')
+ 379: 
+ 380:     if (nameIndex === -1 || emailIndex === -1) {
+ 381:       console.error('CSV must have name and email columns')
+ 382:       return
+ 383:     }
+ 384: 
+ 385:     const teachers = []
+ 386: 
+ 387:     for (let i = 1; i < lines.length; i++) {
+ 388:       const values = lines[i].split(',').map(v => v.trim())
+ 389:       const name = values[nameIndex]
+ 390:       const email = values[emailIndex]
+ 391:       const role = values[roleIndex] || 'subject_teacher'
+ 392:       const className = values[classIndex] || ''
+ 393:       const subjectName = values[subjectIndex] || ''
+ 394: 
+ 395:       if (!name || !email) continue
+ 396: 
+ 397:       teachers.push({ name, email, role, className, subjectName })
+ 398:     }
+ 399: 
+ 400:     if (teachers.length === 0) {
+ 401:       console.error('No valid teachers found in CSV')
+ 402:       return
+ 403:     }
+ 404: 
+ 405:     // âœ… Gate: Check teacher limit before creating any accounts
+ 406:     const config = getPlanConfig(plan)
+ 407:     const { count: currentTeacherCount } = await supabase
+ 408:       .from('users')
+ 409:       .select('id', { count: 'exact', head: true })
+ 410:       .eq('organization_id', orgId)
+ 411:       .in('role', ['teacher', 'lecturer', 'assistant', 'principal'])
+ 412: 
+ 413:     // Check how many of these are genuinely NEW users (existing emails don't count against the limit)
+ 414:     const emails = teachers.map(t => t.email)
+ 415:     const { data: existingUsers } = await supabase
+ 416:       .from('users')
+ 417:       .select('email')
+ 418:       .in('email', emails)
+ 419:     const existingEmails = new Set((existingUsers ?? []).map(u => u.email))
+ 420:     const newTeacherCount = teachers.filter(t => !existingEmails.has(t.email)).length
+ 421: 
+ 422:     const projectedTotal = (currentTeacherCount ?? 0) + newTeacherCount
+ 423:     
+ 424:     // âœ… FIXED: Use a type guard to handle 'unlimited' properly
+ 425:     const maxTeachers = config.limits.maxTeachers
+ 426:     const maxTeachersValue = typeof maxTeachers === 'number' ? maxTeachers : Infinity
+ 427:     if (projectedTotal > maxTeachersValue) {
+ 428:       console.error(`Upload would exceed teacher limit: ${projectedTotal} > ${maxTeachers}`)
+ 429:       return
+ 430:     }
+ 431: 
+ 432:     for (const teacher of teachers) {
+ 433:       // âœ… Check if a users profile already exists for this email
+ 434:       const { data: existingUser } = await supabase
+ 435:         .from('users')
+ 436:         .select('id')
+ 437:         .eq('email', teacher.email)
+ 438:         .maybeSingle()
+ 439: 
+ 440:       let teacherId: string
+ 441: 
+ 442:       if (existingUser) {
+ 443:         teacherId = existingUser.id
+ 444:       } else {
+ 445:         // âœ… Create a real Supabase Auth account via admin API,
+ 446:         // and send the teacher an email invite to set their own password.
+ 447:         // This does NOT touch the admin's browser session â€” service-role
+ 448:         // client is fully separate from the cookie-based client.
+ 449:         const { data: newAuthUser, error: inviteError } =
+ 450:           await adminClient.auth.admin.inviteUserByEmail(teacher.email, {
+ 451:             data: { name: teacher.name, role: teacher.role, organization_id: orgId },
+ 452:             redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/set-password`,
+ 453:           })
+ 454: 
+ 455:         if (inviteError || !newAuthUser.user) {
+ 456:           console.error(`Error inviting ${teacher.email}:`, inviteError)
+ 457:           continue
+ 458:         }
+ 459: 
+ 460:         teacherId = newAuthUser.user.id
+ 461: 
+ 462:         // âœ… Create/update the corresponding profile row
+ 463:         const { error: profileError } = await adminClient
+ 464:           .from('users')
+ 465:           .update({
+ 466:             name: teacher.name,
+ 467:             role: teacher.role,
+ 468:             organization_id: orgId,
+ 469:           })
+ 470:           .eq('id', teacherId)
+ 471: 
+ 472:         if (profileError) {
+ 473:           console.error(`Error updating profile for ${teacher.email}:`, profileError)
+ 474:         }
+ 475:       }
+ 476: 
+ 477:       // Find or create class
+ 478:       let classId: string | null = null
+ 479:       if (teacher.className) {
+ 480:         const { data: existingClass } = await supabase
+ 481:           .from('groups')
+ 482:           .select('id')
+ 483:           .eq('name', teacher.className)
+ 484:           .eq('organization_id', orgId)
+ 485:           .maybeSingle()
+ 486: 
+ 487:         if (existingClass) {
+ 488:           classId = existingClass.id
+ 489:         } else {
+ 490:           const { data: newClass, error: classError } = await supabase
+ 491:             .from('groups')
+ 492:             .insert({ name: teacher.className, organization_id: orgId, is_active: true })
+ 493:             .select('id')
+ 494:             .single()
+ 495: 
+ 496:           if (classError) {
+ 497:             console.error('Error creating class:', classError)
+ 498:           } else {
+ 499:             classId = newClass.id
+ 500:           }
+ 501:         }
+ 502:       }
+ 503: 
+ 504:       // Find or create subject
+ 505:       let subjectId: string | null = null
+ 506:       if (teacher.subjectName && classId) {
+ 507:         const { data: existingSubject } = await supabase
+ 508:           .from('subjects')
+ 509:           .select('id')
+ 510:           .eq('name', teacher.subjectName)
+ 511:           .eq('group_id', classId)
+ 512:           .eq('organization_id', orgId)
+ 513:           .maybeSingle()
+ 514: 
+ 515:         if (existingSubject) {
+ 516:           subjectId = existingSubject.id
+ 517:         } else {
+ 518:           const { data: newSubject, error: subjectError } = await supabase
+ 519:             .from('subjects')
+ 520:             .insert({ name: teacher.subjectName, group_id: classId, organization_id: orgId, is_active: true })
+ 521:             .select('id')
+ 522:             .single()
+ 523: 
+ 524:           if (subjectError) {
+ 525:             console.error('Error creating subject:', subjectError)
+ 526:           } else {
+ 527:             subjectId = newSubject.id
+ 528:           }
+ 529:         }
+ 530:       }
+ 531: 
+ 532:       // Create assignment
+ 533:       if (teacherId && (classId || subjectId)) {
+ 534:         const { error: assignError } = await supabase
+ 535:           .from('teacher_assignments')
+ 536:           .insert({
+ 537:             organization_id: orgId,
+ 538:             teacher_id: teacherId,
+ 539:             class_id: classId,
+ 540:             subject_id: subjectId,
+ 541:             role: teacher.role,
+ 542:             is_active: true,
+ 543:           })
+ 544: 
+ 545:         if (assignError) {
+ 546:           console.error('Error creating assignment:', assignError)
+ 547:         }
+ 548:       }
+ 549:     }
+ 550: 
+ 551:     revalidatePath('/settings/teachers')
+ 552:   } catch (error) {
+ 553:     console.error('Error processing CSV:', error)
+ 554:   }
+ 555: }
+ 556: 
+ 557: // Download teacher template CSV
+ 558: export async function downloadTeacherTemplate() {
+ 559:   const csv = `name,email,role,class_name,subject_name
+ 560: John Doe,john@school.com,class_teacher,Primary 5,
+ 561: Jane Smith,jane@school.com,subject_teacher,Primary 5,Mathematics
+ 562: Mark Johnson,mark@school.com,subject_teacher,Primary 5,English
+ 563: Sarah Williams,sarah@school.com,subject_teacher,Primary 6,Science
+ 564: `
+ 565:   
+ 566:   return new Response(csv, {
+ 567:     headers: {
+ 568:       'Content-Type': 'text/csv',
+ 569:       'Content-Disposition': 'attachment; filename=teachers_template.csv',
+ 570:     },
+ 571:   })
+ 572: }
+ 573: 
+ 574: // Delete a teacher
+ 575: export async function deleteTeacher(formData: FormData) {
+ 576:   const supabase = await createClient()
+ 577:   
+ 578:   // âœ… Get authenticated user
+ 579:   const { user: adminUser } = await getAuthenticatedUser(supabase)
+ 580:   if (!adminUser) return { error: 'Not authenticated' }
+ 581: 
+ 582:   // âœ… SUBSCRIPTION GATE: Check active subscription before deleting teacher
+ 583:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+ 584:   if (!allowed) return { error: message }
+ 585: 
+ 586:   await checkInstitutionAccess()
+ 587: 
+ 588:   const teacherId = formData.get('teacher_id') as string
+ 589:   if (!teacherId) return
+ 590: 
+ 591:   // Delete all assignments first
+ 592:   await supabase
+ 593:     .from('teacher_assignments')
+ 594:     .delete()
+ 595:     .eq('teacher_id', teacherId)
+ 596: 
+ 597:   // Remove from groups where they're class teacher
+ 598:   await supabase
+ 599:     .from('groups')
+ 600:     .update({ teacher_id: null })
+ 601:     .eq('teacher_id', teacherId)
+ 602: 
+ 603:   // Remove from subjects where they're subject teacher
+ 604:   await supabase
+ 605:     .from('subjects')
+ 606:     .update({ teacher_id: null })
+ 607:     .eq('teacher_id', teacherId)
+ 608: 
+ 609:   // Delete the user
+ 610:   await supabase
+ 611:     .from('users')
+ 612:     .delete()
+ 613:     .eq('id', teacherId)
+ 614: 
+ 615:   revalidatePath('/settings/teachers')
+ 616: }
+ 617: 
+ 618: // âœ… NEW: Update teacher signature
+ 619: export async function updateTeacherSignature(formData: FormData) {
+ 620:   const supabase = await createClient()
+ 621:   
+ 622:   // âœ… Get authenticated user
+ 623:   const { user: adminUser } = await getAuthenticatedUser(supabase)
+ 624:   if (!adminUser) return { error: 'Not authenticated' }
+ 625: 
+ 626:   // âœ… SUBSCRIPTION GATE: Check active subscription before updating signature
+ 627:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+ 628:   if (!allowed) return { error: message }
+ 629: 
+ 630:   await checkInstitutionAccess()
+ 631: 
+ 632:   const teacherId = formData.get('teacher_id') as string
+ 633:   const signatureUrl = formData.get('signature_url') as string
+ 634: 
+ 635:   if (!teacherId || !signatureUrl) return
+ 636: 
+ 637:   const { error } = await supabase
+ 638:     .from('users')
+ 639:     .update({ signature_url: signatureUrl })
+ 640:     .eq('id', teacherId)
+ 641: 
+ 642:   if (error) {
+ 643:     console.error('Error updating signature:', error)
+ 644:     return
+ 645:   }
+ 646: 
+ 647:   revalidatePath('/settings/teachers')
+ 648: }
+
+######## src\app\api\staff\create-teacher-account\route.ts ########
+   1: import { createClient as createServiceClient } from '@supabase/supabase-js'
+   2: import { createClient as createServerClient } from '@/lib/supabase/server'
+   3: import { NextResponse } from 'next/server'
+   4: import { requireActiveSubscription } from '@/lib/subscription/checkAccess'
+   5: import { checkPlanLimit } from '@/lib/subscription/checkPlanLimit'
+   6: import { hasFeature, canAddTeacher } from '@/lib/plans/gating'
+   7: 
+   8: export async function POST(req: Request) {
+   9:   const supabase = await createServerClient()
+  10:   const { data: { user: adminUser } } = await supabase.auth.getUser()
+  11:   if (!adminUser) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  12: 
+  13:   const { data: profile } = await supabase.from('users').select('organization_id, role').eq('id', adminUser.id).single()
+  14:   const orgId = profile?.organization_id
+  15:   if (!orgId) return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+  16:   if (profile?.role !== 'admin' && profile?.role !== 'school_admin') {
+  17:     return NextResponse.json({ error: 'Only administrators can add teachers' }, { status: 403 })
+  18:   }
+  19: 
+  20:   const { allowed, message } = await requireActiveSubscription(supabase, adminUser.id)
+  21:   if (!allowed) return NextResponse.json({ error: message }, { status: 403 })
+  22: 
+  23:   const limitCheck = await checkPlanLimit(supabase, adminUser.id, 'maxTeachers')
+  24:   if (!limitCheck.allowed) return NextResponse.json({ error: limitCheck.message }, { status: 403 })
+  25: 
+  26:   const { data: org } = await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single()
+  27:   const plan = org?.subscription_plan ?? 'free'
+  28:   if (!hasFeature(plan, 'teacherManagement')) {
+  29:     return NextResponse.json({ error: 'Teacher management is not available on your current plan.' }, { status: 403 })
+  30:   }
+  31: 
+  32:   const gate = await canAddTeacher(plan, { type: 'org', orgId })
+  33:   if (!gate.allowed) return NextResponse.json({ error: gate.reason }, { status: 403 })
+  34: 
+  35:   const body = await req.json()
+  36:   const { name, email, phone, role, password, classId, subjectIds, subjectGroupMap, isClassTeacher } = body
+  37: 
+  38:   if (!name?.trim() || !email?.trim() || !password) {
+  39:     return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
+  40:   }
+  41:   if (!['teacher', 'lecturer', 'assistant', 'principal'].includes(role)) {
+  42:     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  43:   }
+  44: 
+  45:   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  46:     return NextResponse.json({ error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY not set' }, { status: 500 })
+  47:   }
+  48:   const admin = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  49: 
+  50:   const { data: newUser, error: createError } = await admin.auth.admin.createUser({
+  51:     email: email.trim(),
+  52:     password,
+  53:     email_confirm: true,
+  54:     user_metadata: { name: name.trim(), role, organization_id: orgId },
+  55:   })
+  56:   if (createError || !newUser.user) {
+  57:     return NextResponse.json({ error: createError?.message ?? 'Failed to create teacher account' }, { status: 500 })
+  58:   }
+  59:   const teacherId = newUser.user.id
+  60: 
+  61:   const { error: updateError } = await admin
+  62:     .from('users')
+  63:     .update({ name: name.trim(), phone: phone || null, organization_id: orgId, role })
+  64:     .eq('id', teacherId)
+  65:   if (updateError) {
+  66:     await admin.auth.admin.deleteUser(teacherId)
+  67:     return NextResponse.json({ error: 'Failed to finish setting up the account' }, { status: 500 })
+  68:   }
+  69: 
+  70:   if (role === 'principal') {
+  71:     return NextResponse.json({ success: true, teacherId, teacherName: name })
+  72:   }
+  73: 
+  74:   const assignments: { teacher_id: string; class_id?: string; subject_id?: string; role: string; organization_id: string }[] = []
+  75:   if (isClassTeacher && classId) {
+  76:     assignments.push({ teacher_id: teacherId, class_id: classId, role: 'class_teacher', organization_id: orgId })
+  77:   }
+  78:   ;(subjectIds ?? []).forEach((subjectId: string) => {
+  79:     assignments.push({
+  80:       teacher_id: teacherId, class_id: subjectGroupMap?.[subjectId], subject_id: subjectId,
+  81:       role: 'subject_teacher', organization_id: orgId,
+  82:     })
+  83:   })
+  84:   if (assignments.length > 0) {
+  85:     const { error: assignError } = await admin.from('teacher_assignments').insert(assignments)
+  86:     if (assignError) console.error('Assignment error:', assignError)
+  87:   }
+  88: 
+  89:   return NextResponse.json({ success: true, teacherId, teacherName: name })
+  90: }
+
+######## src\app\(dashboard)\training\learners\new\page.tsx ########
+   1: // FILE: src/app/(dashboard)/training/learners/new/page.tsx
+   2: 'use client'
+   3: 
+   4: import { useState, useEffect, Suspense } from 'react'
+   5: import { useRouter, useSearchParams } from 'next/navigation'
+   6: import { createClient } from '@/lib/supabase/client'
+   7: import toast from 'react-hot-toast'
+   8: import Link from 'next/link'
+   9: import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+  10: 
+  11: function NewTrainingLearnerForm() {
+  12:   const supabase = createClient()
+  13:   const router = useRouter()
+  14:   const searchParams = useSearchParams()
+  15:   const preselectedBatchId = searchParams.get('batch_id') ?? ''
+  16: 
+  17:   const [loading, setLoading] = useState(false)
+  18:   const [programmes, setProgrammes] = useState<{ id: string; name: string }[]>([])
+  19:   const [batches, setBatches] = useState<{ id: string; name: string; training_programme_id: string }[]>([])
+  20:   const [programmeId, setProgrammeId] = useState('')
+  21:   const [batchId, setBatchId] = useState(preselectedBatchId)
+  22: 
+  23:   const [firstName, setFirstName] = useState('')
+  24:   const [lastName, setLastName] = useState('')
+  25:   const [otherNames, setOtherNames] = useState('')
+  26:   const [admissionNumber, setAdmissionNumber] = useState('')
+  27:   const [email, setEmail] = useState('')
+  28:   const [phone, setPhone] = useState('')
+  29: 
+  30:   useEffect(() => {
+  31:     async function load() {
+  32:       const { user } = await getAuthenticatedUser(supabase)
+  33:       const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+  34:       if (!profile?.organization_id) return
+  35: 
+  36:       const [{ data: progs }, { data: batchRows }] = await Promise.all([
+  37:         supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+  38:         supabase.from('groups').select('id, name, training_programme_id').eq('organization_id', profile.organization_id).eq('type', 'batch').order('name'),
+  39:       ])
+  40:       setProgrammes(progs ?? [])
+  41:       setBatches(batchRows ?? [])
+  42: 
+  43:       if (preselectedBatchId) {
+  44:         const preselected = (batchRows ?? []).find(b => b.id === preselectedBatchId)
+  45:         if (preselected) setProgrammeId(preselected.training_programme_id)
+  46:       }
+  47:     }
+  48:     load()
+  49:   }, [])
+  50: 
+  51:   const batchesForProgramme = batches.filter(b => b.training_programme_id === programmeId)
+  52: 
+  53:   async function handleSubmit(e: React.FormEvent) {
+  54:     e.preventDefault()
+  55:     if (!firstName.trim() || !lastName.trim()) { toast.error('First and last name are required'); return }
+  56:     if (!programmeId) { toast.error('Select a training programme'); return }
+  57:     if (!batchId) { toast.error('Select a batch'); return }
+  58:     setLoading(true)
+  59: 
+  60:     const { user } = await getAuthenticatedUser(supabase)
+  61:     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+  62: 
+  63:     // group_id set to the batch â€” consistent with how batches are stored
+  64:     // as groups (type='batch') throughout this feature; a Training Centre
+  65:     // learner's "group" IS their batch, there is no separate class concept.
+  66:     const { data: learner, error: learnerError } = await supabase
+  67:       .from('learners')
+  68:       .insert({
+  69:         organization_id: profile?.organization_id,
+  70:         group_id: batchId,
+  71:         first_name: firstName.trim(),
+  72:         last_name: lastName.trim(),
+  73:         other_names: otherNames.trim() || null,
+  74:         admission_number: admissionNumber.trim() || null,
+  75:         email: email.trim() || null,
+  76:         phone: phone.trim() || null,
+  77:         is_active: true,
+  78:       })
+  79:       .select('id')
+  80:       .single()
+  81: 
+  82:     if (learnerError) {
+  83:       setLoading(false)
+  84:       if (learnerError.code === '23505') { toast.error('Admission number already exists'); return }
+  85:       toast.error(learnerError.message)
+  86:       return
+  87:     }
+  88: 
+  89:     const { error: enrolError } = await supabase.from('training_enrolments').insert({
+  90:       organization_id: profile?.organization_id,
+  91:       learner_id: learner.id,
+  92:       training_programme_id: programmeId,
+  93:       batch_group_id: batchId,
+  94:     })
+  95: 
+  96:     setLoading(false)
+  97:     if (enrolError) {
+  98:       // Learner was created but enrolment failed â€” surface this precisely
+  99:       // rather than a generic error, since the two are not atomic here.
+ 100:       toast.error(`Learner created, but enrolment failed: ${enrolError.message}. Enrol them manually from Enrolments.`)
+ 101:       router.push('/training/enrolments/new')
+ 102:       return
+ 103:     }
+ 104: 
+ 105:     toast.success(`${firstName} ${lastName} added and enrolled`)
+ 106:     router.push(`/training/enrolments?batch_id=${batchId}`)
+ 107:     router.refresh()
+ 108:   }
+ 109: 
+ 110:   return (
+ 111:     <div className="max-w-lg">
+ 112:       <div className="flex items-center gap-2 mb-6">
+ 113:         <Link href="/training/enrolments" className="text-sm text-ink-muted hover:text-ink">Enrolments</Link>
+ 114:         <span className="text-ink-faint">/</span>
+ 115:         <span className="text-sm text-ink font-medium">New Learner</span>
+ 116:       </div>
+ 117:       <h1 className="page-title mb-1">Add a Learner</h1>
+ 118:       <p className="page-subtitle mb-6">Creates the learner and enrols them into a programme and batch in one step.</p>
+ 119: 
+ 120:       <form onSubmit={handleSubmit} className="card p-6 flex flex-col gap-4">
+ 121:         <div className="grid grid-cols-2 gap-3">
+ 122:           <div>
+ 123:             <label className="block text-xs font-medium text-ink mb-1">Last name *</label>
+ 124:             <input autoFocus type="text" className="input" value={lastName} onChange={e => setLastName(e.target.value)} />
+ 125:           </div>
+ 126:           <div>
+ 127:             <label className="block text-xs font-medium text-ink mb-1">First name *</label>
+ 128:             <input type="text" className="input" value={firstName} onChange={e => setFirstName(e.target.value)} />
+ 129:           </div>
+ 130:         </div>
+ 131:         <div>
+ 132:           <label className="block text-xs font-medium text-ink mb-1">Other names</label>
+ 133:           <input type="text" className="input" value={otherNames} onChange={e => setOtherNames(e.target.value)} />
+ 134:         </div>
+ 135:         <div className="grid grid-cols-2 gap-3">
+ 136:           <div>
+ 137:             <label className="block text-xs font-medium text-ink mb-1">Admission / ID number</label>
+ 138:             <input type="text" className="input font-mono" value={admissionNumber} onChange={e => setAdmissionNumber(e.target.value)} />
+ 139:           </div>
+ 140:           <div>
+ 141:             <label className="block text-xs font-medium text-ink mb-1">Phone</label>
+ 142:             <input type="tel" className="input" value={phone} onChange={e => setPhone(e.target.value)} />
+ 143:           </div>
+ 144:         </div>
+ 145:         <div>
+ 146:           <label className="block text-xs font-medium text-ink mb-1">Email (optional)</label>
+ 147:           <input type="email" className="input" value={email} onChange={e => setEmail(e.target.value)} />
+ 148:         </div>
+ 149: 
+ 150:         <hr className="border-surface-200" />
+ 151: 
+ 152:         <div>
+ 153:           <label className="block text-xs font-medium text-ink mb-1">Training programme *</label>
+ 154:           <select className="input" value={programmeId} onChange={e => { setProgrammeId(e.target.value); setBatchId('') }}>
+ 155:             <option value="">Select programme</option>
+ 156:             {programmes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+ 157:           </select>
+ 158:         </div>
+ 159:         <div>
+ 160:           <label className="block text-xs font-medium text-ink mb-1">Batch *</label>
+ 161:           <select className="input" value={batchId} onChange={e => setBatchId(e.target.value)} disabled={!programmeId}>
+ 162:             <option value="">{programmeId ? 'Select batch' : 'Select a programme first'}</option>
+ 163:             {batchesForProgramme.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+ 164:           </select>
+ 165:           {programmeId && batchesForProgramme.length === 0 && (
+ 166:             <p className="text-xs text-ink-faint mt-1">
+ 167:               No batches for this programme yet. <Link href={`/training/batches/new?programme_id=${programmeId}`} className="text-brand-500 hover:underline">Add one</Link>.
+ 168:             </p>
+ 169:           )}
+ 170:         </div>
+ 171: 
+ 172:         <div className="flex gap-3">
+ 173:           <button type="submit" disabled={loading} className="btn-primary btn flex-1">{loading ? 'Addingâ€¦' : 'Add & enrol learner'}</button>
+ 174:           <Link href="/training/enrolments" className="btn-secondary btn">Cancel</Link>
+ 175:         </div>
+ 176:       </form>
+ 177:     </div>
+ 178:   )
+ 179: }
+ 180: 
+ 181: export default function NewTrainingLearnerPage() {
+ 182:   return (
+ 183:     <Suspense fallback={<p className="text-sm text-ink-faint">Loadingâ€¦</p>}>
+ 184:       <NewTrainingLearnerForm />
+ 185:     </Suspense>
+ 186:   )
+ 187: }
+
+######## src\app\api\webhooks\new-signup\route.ts ########
+   1: import { NextResponse } from 'next/server'
+   2: import { createAdminClient } from '@/lib/supabase/admin'
+   3: import { sendEmail } from '@/lib/email/resend'
+   4: 
+   5: const ADMIN_EMAIL = 'j.sylvester@eduxellence.org'
+   6: const ADMIN_SITE = 'https://admin.eduxellence.org'
+   7: 
+   8: type AdminClient = ReturnType<typeof createAdminClient>
+   9: 
+  10: export async function POST(request: Request) {
+  11:   const secret = request.headers.get('x-webhook-secret')
+  12:   if (!secret || secret !== process.env.SUPABASE_WEBHOOK_SECRET) {
+  13:     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  14:   }
+  15: 
+  16:   const payload = await request.json()
+  17:   if (payload.type !== 'INSERT') {
+  18:     return NextResponse.json({ ignored: true }, { status: 200 })
+  19:   }
+  20: 
+  21:   const admin = createAdminClient()
+  22: 
+  23:   switch (payload.table) {
+  24:     case 'organizations':
+  25:       return handleInstitutionSignup(admin, payload.record)
+  26:     case 'users':
+  27:       return handleSoloTeacherSignup(admin, payload.record)
+  28:     case 'representatives':
+  29:       return handleRepresentativeSignup(admin, payload.record)
+  30:     default:
+  31:       return NextResponse.json({ ignored: true }, { status: 200 })
+  32:   }
+  33: }
+  34: 
+  35: async function claimOrSkip(admin: AdminClient, table: string, id: string, selectCols: string) {
+  36:   const { data, error } = await admin
+  37:     .from(table)
+  38:     .update({ admin_signup_notified_at: new Date().toISOString() })
+  39:     .eq('id', id)
+  40:     .is('admin_signup_notified_at', null)
+  41:     .select(selectCols)
+  42:     .single()
+  43: 
+  44:   if (error || !data) return null
+  45:   return data as any
+  46: }
+  47: 
+  48: function escapeHtml(str: string) {
+  49:   return (str ?? '')
+  50:     .replace(/&/g, '&amp;')
+  51:     .replace(/</g, '&lt;')
+  52:     .replace(/>/g, '&gt;')
+  53:     .replace(/"/g, '&quot;')
+  54: }
+  55: 
+  56: async function getReferralCode(admin: AdminClient, authUserId: string) {
+  57:   const { data } = await admin
+  58:     .from('referrals')
+  59:     .select('referral_code')
+  60:     .eq('referred_user_id', authUserId)
+  61:     .maybeSingle()
+  62:   return data?.referral_code ?? null
+  63: }
+  64: 
+  65: function formatDate(iso: string) {
+  66:   return new Date(iso).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
+  67: }
+  68: 
+  69: async function handleInstitutionSignup(admin: AdminClient, org: any) {
+  70:   const claimed = await claimOrSkip(admin, 'organizations', org.id, 'id, name, type, created_at')
+  71:   if (!claimed) return NextResponse.json({ skipped: true }, { status: 200 })
+  72: 
+  73:   try {
+  74:     const { data: adminUser } = await admin
+  75:       .from('users')
+  76:       .select('id, email, name')
+  77:       .eq('organization_id', claimed.id)
+  78:       .eq('role', 'admin')
+  79:       .order('created_at', { ascending: true })
+  80:       .limit(1)
+  81:       .maybeSingle()
+  82: 
+  83:     const referralCode = adminUser ? await getReferralCode(admin, adminUser.id) : null
+  84: 
+  85:     const html = `
+  86:       <h2>New Institution Signup</h2>
+  87:       <p><strong>School/Institution name:</strong> ${escapeHtml(claimed.name)}</p>
+  88:       <p><strong>Institution type:</strong> ${escapeHtml(claimed.type)}</p>
+  89:       <p><strong>Admin name:</strong> ${escapeHtml(adminUser?.name || 'Unknown')}</p>
+  90:       <p><strong>Admin email:</strong> ${escapeHtml(adminUser?.email || 'Unknown')}</p>
+  91:       <p><strong>Referral code used:</strong> ${referralCode ? escapeHtml(referralCode) : 'None'}</p>
+  92:       <p><strong>Registered:</strong> ${formatDate(claimed.created_at)}</p>
+  93:       <p><strong>Organization ID:</strong> ${claimed.id}</p>
+  94:       <p><a href="${ADMIN_SITE}/schools/${claimed.id}">View this school in Super Admin</a></p>
+  95:     `
+  96: 
+  97:     await sendEmail({ to: ADMIN_EMAIL, subject: `New Institution Signup: ${claimed.name}`, html })
+  98:   } catch (err) {
+  99:     console.error('Failed to send institution signup notification email:', {
+ 100:       organizationId: claimed.id,
+ 101:       error: err instanceof Error ? err.message : String(err),
+ 102:     })
+ 103:   }
+ 104: 
+ 105:   return NextResponse.json({ ok: true })
+ 106: }
+ 107: 
+ 108: async function handleSoloTeacherSignup(admin: AdminClient, userRow: any) {
+ 109:   const claimed = await claimOrSkip(admin, 'users', userRow.id, 'id, email, name, created_at')
+ 110:   if (!claimed) return NextResponse.json({ skipped: true }, { status: 200 })
+ 111: 
+ 112:   try {
+ 113:     const referralCode = await getReferralCode(admin, claimed.id)
+ 114: 
+ 115:     const html = `
+ 116:       <h2>New Solo Teacher Signup</h2>
+ 117:       <p><strong>Name:</strong> ${escapeHtml(claimed.name)}</p>
+ 118:       <p><strong>Email:</strong> ${escapeHtml(claimed.email)}</p>
+ 119:       <p><strong>Referral code used:</strong> ${referralCode ? escapeHtml(referralCode) : 'None'}</p>
+ 120:       <p><strong>Registered:</strong> ${formatDate(claimed.created_at)}</p>
+ 121:       <p><strong>User ID:</strong> ${claimed.id}</p>
+ 122:       <p><a href="${ADMIN_SITE}/solo-teachers/${claimed.id}">View this teacher in Super Admin</a></p>
+ 123:     `
+ 124: 
+ 125:     await sendEmail({ to: ADMIN_EMAIL, subject: `New Solo Teacher Signup: ${claimed.name}`, html })
+ 126:   } catch (err) {
+ 127:     console.error('Failed to send solo teacher signup notification email:', {
+ 128:       userId: claimed.id,
+ 129:       error: err instanceof Error ? err.message : String(err),
+ 130:     })
+ 131:   }
+ 132: 
+ 133:   return NextResponse.json({ ok: true })
+ 134: }
+ 135: 
+ 136: async function handleRepresentativeSignup(admin: AdminClient, rep: any) {
+ 137:   const claimed = await claimOrSkip(
+ 138:     admin,
+ 139:     'representatives',
+ 140:     rep.id,
+ 141:     'id, full_name, email, phone, referral_code, territory_state, created_at'
+ 142:   )
+ 143:   if (!claimed) return NextResponse.json({ skipped: true }, { status: 200 })
+ 144: 
+ 145:   try {
+ 146:     const html = `
+ 147:       <h2>New Representative Signup</h2>
+ 148:       <p><strong>Name:</strong> ${escapeHtml(claimed.full_name)}</p>
+ 149:       <p><strong>Email:</strong> ${escapeHtml(claimed.email)}</p>
+ 150:       <p><strong>Phone:</strong> ${escapeHtml(claimed.phone || 'Not provided')}</p>
+ 151:       <p><strong>State/territory:</strong> ${escapeHtml(claimed.territory_state || 'Not provided')}</p>
+ 152:       <p><strong>Their new referral code:</strong> ${escapeHtml(claimed.referral_code)}</p>
+ 153:       <p><strong>Registered:</strong> ${formatDate(claimed.created_at)}</p>
+ 154:       <p><strong>Representative ID:</strong> ${claimed.id}</p>
+ 155:       <p><a href="${ADMIN_SITE}/representatives/${claimed.id}">View this representative in Super Admin</a></p>
+ 156:     `
+ 157: 
+ 158:     await sendEmail({ to: ADMIN_EMAIL, subject: `New Representative Signup: ${claimed.full_name}`, html })
+ 159:   } catch (err) {
+ 160:     console.error('Failed to send representative signup notification email:', {
+ 161:       representativeId: claimed.id,
+ 162:       error: err instanceof Error ? err.message : String(err),
+ 163:     })
+ 164:   }
+ 165: 
+ 166:   return NextResponse.json({ ok: true })
+ 167: }

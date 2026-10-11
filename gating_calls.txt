@@ -1,0 +1,168 @@
+﻿\src\app\(dashboard)\admin\page.tsx:29: const currentPlanKey = user?.subscription_plan ?? 'free'
+\src\app\(dashboard)\admin\page.tsx:32: const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
+\src\app\(dashboard)\dashboard\page.tsx:32: const currentPlanKey = user?.subscription_plan ?? 'free'
+\src\app\(dashboard)\dashboard\page.tsx:63: const orgPlanKey = user?.organization?.subscription_plan ?? 'free'
+\src\app\(dashboard)\reports\[id]\ai-remarks-actions.ts:31: .from('users').select('organization_id, subscription_plan').eq('id', user.id).single()
+\src\app\(dashboard)\reports\[id]\ai-remarks-actions.ts:36: .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+\src\app\(dashboard)\reports\[id]\ai-remarks-actions.ts:37: plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\reports\[id]\ai-remarks-actions.ts:39: plan = profile?.subscription_plan ?? 'free'
+\src\app\(dashboard)\reports\[id]\page.tsx:148: .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+\src\app\(dashboard)\reports\[id]\page.tsx:149: currentPlan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\reports\[id]\page.tsx:152: .from('users').select('subscription_plan').eq('id', user.id).single()
+\src\app\(dashboard)\reports\[id]\page.tsx:153: currentPlan = soloProfile?.subscription_plan ?? 'free'
+\src\app\(dashboard)\reports\page.tsx:25: profile?.organization?.subscription_status === 'active'
+\src\app\(dashboard)\settings\academic\actions.ts:23: // Fetches the current subscription_plan for whoever is acting —
+\src\app\(dashboard)\settings\academic\actions.ts:28: const { data } = await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\(dashboard)\settings\academic\actions.ts:29: return { plan: data?.subscription_plan ?? 'free', ref: { type: 'org', orgId } }
+\src\app\(dashboard)\settings\academic\actions.ts:31: const { data } = await supabase.from('users').select('subscription_plan').eq('id', userId).single()
+\src\app\(dashboard)\settings\academic\actions.ts:32: return { plan: data?.subscription_plan ?? 'free', ref: { type: 'solo', userId } }
+\src\app\(dashboard)\settings\billing\actions.ts:53: .update({ subscription_plan: targetPlan })
+\src\app\(dashboard)\settings\institution\page.tsx:118: const { data: ent } = await supabase.rpc('get_tertiary_entitlement', { p_org_id: profile.organization_id })
+\src\app\(dashboard)\settings\subjects\actions.ts:16: .from('users').select('organization_id, subscription_plan').eq('id', user.id).single()
+\src\app\(dashboard)\settings\teachers\actions.ts:74: .from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\(dashboard)\settings\teachers\actions.ts:75: const plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\settings\teachers\actions.ts:218: .from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\(dashboard)\settings\teachers\actions.ts:219: const plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\settings\teachers\actions.ts:349: .from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\(dashboard)\settings\teachers\actions.ts:350: const plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\settings\page.tsx:38: const { data: e } = await supabase.rpc('get_tertiary_entitlement', { p_org_id: org.id })
+\src\app\(dashboard)\settings\page.tsx:50: // ✅ Solo teachers carry their own subscription_plan/status on users;
+\src\app\(dashboard)\settings\page.tsx:52: const currentPlan = (isInstitution ? org?.subscription_plan : profile?.subscription_plan) as PlanKey ?? 'free'
+\src\app\(dashboard)\settings\page.tsx:53: const currentStatus = (isInstitution ? org?.subscription_status : profile?.subscription_status) ?? 'active'
+\src\app\(dashboard)\settings\page.tsx:78: const { data: hasAIRemarks } = await supabase.rpc('user_has_feature', { p_feature_key: 'basic_ai_remarks' })
+\src\app\(dashboard)\settings\page.tsx:79: const { data: hasTeacherMgmt } = await supabase.rpc('user_has_feature', { p_feature_key: 'teacher_management' })
+\src\app\(dashboard)\students\import\actions.ts:48: .select('organization_id, subscription_plan')
+\src\app\(dashboard)\students\import\actions.ts:89: .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+\src\app\(dashboard)\students\import\actions.ts:90: plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\students\import\actions.ts:93: plan = profile?.subscription_plan ?? 'free'
+\src\app\(dashboard)\students\new\actions.ts:37: .select('organization_id, subscription_plan')
+\src\app\(dashboard)\students\new\actions.ts:51: .select('subscription_plan, type')
+\src\app\(dashboard)\students\new\actions.ts:54: plan = org?.subscription_plan ?? 'free'
+\src\app\(dashboard)\students\new\actions.ts:58: plan = profile?.subscription_plan ?? 'free'
+\src\app\(dashboard)\layout.tsx:69: const planFeatures = await getPlanFeatures(supabase, org?.subscription_plan, org?.id)
+\src\app\(super-admin)\founding-500\Founding500Client.tsx:12: organizations: { name: string; subscription_plan: string } | null;
+\src\app\(super-admin)\founding-500\Founding500Client.tsx:36: e.organizations?.subscription_plan || 'free',
+\src\app\(super-admin)\founding-500\Founding500Client.tsx:152: {e.organizations?.subscription_plan ?? 'free'}
+\src\app\(super-admin)\founding-500\page.tsx:29: organizations ( id, name, type, subscription_plan ),
+\src\app\(super-admin)\overview\page.tsx:59: admin.from('organizations').select('*', { count: 'exact', head: true }).eq('subscription_status', 'active'),
+\src\app\(super-admin)\overview\page.tsx:95: .select('subscription_plan, subscription_status')
+\src\app\(super-admin)\overview\page.tsx:96: .in('subscription_status', ['active'])
+\src\app\(super-admin)\overview\page.tsx:107: .select('subscription_plan, subscription_status')
+\src\app\(super-admin)\overview\page.tsx:110: .eq('subscription_status', 'active')
+\src\app\(super-admin)\overview\page.tsx:111: .eq('subscription_plan', 'solo_teacher_pro')
+\src\app\(super-admin)\overview\page.tsx:114: (paidOrgs ?? []).reduce((sum, o) => sum + (PLAN_PRICES[o.subscription_plan] ?? 0), 0) +
+\src\app\(super-admin)\schools\[id]\actions.ts:64: const { data: before } = await admin.from('organizations').select('subscription_status').eq('id', orgId).single()
+\src\app\(super-admin)\schools\[id]\actions.ts:66: const updates: Record<string, unknown> = { subscription_status: status }
+\src\app\(super-admin)\schools\[id]\actions.ts:88: old_status: before?.subscription_status ?? null,
+\src\app\(super-admin)\schools\[id]\actions.ts:110: subscription_status: 'active',
+\src\app\(super-admin)\schools\[id]\actions.ts:212: const { data: before } = await admin.from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\(super-admin)\schools\[id]\actions.ts:216: .update({ subscription_plan: plan })
+\src\app\(super-admin)\schools\[id]\actions.ts:225: old_plan: before?.subscription_plan ?? null,
+\src\app\(super-admin)\schools\[id]\page.tsx:134: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[org.subscription_status] ?? statusStyle.cancelled}`}>
+\src\app\(super-admin)\schools\[id]\page.tsx:135: {org.subscription_status ?? 'cancelled'}
+\src\app\(super-admin)\schools\[id]\page.tsx:139: Plan: {org.subscription_plan ?? '—'} · Signed up {new Date(org.created_at).toLocaleDateString('en-NG')}
+\src\app\(super-admin)\schools\[id]\page.tsx:173: currentStatus={org.subscription_status ?? 'cancelled'}
+\src\app\(super-admin)\schools\[id]\page.tsx:175: currentPlan={org.subscription_plan ?? 'free'}
+\src\app\(super-admin)\schools\page.tsx:30: .select('id, name, subscription_plan, subscription_status, subscription_expires_at, created_at')
+\src\app\(super-admin)\schools\page.tsx:95: <td className="px-4 py-3 text-ink-muted">{org.subscription_plan ?? '—'}</td>
+\src\app\(super-admin)\schools\page.tsx:97: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[org.subscription_status] ?? statusStyle.inactive}`}>
+\src\app\(super-admin)\schools\page.tsx:98: {org.subscription_status ?? 'inactive'}
+\src\app\(super-admin)\solo-teachers\[id]\actions.ts:40: const updates: Record<string, unknown> = { subscription_status: status }
+\src\app\(super-admin)\solo-teachers\[id]\actions.ts:78: subscription_status: 'active',
+\src\app\(super-admin)\solo-teachers\[id]\actions.ts:103: .update({ subscription_plan: plan })
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx:68: <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${statusBadge[teacher.subscription_status] ?? statusBadge.cancelled}`}>
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx:69: {teacher.subscription_status ?? 'cancelled'}
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx:73: {teacher.email} · {groups?.length ?? 0} classes · Plan: {teacher.subscription_plan ?? 'free'}
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx:82: currentStatus={teacher.subscription_status ?? 'cancelled'}
+\src\app\(super-admin)\solo-teachers\[id]\page.tsx:84: currentPlan={teacher.subscription_plan ?? 'free'}
+\src\app\(super-admin)\solo-teachers\page.tsx:34: // ✅ FIX: Exclude super admins and include subscription_status
+\src\app\(super-admin)\solo-teachers\page.tsx:37: .select('id, name, email, created_at, is_active, subscription_status')
+\src\app\(super-admin)\solo-teachers\page.tsx:99: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(t.subscription_status)}`}>
+\src\app\(super-admin)\solo-teachers\page.tsx:100: {t.subscription_status ?? 'cancelled'}
+\src\app\api\admin\fees\analytics\overview\route.ts:125: const { data: hasFees } = await supabase.rpc('org_has_feature', { p_org_id: orgId, p_feature_key: 'fees' })
+\src\app\api\admin\fees\analytics\overview\route.ts:130: const { data: hasAdvanced } = await supabase.rpc('org_has_feature', { p_org_id: orgId, p_feature_key: 'advanced_finance_analytics' })
+\src\app\api\admin\fees\analytics\trends\route.ts:50: const { data: hasAdvanced } = await supabase.rpc('org_has_feature', { p_org_id: orgId, p_feature_key: 'advanced_finance_analytics' })
+\src\app\api\ai\remarks\principal\route.ts:13: .from('users').select('organization_id, subscription_plan, role').eq('id', user.id).single()
+\src\app\api\ai\remarks\principal\route.ts:20: .from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+\src\app\api\ai\remarks\principal\route.ts:21: const plan = org?.subscription_plan ?? 'free'
+\src\app\api\ai\remarks\route.ts:21: ? await supabase.from('organizations').select('subscription_plan').eq('id', profile.organization_id).single()
+\src\app\api\ai\remarks\route.ts:25: if (org && !allowedPlans.includes(org.subscription_plan)) {
+\src\app\api\attendance\route.ts:53: .rpc('org_has_feature', {
+\src\app\api\cron\check-expirations\subscription-check\route.ts:28: .eq('subscription_status', 'active')
+\src\app\api\cron\check-expirations\subscription-check\route.ts:35: .update({ subscription_status: 'grace_period', grace_period_ends_at: graceEnd.toISOString() })
+\src\app\api\cron\check-expirations\subscription-check\route.ts:44: .eq('subscription_status', 'grace_period')
+\src\app\api\cron\check-expirations\subscription-check\route.ts:50: .update({ subscription_status: 'expired' })
+\src\app\api\cron\check-expirations\subscription-check\route.ts:60: .eq('subscription_status', 'active')
+\src\app\api\cron\check-expirations\subscription-check\route.ts:67: .update({ subscription_status: 'grace_period', grace_period_ends_at: graceEnd.toISOString() })
+\src\app\api\cron\check-expirations\subscription-check\route.ts:76: .eq('subscription_status', 'grace_period')
+\src\app\api\cron\check-expirations\subscription-check\route.ts:82: .update({ subscription_status: 'expired' })
+\src\app\api\domain-ratings\route.ts:41: .rpc('org_has_feature', {
+\src\app\api\homework\submissions\route.ts:52: .rpc('org_has_feature', { p_org_id: group.organization_id, p_feature_key: 'homework' });
+\src\app\api\homework\route.ts:52: .rpc('org_has_feature', {
+\src\app\api\parents\fees\route.ts:57: const { data: hasFeature } = await supabase.rpc('org_has_feature', {
+\src\app\api\parents\homework\route.ts:58: const { data: hasFeature } = await supabase.rpc('org_has_feature', {
+\src\app\api\parents\link\route.ts:38: .rpc('org_has_feature', {
+\src\app\api\platform-staff\analytics\route.ts:39: admin.from('organizations').select('subscription_plan, subscription_status'),
+\src\app\api\platform-staff\analytics\route.ts:40: admin.from('users').select('subscription_plan, subscription_status').is('organization_id', null),
+\src\app\api\platform-staff\analytics\route.ts:62: const activeOrgs = (orgsByPlan ?? []).filter(o => o.subscription_status === 'active');
+\src\app\api\platform-staff\analytics\route.ts:63: const activeSolo = (soloByPlan ?? []).filter(u => u.subscription_status === 'active');
+\src\app\api\platform-staff\analytics\route.ts:67: if (o.subscription_plan && o.subscription_plan !== 'free') {
+\src\app\api\platform-staff\analytics\route.ts:68: revenueByPlan[o.subscription_plan] = (revenueByPlan[o.subscription_plan] ?? 0) + (PLAN_PRICES[o.subscription_plan] ?? 0);
+\src\app\api\platform-staff\analytics\route.ts:71: const soloRevenue = activeSolo.filter(u => u.subscription_plan === 'solo_teacher_pro').length * PLAN_PRICES.solo_teacher_pro;
+\src\app\api\platform-staff\analytics\route.ts:73: const totalPaidOrgs = activeOrgs.filter(o => o.subscription_plan !== 'free').length;
+\src\app\api\platform-staff\analytics\route.ts:74: const totalFreeOrgs = (orgsByPlan ?? []).filter(o => o.subscription_plan === 'free' || !o.subscription_plan).length;
+\src\app\api\platform-staff\commissions\route.ts:18: .select('id, representative_id, subscription_plan, amount, commission_rate, status, hold_until, created_at, paid_at')
+\src\app\api\platform-users\search\route.ts:34: .select('id, name, email, phone, role, organization_id, account_status, subscription_plan, subscription_status, last_login')
+\src\app\api\platform-users\search\route.ts:51: .select('id, name, email, phone, role, organization_id, account_status, subscription_plan, subscription_status, last_login')
+\src\app\api\platform-users\search\route.ts:81: .select('id, account_status, last_login, subscription_plan, organization_id')
+\src\app\api\platform-users\search\route.ts:101: subscription_plan: linkedUser?.subscription_plan ?? null,
+\src\app\api\platform-users\search\route.ts:102: subscription_status: null,
+\src\app\api\platform-users\search\route.ts:122: ? admin.from('organizations').select('id, name, subscription_plan').in('id', orgIds)
+\src\app\api\platform-users\search\route.ts:158: const plan = org?.subscription_plan ?? u.subscription_plan ?? null
+\src\app\api\platform-users\[id]\route.ts:40: ? admin.from('organizations').select('id, name, subscription_plan, subscription_status').eq('id', profile.organization_id).maybeSingle()
+\src\app\api\promotion\confirm\route.ts:41: .rpc('org_has_feature', { p_org_id: userRow.organization_id, p_feature_key: 'promotion_wizard' });
+\src\app\api\promotion\preview\route.ts:51: .rpc('org_has_feature', { p_org_id: userRow.organization_id, p_feature_key: 'promotion_wizard' });
+\src\app\api\promotion\rules\route.ts:38: .rpc('org_has_feature', {
+\src\app\api\promotion\rules\route.ts:110: .rpc('org_has_feature', {
+\src\app\api\reports\lock\route.ts:121: const { data: hasAffectiveFeature } = await supabase.rpc('org_has_feature', {
+\src\app\api\representatives\me\route.ts:46: .select('id, amount, status, subscription_plan, created_at, paid_at')
+\src\app\api\representatives\schools\route.ts:43: .select('id, name, address, principal_name, principal_title, contact_phone, contact_email, phone, email, subscription_plan, subscription_status, subscription_expires_at, created_at')
+\src\app\api\representatives\schools\route.ts:85: subscriptionPlan: org.subscription_plan,
+\src\app\api\representatives\schools\route.ts:86: subscriptionStatus: org.subscription_status,
+\src\app\api\staff\create-teacher-account\route.ts:26: const { data: org } = await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single()
+\src\app\api\staff\create-teacher-account\route.ts:27: const plan = org?.subscription_plan ?? 'free'
+\src\components\layout\Sidebar.tsx:50: const plan = org?.subscription_plan ?? 'free'
+\src\components\representatives\RepDashboard.tsx:67: <span>{c.subscription_plan} · ₦{Number(c.amount).toLocaleString()}</span>
+\src\components\representatives\SchoolProfilePanel.tsx:86: const isInactive = ['expired', 'suspended', 'cancelled'].includes(school.subscription_status)
+\src\components\representatives\SchoolProfilePanel.tsx:87: const isOnboarding = school.subscription_status === 'trial' && !relationship?.last_contact_at
+\src\components\representatives\SchoolProfilePanel.tsx:259: <dt className="text-ink-faint">Plan</dt><dd className="text-ink">{school.subscription_plan}</dd>
+\src\components\super-admin\CommissionQueue.tsx:85: <p className="text-sm font-medium">{c.representativeName} · {c.subscription_plan}</p>
+\src\components\super-admin\PlatformUsersDirectory.tsx:293: <p className="text-ink-faint text-xs">{detail.organization.subscription_plan} · {detail.organization.subscription_status}</p>
+\src\components\super-admin\RepLeaderboardDetail.tsx:56: {qualifying_schools.map((s: any) => <p key={s.organization_id} className="text-xs text-ink-muted py-1">{s.name} · {s.subscription_status}</p>)}
+\src\components\super-admin\RepSchoolPortfolioSection.tsx:85: <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_STYLE[s.subscription_status] ?? 'bg-gray-100 text-gray-700'}`}>
+\src\components\super-admin\RepSchoolPortfolioSection.tsx:86: {s.subscription_status}
+\src\components\super-admin\RepSchoolPortfolioSection.tsx:99: <span>Plan: {s.subscription_plan}</span>
+\src\components\super-admin\SchoolPortfoliosTable.tsx:191: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[u.subscription_status] ?? 'bg-gray-100 text-gray-700'}`}>
+\src\components\super-admin\SchoolPortfoliosTable.tsx:192: {u.subscription_status}
+\src\components\super-admin\SchoolPortfoliosTable.tsx:264: <td className="px-4 py-3 text-ink-muted">{p.subscription_plan}</td>
+\src\components\super-admin\SchoolPortfoliosTable.tsx:266: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[p.subscription_status] ?? 'bg-gray-100 text-gray-700'}`}>
+\src\components\super-admin\SchoolPortfoliosTable.tsx:267: {p.subscription_status}
+\src\components\super-admin\SchoolRelationshipProfile.tsx:104: <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[school.subscription_status] ?? 'bg-gray-100 text-gray-700'}`}>
+\src\components\super-admin\SchoolRelationshipProfile.tsx:105: {school.subscription_status}
+\src\components\super-admin\SchoolRelationshipProfile.tsx:249: <dt className="text-ink-faint">Plan</dt><dd className="text-ink">{school.subscription_plan}</dd>
+\src\components\super-admin\SchoolRelationshipProfile.tsx:250: <dt className="text-ink-faint">Status</dt><dd className="text-ink">{school.subscription_status}</dd>
+\src\hooks\useOrg.ts:43: const plan: SubscriptionPlan = (org?.subscription_plan as SubscriptionPlan) ?? 'free'
+\src\lib\payments\apply-subscription.ts:58: subscription_plan: metadata.plan,
+\src\lib\payments\apply-subscription.ts:59: subscription_status: 'active',
+\src\lib\subscription\checkAccess.ts:8: .from('users').select('organization_id, subscription_status').eq('id', userId).single()
+\src\lib\subscription\checkAccess.ts:11: ? (await supabase.from('organizations').select('subscription_status').eq('id', profile.organization_id).single()).data?.subscription_status
+\src\lib\subscription\checkAccess.ts:12: : profile?.subscription_status
+\src\lib\subscription\checkPlanLimit.ts:12: .from('users').select('organization_id, subscription_plan').eq('id', userId).single()
+\src\lib\subscription\checkPlanLimit.ts:33: ? (await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single()).data?.subscription_plan
+\src\lib\subscription\checkPlanLimit.ts:34: : profile?.subscription_plan
+\src\lib\subscription\getSubscriptionState.ts:21: .select('organization_id, subscription_plan, subscription_status, grace_period_ends_at, subscription_expires_at')
+\src\lib\subscription\getSubscriptionState.ts:27: .select('subscription_status, subscription_plan, grace_period_ends_at, subscription_expires_at')
+\src\lib\subscription\getSubscriptionState.ts:30: return computeState(org?.subscription_status, org?.subscription_plan, org?.grace_period_ends_at, org?.subscription_expires_at)
+\src\lib\subscription\getSubscriptionState.ts:33: return computeState(profile?.subscription_status, profile?.subscription_plan, profile?.grace_period_ends_at, profile?.subscription_expires_at)
+\src\types\index.ts:22: subscription_plan: SubscriptionPlan
+\src\types\index.ts:23: subscription_status: SubscriptionStatus
