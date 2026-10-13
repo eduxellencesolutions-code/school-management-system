@@ -22,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'overview', href: '/overview', label: 'Overview', section: 'primary' },
   { key: 'schools', href: '/schools', label: 'Schools', section: 'primary', requiredPermission: 'schools.view' },
   { key: 'solo-teachers', href: '/solo-teachers', label: 'Solo Teachers', section: 'primary', requiredPermission: 'schools.view' },
+  { key: 'founding-institutions', href: '/founding-institutions', label: 'Founding Institutions', section: 'primary', superAdminOnly: true },
   { key: 'analytics', href: '/analytics', label: 'Analytics', section: 'primary', requiredPermission: 'analytics.view' },
   { key: 'support', href: '/support', label: 'Support', section: 'primary', requiredPermission: 'support.view' },
   { key: 'commissions', href: '/commissions', label: 'Commissions', section: 'more', requiredPermission: 'commissions.approve' },

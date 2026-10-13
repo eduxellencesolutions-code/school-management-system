@@ -14,6 +14,7 @@ const ICONS: Record<string, any> = {
   welcome: Home,
   schools: Building,
   'solo-teachers': Users,
+  'founding-institutions': Building,
   analytics: BarChart3,
   support: Ticket,
   commissions: DollarSign,
