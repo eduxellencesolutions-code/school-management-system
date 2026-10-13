@@ -30,7 +30,7 @@
     },
     {
       "path": "/api/cron/drain-signup-outbox",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
