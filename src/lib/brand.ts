@@ -4,3 +4,4 @@ export const BRAND = {
   phoneTel: '+2348135980311',
   email: 'eduxellencesolutions@gmail.com',
 } as const
+// deploy trigger 2026-10-13 16:46:02
