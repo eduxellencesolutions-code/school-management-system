@@ -95,6 +95,7 @@ export async function createTeacher(input: CreateTeacherInput) {
     password: input.password,
     email_confirm: true,
     user_metadata: { name: input.name.trim(), role: input.role, organization_id: orgId },
+    app_metadata:  { edux_org_id: orgId, edux_role: input.role },
   })
 
   if (createError || !newUser.user) {

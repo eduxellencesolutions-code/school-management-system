@@ -30,6 +30,7 @@ export async function GET() {
       status, status_reason, created_at, pilot_started_at, pilot_ends_at, converted_at,
       conversion_type, waiver_reason, referral_code, representative_id, referral_id, organization_id,
       agreed_tier_key, agreed_price_per_student_per_term, agreed_currency, agreed_locked_at,
+      attribution_note, referral_review_reason,
       representative:representatives!founding_institution_applications_representative_id_fkey(full_name, referral_code, status),
       organization:organizations!founding_institution_applications_organization_id_fkey(name, tertiary_plan, subscription_status, subscription_expires_at)
     `)

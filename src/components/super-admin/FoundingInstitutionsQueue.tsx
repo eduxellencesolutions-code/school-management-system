@@ -42,6 +42,12 @@ export default function FoundingInstitutionsQueue() {
     const json = await res.json()
     setBusyId(null)
     if (json.error) { alert(json.error); return false }
+    const d = json.data
+    if (d?.review_required) {
+      alert(`Nothing was linked. Referral attribution needs review: ${String(d.reason).replace(/_/g, ' ')}. The details are in the audit log; contact engineering to resolve it, then link again.`)
+    } else if (d?.referral_outcome === 'existing_prevailed') {
+      alert("The institution's original referral was kept. The applicant's own code is recorded in the audit log.")
+    }
     await load()
     return true
   }
@@ -130,6 +136,12 @@ export default function FoundingInstitutionsQueue() {
                       ? `code "${a.referral_code}" did not match an active representative — no commission will be paid`
                       : 'no referral'}
                 </p>
+                {a.referral_review_reason && (
+                  <p className="text-xs text-red-600">
+                    Referral attribution needs review: {String(a.referral_review_reason).replace(/_/g, ' ')}. Nothing was linked; contact engineering to resolve it, then link again.
+                  </p>
+                )}
+                {a.attribution_note && <p className="text-xs text-ink-faint">{a.attribution_note} (recorded in the audit log)</p>}
                 {a.organization && (
                   <p className="text-xs text-ink-faint">
                     <span className="font-medium text-ink-muted">Organization:</span> {a.organization.name}

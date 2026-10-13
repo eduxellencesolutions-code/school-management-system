@@ -82,7 +82,7 @@ export default function HigherInstitutionsPricingClient({ data }: { data: Pricin
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-ink">Pricing for Universities, Polytechnics & Colleges</h1>
         <p className="text-lg text-ink-muted max-w-2xl mx-auto mt-4">
-          Transparent per-student, per-term pricing that scales with your institution — from a single faculty pilot to a multi-campus university.
+          Transparent per-student, per-term pricing that scales with your institution — from a single faculty pilot to a large university.
         </p>
       </div>
 

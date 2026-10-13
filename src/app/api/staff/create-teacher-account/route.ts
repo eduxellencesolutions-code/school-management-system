@@ -52,6 +52,7 @@ export async function POST(req: Request) {
     password,
     email_confirm: true,
     user_metadata: { name: name.trim(), role, organization_id: orgId },
+    app_metadata:  { edux_org_id: orgId, edux_role: role },
   })
   if (createError || !newUser.user) {
     return NextResponse.json({ error: createError?.message ?? 'Failed to create teacher account' }, { status: 500 })

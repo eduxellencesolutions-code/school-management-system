@@ -318,7 +318,7 @@ export default function LandingPage() {
           <div className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-2">Higher Institutions</div>
           <h3 className="text-xl font-bold text-ink mb-2">Per-student, per-term pricing that scales with you</h3>
           <p className="text-sm text-ink-muted max-w-xl mx-auto mb-6">
-            From a single-faculty pilot to a multi-campus university, with a dedicated negotiated tier
+            From a single-faculty pilot to a large university, with a dedicated negotiated tier
             for the largest institutions.
           </p>
           <Link href="/pricing/higher-institutions" className="btn-primary btn btn-lg">See Higher Institutions Pricing</Link>

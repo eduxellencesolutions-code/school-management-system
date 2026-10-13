@@ -127,6 +127,7 @@ export default function InstitutionSettingsPage() {
             .select('capability_key')
             .eq('tier_key', org.tertiary_plan)
             .eq('is_enabled', true)
+            .eq('customer_visible', true)
           setCapabilities((capRows ?? []).map(c => c.capability_key))
 
           const { data: estimate, error: estimateError } = await supabase.rpc('get_tertiary_billing_estimate', {
