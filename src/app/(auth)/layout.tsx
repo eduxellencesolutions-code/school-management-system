@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { getPortalContext } from '@/lib/domains/portalContext'
+import DeveloperCredit from '@/components/brand/DeveloperCredit'
 
 // Converts a hex color to an rgba() string at a given opacity, for a soft
 // background tint that doesn't fight with the white sign-in card's contrast.
@@ -74,6 +75,9 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         ) : null}
 
         {children}
+        <div className="mt-6">
+          <DeveloperCredit />
+        </div>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 // src/app/page.tsx
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { BRAND } from '@/lib/brand'
 
 export const metadata: Metadata = {
   title: 'Eduxellence Results | Academic Operating System for Schools & Higher Institutions',
@@ -39,6 +40,7 @@ export default function LandingPage() {
             <Link href="#schools" className="hidden md:inline text-sm text-ink-muted hover:text-ink transition-colors">Schools</Link>
             <Link href="#higher-education" className="hidden md:inline text-sm text-ink-muted hover:text-ink transition-colors">Higher Education</Link>
             <Link href="#pricing" className="hidden md:inline text-sm text-ink-muted hover:text-ink transition-colors">Pricing</Link>
+            <Link href="#contact" className="hidden md:inline text-sm text-ink-muted hover:text-ink transition-colors">Contact</Link>
             <Link href="/login" className="btn-secondary btn-sm btn whitespace-nowrap">Sign in</Link>
             <Link href="/signup" className="btn-primary btn-sm btn whitespace-nowrap">Get started free</Link>
           </div>
@@ -338,17 +340,32 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-surface-200 px-6 py-8">
-        <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <div className="font-semibold text-ink">
-            Eduxellence <span className="text-brand-500">Results</span>
-          </div>
-          <p className="text-xs text-ink-faint">
-            © {new Date().getFullYear()} Eduxellence. The academic operating system for modern education institutions.
+      {/* 13. Contact & Support */}
+      <section id="contact" aria-labelledby="support-heading" className="max-w-6xl mx-auto px-6 py-20 scroll-mt-20">
+        <div className="text-center mb-10">
+          <span className="inline-block text-xs font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full mb-4">CONTACT &amp; SUPPORT</span>
+          <h2 id="support-heading" className="text-3xl font-bold text-ink mb-3">Need help or have a question?</h2>
+          <p className="text-ink-muted max-w-xl mx-auto">
+            Contact our support team for assistance, enquiries or feedback.
           </p>
         </div>
-      </footer>
+        <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          <a
+            href={`tel:${BRAND.phoneTel}`}
+            className="card p-6 text-center hover:shadow-modal transition-shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+          >
+            <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">Phone</div>
+            <div className="text-lg font-semibold text-ink">{BRAND.phoneDisplay}</div>
+          </a>
+          <a
+            href={`mailto:${BRAND.email}`}
+            className="card p-6 text-center hover:shadow-modal transition-shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+          >
+            <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">Email</div>
+            <div className="text-base sm:text-lg font-semibold text-ink break-all">{BRAND.email}</div>
+          </a>
+        </div>
+      </section>
     </div>
   )
 }

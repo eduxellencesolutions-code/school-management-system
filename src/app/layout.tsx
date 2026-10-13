@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import AnnouncementTicker from '@/components/announcements/AnnouncementTicker'
 import TawkWidget from '@/components/support/TawkWidget'
+import SiteFooter from '@/components/brand/SiteFooter'
 import '@/styles/globals.css'
 
 // ✅ Google Fonts using Next.js built-in optimization
@@ -97,6 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* ✅ Tawk.to live chat */}
         <TawkWidget />
         {children}
+        <SiteFooter />
         <Toaster
           position="top-right"
           toastOptions={{
