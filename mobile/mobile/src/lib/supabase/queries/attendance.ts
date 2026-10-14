@@ -68,7 +68,7 @@ export async function submitAttendance(params: {
   // (group_id, learner_id, date) — see note below if this errors.
   const { error } = await supabase
     .from('attendance_records')
-    .upsert(rows, { onConflict: 'group_id,learner_id,date' })
+    .upsert(rows, { onConflict: 'learner_id,date' })
 
   if (error) throw new Error('Could not save attendance. Please try again.')
 }

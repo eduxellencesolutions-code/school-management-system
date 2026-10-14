@@ -38,15 +38,16 @@ export async function GET() {
 
   const { data: rep } = await supabase
     .from('representatives')
-    .select('id')
+    .select('id, status')
     .eq('user_id', user.id)
     .single();
 
   if (!rep) return NextResponse.json({ error: 'You do not have representative access' }, { status: 403 });
+  if (rep.status !== 'active') return NextResponse.json({ error: 'Your representative account is not active' }, { status: 403 });
 
   const { data: withdrawals, error } = await supabase
     .from('withdrawals')
-    .select('id, amount_requested, amount_claimed, status, date_requested, date_paid, payment_reference, rejection_reason')
+    .select('id, status')
     .eq('representative_id', rep.id)
     .order('date_requested', { ascending: false });
 

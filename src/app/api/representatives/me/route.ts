@@ -14,6 +14,7 @@ export async function GET() {
     .single();
 
   if (error || !rep) return NextResponse.json({ error: 'You do not have representative access' }, { status: 403 });
+  if (rep.status !== 'active') return NextResponse.json({ error: 'Your representative account is not active' }, { status: 403 });
 
   const { data: referrals } = await supabase
     .from('referrals')

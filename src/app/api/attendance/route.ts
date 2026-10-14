@@ -5,110 +5,40 @@ import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 // POST /api/attendance
 // Body: { groupId, termId, sessionId, date, records: [{ learnerId, status }] }
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const supabase = await createClient()
+  const { user } = await getAuthenticatedUser(supabase)
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const { user } = await getAuthenticatedUser(supabase);
-  if (!user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  // ✅ FIX: Check permission instead of hard role check
-  const { data: userRow } = await supabase
-    .from('users')
-    .select('organization_id, role')
-    .eq('id', user.id)
-    .single();
-
-  const { data: hasPerm } = await supabase.rpc('has_permission', { 
-    p_user_id: user.id, 
-    p_permission_key: 'attendance.mark' 
-  });
-  if (userRow?.role !== 'admin' && !hasPerm) {
-    return NextResponse.json({ error: 'You do not have permission to mark attendance' }, { status: 403 });
-  }
-
-  const body = await request.json();
-  const { groupId, termId, sessionId, date, records } = body;
-
+  const body = await request.json()
+  const { groupId, termId, sessionId, date, records } = body
   if (!groupId || !termId || !sessionId || !date || !Array.isArray(records) || records.length === 0) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Resolve the caller's org (null org = solo teacher, always allowed)
-  const { data: userRowOrg, error: userError } = await supabase
-    .from('users')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
+  const { data: canMark } = await supabase.rpc('can_mark_attendance', { p_group_id: groupId })
+  if (!canMark) return NextResponse.json({ error: 'You do not have permission to mark attendance for this class' }, { status: 403 })
 
-  if (userError) {
-    return NextResponse.json({ error: 'Could not resolve user profile' }, { status: 500 });
-  }
+  const { data: userRow } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+  const orgId = userRow?.organization_id ?? null
 
-  const isSolo = userRowOrg.organization_id === null;
+  const learnerIds = [...new Set(records.map((r: { learnerId: string }) => r.learnerId))]
+  const { data: activeLearners, error: lerr } = await supabase
+    .from('learners').select('id').in('id', learnerIds).eq('group_id', groupId).eq('is_active', true).eq('status', 'active')
+  if (lerr) return NextResponse.json({ error: lerr.message }, { status: 500 })
+  const active = new Set((activeLearners ?? []).map(l => l.id))
+  const skipped = learnerIds.filter(id => !active.has(id))
 
-  // Explicit app-layer gate check, in addition to RLS — belt and braces.
-  if (!isSolo) {
-    const { data: hasFeature, error: featureError } = await supabase
-      .rpc('org_has_feature', {
-        p_org_id: userRowOrg.organization_id,
-        p_feature_key: 'basic_attendance',
-      });
-
-    if (featureError) {
-      return NextResponse.json({ error: 'Could not verify plan entitlement' }, { status: 500 });
-    }
-
-    if (!hasFeature) {
-      return NextResponse.json(
-        { error: 'Attendance is not available on your current plan' },
-        { status: 403 }
-      );
-    }
-  }
-
-  // A withdrawn/transferred/graduated/suspended/archived student must
-  // not accumulate new attendance records — this is the exact contamination
-  // risk called out for attendance specifically. Filter the incoming
-  // learner IDs down to currently active ones before writing anything.
-  const learnerIds = [...new Set(records.map((r: { learnerId: string }) => r.learnerId))];
-  const { data: activeLearners, error: activeLearnersError } = await supabase
-    .from('learners')
-    .select('id')
-    .in('id', learnerIds)
-    .eq('is_active', true);
-  if (activeLearnersError) {
-    return NextResponse.json({ error: activeLearnersError.message }, { status: 500 });
-  }
-  const activeLearnerIds = new Set((activeLearners ?? []).map((l) => l.id));
-  const skippedLearnerIds = learnerIds.filter((id) => !activeLearnerIds.has(id));
-
-  // organization_id is stamped from resolved user context, never trusted from client input
   const rows = records
-    .filter((r: { learnerId: string; status: string }) => activeLearnerIds.has(r.learnerId))
+    .filter((r: { learnerId: string; status: string }) => active.has(r.learnerId) && ['present', 'absent', 'late'].includes(r.status))
     .map((r: { learnerId: string; status: string }) => ({
-      organization_id: userRowOrg.organization_id,
-      group_id: groupId,
-      learner_id: r.learnerId,
-      term_id: termId,
-      session_id: sessionId,
-      date,
-      status: r.status,
-      recorded_by: user.id,
-    }));
+      organization_id: orgId, group_id: groupId, learner_id: r.learnerId,
+      term_id: termId, session_id: sessionId, date, status: r.status, recorded_by: user.id,
+    }))
+  if (rows.length === 0) return NextResponse.json({ error: 'No active students among the submitted records' }, { status: 400 })
 
-  if (rows.length === 0) {
-    return NextResponse.json({ error: 'No active students among the submitted records' }, { status: 400 });
-  }
-
-  const { error: insertError } = await supabase
-    .from('attendance_records')
-    .upsert(rows, { onConflict: 'learner_id,date' });
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ success: true, count: rows.length, skipped: skippedLearnerIds });
+  const { error } = await supabase.from('attendance_records').upsert(rows, { onConflict: 'learner_id,date' })
+  if (error) return NextResponse.json({ error: error.message }, { status: error.code === '42501' ? 403 : 500 })
+  return NextResponse.json({ success: true, count: rows.length, skipped })
 }
 
 // GET /api/attendance?groupId=...&date=...

@@ -13,6 +13,7 @@ export default function StudentPortalPage() {
   const [record, setRecord] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [attendance, setAttendance] = useState<any[]>([])
 
   useEffect(() => {
     async function load() {
@@ -24,6 +25,10 @@ export default function StudentPortalPage() {
       setLoading(false)
     }
     load()
+  }, [])
+
+  useEffect(() => {
+    supabase.rpc('get_student_attendance_report').then(({ data }) => setAttendance(data ?? []))
   }, [])
 
   if (loading) return <p className="text-sm text-ink-faint p-6">Loading…</p>
@@ -75,6 +80,19 @@ export default function StudentPortalPage() {
           </table>
         </div>
       ))}
+
+      {attendance.length > 0 && (
+        <div className="card p-6 mb-4">
+          <p className="font-medium text-ink mb-3">My attendance</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-ink-faint uppercase"><th className="pb-2">Course</th><th>Present</th><th>Late</th><th>Absent</th><th>Excused</th><th>%</th></tr></thead>
+            <tbody>{attendance.map((a: any) => (
+              <tr key={a.subject_id + a.term_id} className="border-t border-surface-100">
+                <td className="py-1.5">{a.code} — {a.name}</td><td>{a.present}</td><td>{a.late}</td><td>{a.absent}</td><td>{a.excused}</td><td>{a.attendance_percentage ?? '—'}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

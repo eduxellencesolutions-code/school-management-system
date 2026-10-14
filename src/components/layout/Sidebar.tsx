@@ -112,8 +112,8 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
   ] : []
 
   const studentLifeNav = [
-    ...(has('basic_attendance') ? [{ label: 'Attendance', href: '/attendance', icon: CalendarCheck }] : []),
-    ...(has('basic_attendance') ? [{ label: 'Attendance Reports', href: '/attendance/reports', icon: FileText }] : []),
+    ...(isTertiary || has('basic_attendance') ? [{ label: 'Attendance', href: isTertiary ? '/lecturer/attendance' : '/attendance', icon: CalendarCheck }] : []),
+    ...(isTertiary || has('basic_attendance') ? [{ label: 'Attendance Reports', href: isTertiary ? '/attendance/course-reports' : '/attendance/reports', icon: FileText }] : []),
     ...(has('affective_psychomotor') ? [{ label: 'Affective & Psychomotor', href: '/psychomotor', icon: Smile }] : []),
     ...(has('homework') ? [{ label: 'Homework', href: '/homework', icon: ClipboardCheck }] : []),
     ...(has('fees') ? [{ label: 'Fees', href: '/fees', icon: Wallet }] : []),
@@ -136,9 +136,6 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
     ...(isAdmin ? [{ label: 'Setup Status', href: '/settings/setup-wizard', icon: AlertCircle }] : []),
     { label: 'Support', href: '/school-support', icon: TicketIcon },
-    ...(isAdmin ? [{ label: 'Representatives', href: '/representatives', icon: Users }] : []),
-    ...(isAdmin ? [{ label: 'Commissions', href: '/commissions', icon: Wallet }] : []),
-    ...(isAdmin ? [{ label: 'Withdrawals', href: '/withdrawals', icon: Wallet }] : []),
   ]
 
   const renderLink = ({ label, href, icon: Icon }: { label: string; href: string; icon: any }) => {
