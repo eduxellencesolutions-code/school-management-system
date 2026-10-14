@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
   }
   const orgId = profile.organization_id
   const { data: orgTypeRow } = await admin.from('organizations').select('type').eq('id', orgId).single()
-  if (orgTypeRow?.type === 'university') {
-    return NextResponse.json({ error: 'Founding 500 is for schools. Higher institutions use the Founding 50 programme.' }, { status: 403 })
+  if (orgTypeRow?.type !== 'school') {
+    return NextResponse.json({ error: 'Founding 500 is for schools.' }, { status: 403 })
   }
 
   // Referral is resolved server-side from signup-time data — never

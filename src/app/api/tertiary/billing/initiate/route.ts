@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Tertiary billing checkout is not yet available.' }, { status: 503 })
   }
   const body = await req.json().catch(() => ({}))
+  const expectedAmount = Number(body.expectedAmount)
   const provider = body.provider as 'flutterwave' | 'paystack'
   const kind: 'period' | 'founding_conversion' = body.kind === 'founding_conversion' ? 'founding_conversion' : 'period'
   const applicationId = typeof body.applicationId === 'string' ? body.applicationId : null
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Tertiary billing only applies to University/Polytechnic/College institutions' }, { status: 400 })
   }
 
+  const { data: gateways } = await supabase.rpc('get_available_gateways', { p_currency: 'NGN', p_scope: 'tertiary' })
+  if (!Array.isArray(gateways) || !gateways.includes(provider)) return NextResponse.json({ error: 'That payment method is not available right now.' }, { status: 400 })
+
   const quoteReference = `edux-tq-${orgId}-${Date.now()}`
   const { data: quote, error: quoteError } = kind === 'period'
     ? await supabase.rpc('create_tertiary_payment_quote', { p_org_id: orgId, p_reference: quoteReference })
@@ -50,6 +54,9 @@ export async function POST(req: NextRequest) {
   if (quoteError || !quote) return NextResponse.json({ error: quoteError?.message ?? 'Could not create a quote' }, { status: 400 })
 
   const amount = Number(quote.amount_due)
+  if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {
+    return NextResponse.json({ error: 'The amount changed since you reviewed it. Please review the updated quote.', code: 'quote_changed', amount }, { status: 409 })
+  }
   const currency = quote.currency as Currency
   const reference = `${quote.reference}-${Date.now().toString(36)}`
 

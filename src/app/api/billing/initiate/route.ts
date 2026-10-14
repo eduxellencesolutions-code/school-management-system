@@ -38,10 +38,14 @@ export async function POST(req: NextRequest) {
     .from('users').select('organization_id, name, email').eq('id', user.id).single()
 
   if (profile?.organization_id) {
-    const { data: orgRow } = await supabase.from('organizations').select('type').eq('id', profile.organization_id).single()
-    if (orgRow?.type === 'university') {
-      return NextResponse.json({ error: 'University institutions are billed through Institution Settings.' }, { status: 403 })
-    }
+    return NextResponse.json({ error: 'Please use the plan and payment wizard in Settings.' }, { status: 403 })
+  }
+
+  if (profile?.organization_id) {
+    const { data: eligible } = await supabase.rpc('org_plan_eligibility', { p_org_id: profile.organization_id, p_plan: plan })
+    if (!eligible) return NextResponse.json({ error: 'This plan is not available for your institution type.' }, { status: 403 })
+  } else if (plan !== 'solo_teacher_pro') {
+    return NextResponse.json({ error: 'This plan is not available for individual teachers.' }, { status: 403 })
   }
 
   const accountType = profile?.organization_id ? 'org' : 'solo'

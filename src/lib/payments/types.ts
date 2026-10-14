@@ -39,7 +39,18 @@ export interface TertiaryCheckoutMetadata {
   expected_currency: Currency
 }
 
-export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata
+export interface K12CheckoutMetadata {
+  type: 'k12_subscription'
+  organizationId: string
+  quoteReference: string
+  planKey: string
+  billingCycle: 'termly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata
 
 export interface InitiateCheckoutInput {
   email: string

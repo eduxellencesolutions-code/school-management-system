@@ -38,3 +38,5 @@ tests/e2e/.fixtures.json
 admin_routes_noauthz.txt
 platform-routes-audit.csv
 round6.txt
+.vercel
+.env*

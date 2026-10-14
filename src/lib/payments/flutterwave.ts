@@ -12,6 +12,8 @@ export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput):
       description = input.metadata.quoteKind === 'founding_conversion'
         ? 'Founding 50 conversion fee'
         : `Tertiary: ${input.metadata.tierKey} (${input.metadata.billingCycle})`
+    } else if (input.metadata.type === 'k12_subscription') {
+      description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
     } else {
       description = `${input.metadata.plan} (${input.metadata.cycle})`
     }

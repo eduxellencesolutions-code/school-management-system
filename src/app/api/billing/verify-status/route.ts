@@ -2,94 +2,38 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
 import { verifyPaystackTransaction } from '@/lib/payments/paystack'
-import { applySuccessfulSubscription } from '@/lib/payments/apply-subscription'
-import { applyFounding500Payment } from '@/lib/payments/apply-founding500'
-import { applySuccessfulTertiarySubscription } from '@/lib/payments/apply-tertiary-subscription'
+import { applyVerifiedPayment } from '@/lib/payments/dispatch'
 
 export async function GET(req: NextRequest) {
   const provider = req.nextUrl.searchParams.get('provider')
   const ref = req.nextUrl.searchParams.get('ref')
-  // Flutterwave's redirect also appends its own transaction_id — prefer
-  // that for Flutterwave verification since tx_ref alone isn't enough
-  // for their verify-by-id endpoint.
   const transactionId = req.nextUrl.searchParams.get('transaction_id')
-
-  if (!provider || !ref) {
-    return NextResponse.json({ status: 'error', message: 'Missing provider or reference' }, { status: 400 })
-  }
+  if (!provider || !ref) return NextResponse.json({ status: 'error', message: 'Missing provider or reference' }, { status: 400 })
 
   try {
     const verification = provider === 'flutterwave'
       ? await verifyFlutterwaveTransaction(transactionId ?? ref)
       : await verifyPaystackTransaction(ref)
-
-    if (!verification.success) {
-      return NextResponse.json({ status: 'error', message: verification.error ?? 'Verification failed' })
-    }
-
-    if (verification.status !== 'successful') {
-      return NextResponse.json({ status: verification.status })
-    }
-
-    if (!verification.metadata) {
-      return NextResponse.json({ status: 'error', message: 'Payment verified but no subscription details found' })
-    }
-
-    // ✅ Validate reference exists before applying
-    if (!verification.reference) {
-      console.error('Payment verified but provider returned no reference — refusing to apply subscription')
+    if (!verification.success) return NextResponse.json({ status: 'error', message: verification.error ?? 'Verification failed' })
+    if (verification.status !== 'successful') return NextResponse.json({ status: verification.status })
+    if (!verification.metadata) return NextResponse.json({ status: 'error', message: 'Payment verified but no subscription details found' })
+    if (!verification.reference || verification.amount === undefined) {
       return NextResponse.json({ status: 'error', message: 'Payment verification incomplete — please contact support' })
     }
 
-    // ✅ Validate amount exists before applying — same pattern as the
-    // reference check above. amount should always be present once
-    // status === 'successful', but we don't silently fall back to 0.
-    if (verification.amount === undefined) {
-      console.error('Payment verified but provider returned no amount — refusing to apply subscription')
-      return NextResponse.json({ status: 'error', message: 'Payment verification incomplete — please contact support' })
-    }
-
-    // ✅ Pass gateway and verification.reference to applySuccessfulSubscription
-    // No fallback here — apply-subscription.ts owns the fallback logic centrally
-    const applied = verification.metadata.type === 'founding_500'
-      ? await applyFounding500Payment(
-          verification.metadata,
-          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
-          verification.reference,
-          verification.amount,
-          verification.currency ?? 'NGN'
-        )
-      : verification.metadata.type === 'tertiary_subscription'
-      ? await applySuccessfulTertiarySubscription(
-          verification.metadata,
-          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
-          verification.reference,
-          verification.amount,
-          verification.currency ?? 'NGN'
-        )
-      : await applySuccessfulSubscription(
-          verification.metadata,
-          provider === 'flutterwave' ? 'flutterwave' : 'paystack',
-          verification.reference,
-          verification.amount
-        )
+    const applied = await applyVerifiedPayment(verification, provider === 'flutterwave' ? 'flutterwave' : 'paystack')
     if (!applied.success) {
-      if ('needsReview' in applied && applied.needsReview) {
-        return NextResponse.json({ status: 'needs_review', message: applied.error })
-      }
-
+      if (applied.needsReview) return NextResponse.json({ status: 'needs_review', message: applied.error })
       return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
     }
 
-    return NextResponse.json({
-      status: 'successful',
-      plan: verification.metadata.type === 'founding_500'
-        ? 'founding_500'
-        : verification.metadata.type === 'tertiary_subscription'
-        ? (verification.metadata.tierKey ?? 'founding_conversion')
-        : verification.metadata.plan,
-    })
-  } catch (err: any) {
+    const m = verification.metadata
+    const plan = m.type === 'founding_500' ? 'founding_500'
+      : m.type === 'tertiary_subscription' ? (m.tierKey ?? 'founding_conversion')
+      : m.type === 'k12_subscription' ? m.planKey
+      : m.plan
+    return NextResponse.json({ status: 'successful', plan })
+  } catch (err) {
     console.error('Verify status error:', err)
     return NextResponse.json({ status: 'error', message: 'Something went wrong verifying your payment' }, { status: 500 })
   }

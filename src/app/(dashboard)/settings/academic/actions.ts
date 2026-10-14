@@ -220,11 +220,8 @@ export async function setCurrentTerm(formData: FormData): Promise<void> {
     console.log('Setting current term:', { userId: user.id, orgId, termId })
 
     if (orgId) {
-      const { error } = await supabase
-        .from('organizations')
-        .update({ current_term_id: termId || null })
-        .eq('id', orgId)
-      
+      const { error } = await supabase.rpc('set_current_term', { p_term_id: termId || null })
+
       if (error) {
         console.error('Error updating organization term:', error)
         return

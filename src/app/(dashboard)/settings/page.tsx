@@ -289,12 +289,23 @@ export default async function SettingsPage() {
             <p className="text-xs text-ink-muted">
               Higher-institution plans are billed per student per term. Choose your plan and pay in Institution Settings.
             </p>
+            <Link href="/settings/billing/wizard" className="btn-primary btn-sm btn w-fit">Open plan &amp; payment wizard</Link>
             <Link href="/settings/institution" className="btn-primary btn-sm btn w-fit">Manage plan and payment</Link>
           </div>
         </div>
       )}
 
-      {canSeeBilling && !isTertiary && (
+      {isInstitution && isAdmin && org?.type === 'centre' && (
+        <div id="billing" className="card scroll-mt-20">
+          <div className="card-header"><h2 className="font-semibold text-sm text-ink">Subscription & Billing</h2></div>
+          <div className="card-body flex flex-col gap-3">
+            <p className="text-sm text-ink">Plans for training centres are being finalized. Your current plan and access are unchanged.</p>
+            <Link href="/settings/billing/wizard" className="btn-primary btn-sm btn w-fit">Open plan &amp; payment wizard</Link>
+          </div>
+        </div>
+      )}
+
+      {canSeeBilling && !isTertiary && org?.type !== 'centre' && (
         <div id="billing" className="card scroll-mt-20">
           <div className="card-header flex items-center justify-between">
             <h2 className="font-semibold text-sm text-ink flex items-center gap-2">
@@ -331,6 +342,8 @@ export default async function SettingsPage() {
                 </span>
               )}
             </div>
+
+            <Link href="/settings/billing/wizard" className="btn-primary btn-sm btn w-fit">Open plan &amp; payment wizard</Link>
 
             {/* Feature checklist — driven entirely by the plan config */}
             <div className="grid grid-cols-2 gap-2">
