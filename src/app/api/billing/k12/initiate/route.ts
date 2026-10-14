@@ -6,6 +6,19 @@ import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
 import { initiatePaystackCheckout } from '@/lib/payments/paystack'
 import { K12CheckoutMetadata } from '@/lib/payments/types'
 
+// Payment providers reject reserved test TLDs (.invalid, .test, .example).
+// Swap those for a real address so the test flow can proceed. This is
+// safe in production because RFC 2606 guarantees .invalid/.test/.example
+// are never real domains — no real user has such an email.
+const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+function paymentEmail(profileEmail: string | null | undefined, userEmail: string | null | undefined): string {
+  const raw = profileEmail ?? userEmail ?? ''
+  if (/\.(invalid|test|example)$/i.test(raw)) {
+    return PROVIDER_SAFE_EMAIL
+  }
+  return raw
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const plan = String(body.plan ?? '')
@@ -45,7 +58,7 @@ export async function POST(req: NextRequest) {
     billingCycle: quote.billing_cycle, platform_key: 'results', expected_amount: amount, expected_currency: 'NGN',
   }
   const input = {
-    email: profile.email ?? user.email ?? '', name: profile.name ?? 'Institution Admin', amount, currency: 'NGN' as const,
+    email: paymentEmail(profile.email, user.email), name: profile.name ?? 'Institution Admin', amount, currency: 'NGN' as const,
     reference, redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
   }
   const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(input) : await initiatePaystackCheckout(input)
