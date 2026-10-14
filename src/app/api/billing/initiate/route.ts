@@ -7,6 +7,15 @@ import { getPrice, BillingCycle, Currency, PaidPlan } from '@/lib/payments/prici
 import { CheckoutMetadata } from '@/lib/payments/types'
 import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
 
+const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+function paymentEmail(profileEmail: string | null | undefined, userEmail: string | null | undefined): string {
+  const raw = profileEmail ?? userEmail ?? ''
+  if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) {
+    return PROVIDER_SAFE_EMAIL
+  }
+  return raw
+}
+
 export async function POST(req: NextRequest) {
   const { plan, currency, cycle, provider } = await req.json() as {
     plan: PaidPlan
@@ -69,7 +78,7 @@ export async function POST(req: NextRequest) {
   }
 
   const commonInput = {
-    email: profile?.email ?? user.email!,
+    email: paymentEmail(profile?.email, user.email),
     name: profile?.name ?? 'Customer',
     amount,
     currency,
