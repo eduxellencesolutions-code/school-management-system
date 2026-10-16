@@ -13,11 +13,12 @@ export default async function BillingOpsPage() {
   if (!(await check('billing.view'))) redirect('/dashboard')
   const canResolve = await check('billing.reconcile.confirm')
   const canReview = canResolve || (await check('billing.reconcile.review'))
+  const { data: isSuper } = await supabase.rpc('is_super_admin')
   return (
     <div className="flex flex-col gap-6">
       <div><h1 className="text-xl font-bold text-ink">Billing operations</h1>
         <p className="text-sm text-ink-muted mt-1">Verified counts, quotes, payments, entitlements and reconciliation. Payment secrets are never shown.</p></div>
-      <BillingOpsClient canReview={canReview} canResolve={canResolve} />
+      <BillingOpsClient canReview={canReview} canResolve={canResolve} isSuperAdmin={isSuper === true} />
     </div>
   )
 }

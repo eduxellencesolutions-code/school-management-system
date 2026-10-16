@@ -10,24 +10,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing referralCode or userId' }, { status: 400 });
   }
 
-  const { data: rep } = await admin
-    .from('representatives')
-    .select('id, status')
-    .eq('referral_code', referralCode)
-    .maybeSingle();
+  const { data: rep } = await admin.from('representatives').select('id, status').eq('referral_code', referralCode).maybeSingle();
 
   if (!rep || rep.status !== 'active') {
-    return NextResponse.json({ success: false }); // silent no-op — invalid code should never block signup
+    await admin.from('referral_attempts').insert({ user_id: userId, submitted_code: String(referralCode).slice(0, 64), outcome: 'invalid_code' });
+    return NextResponse.json({ success: false });
   }
 
-  // Fraud guard: no self-referral, no duplicate referral for the same user
-  const { data: existing } = await admin
-    .from('referrals')
-    .select('id')
-    .eq('referred_user_id', userId)
-    .maybeSingle();
-
+  const { data: existing } = await admin.from('referrals').select('id, representative_id').eq('referred_user_id', userId).maybeSingle();
   if (existing) {
+    await admin.from('referral_attempts').insert({
+      user_id: userId, submitted_code: String(referralCode).slice(0, 64), representative_id: rep.id,
+      existing_representative_id: existing.representative_id, outcome: 'ignored_existing_attribution',
+    });
     return NextResponse.json({ success: false });
   }
 
@@ -45,6 +40,8 @@ export async function POST(request: Request) {
     referral_code: referralCode,
     status: 'pending',
   });
+
+  await admin.from('referral_attempts').insert({ user_id: userId, submitted_code: String(referralCode).slice(0, 64), representative_id: rep.id, outcome: 'attributed' });
 
   return NextResponse.json({ success: true });
 }

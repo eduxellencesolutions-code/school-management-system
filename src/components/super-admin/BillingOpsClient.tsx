@@ -2,12 +2,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
+import TypeVerificationPanel from '@/components/super-admin/TypeVerificationPanel'
 
 const naira = (n: any) => n == null ? '—' : new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(n))
 
-export default function BillingOpsClient({ canReview, canResolve }: { canReview: boolean; canResolve: boolean }) {
+export default function BillingOpsClient({ canReview, canResolve, isSuperAdmin }: { canReview: boolean; canResolve: boolean; isSuperAdmin: boolean }) {
   const supabase = createClient()
-  const [tab, setTab] = useState<'orgs' | 'review'>('orgs')
+  const [tab, setTab] = useState<'orgs' | 'review' | 'types'>('orgs')
   const [orgs, setOrgs] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [detail, setDetail] = useState<any>(null)
@@ -31,9 +32,19 @@ export default function BillingOpsClient({ canReview, canResolve }: { canReview:
   async function act(fn: 'billing_review_payment' | 'billing_resolve_payment', id: string, choice: string) {
     const note = window.prompt(`Note for "${choice}" (required):`)
     if (!note?.trim()) return
-    const args = fn === 'billing_review_payment'
-      ? { p_payment_id: id, p_recommendation: choice, p_note: note }
-      : { p_payment_id: id, p_decision: choice, p_note: note }
+    let args: any
+    if (fn === 'billing_review_payment') {
+      args = { p_payment_id: id, p_recommendation: choice, p_note: note }
+    } else {
+      let evidence: string | null = null
+      let commission = false
+      if (choice === 'apply') {
+        evidence = window.prompt('Evidence or reference proving the money was received (gateway dashboard ID, bank statement line):')
+        if (!evidence?.trim()) return
+        commission = window.confirm('Also create the first-payment commission for the referring representative?\n(Only for a verified, non-test K-12 first payment. Press Cancel for no commission.)')
+      }
+      args = { p_payment_id: id, p_decision: choice, p_note: note, p_evidence_ref: evidence, p_create_commission: commission }
+    }
     const { error } = await supabase.rpc(fn, args)
     if (error) toast.error(error.message); else { toast.success('Recorded'); loadRecon(); loadOrgs() }
   }
@@ -41,9 +52,9 @@ export default function BillingOpsClient({ canReview, canResolve }: { canReview:
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        {(['orgs', 'review'] as const).map(t => (
+        {(['orgs', 'review', 'types'] as const).filter(t => t !== 'types' || isSuperAdmin).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`btn-sm btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
-            {t === 'orgs' ? 'Organizations' : `Needs review (${recon.length || '…'})`}</button>))}
+            {t === 'orgs' ? 'Organizations' : t === 'review' ? `Needs review (${recon.length || '…'})` : 'Type verification'}</button>))}
       </div>
 
       {tab === 'orgs' && (
@@ -92,6 +103,8 @@ export default function BillingOpsClient({ canReview, canResolve }: { canReview:
             </div>))}
         </div>
       )}
+
+      {tab === 'types' && isSuperAdmin && <TypeVerificationPanel />}
     </div>
   )
 }

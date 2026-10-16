@@ -1,0 +1,63 @@
+﻿
+\src\app\(dashboard)\training\batches\page.tsx:9: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\batches\page.tsx:12: .from('groups')
+\src\app\(dashboard)\training\batches\page.tsx:23: .from('training_programmes')
+\src\app\(dashboard)\training\batches\new\page.tsx:26: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\batches\new\page.tsx:28: const { data: progs } = await supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name')
+\src\app\(dashboard)\training\batches\new\page.tsx:41: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\batches\new\page.tsx:43: const { error } = await supabase.from('groups').insert({
+\src\app\(dashboard)\training\completions\page.tsx:28: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\completions\page.tsx:31: .from('module_completions')
+\src\app\(dashboard)\training\completions\page.tsx:50: const { error } = await supabase.rpc('confirm_module_completion', { p_completion_id: id, p_action: 'confirm' })
+\src\app\(dashboard)\training\completions\page.tsx:61: const { error } = await supabase.rpc('confirm_module_completion', { p_completion_id: id, p_action: 'return', p_reason: reason.trim() })
+\src\app\(dashboard)\training\enrolments\page.tsx:9: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\enrolments\page.tsx:12: .from('training_enrolments')
+\src\app\(dashboard)\training\enrolments\page.tsx:22: .from('groups')
+\src\app\(dashboard)\training\enrolments\new\page.tsx:28: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\enrolments\new\page.tsx:32: supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\enrolments\new\page.tsx:33: supabase.from('groups').select('id, name, training_programme_id').eq('organization_id', profile.organization_id).eq('type', 'batch').order('name'),
+\src\app\(dashboard)\training\enrolments\new\page.tsx:34: supabase.from('learners').select('id, first_name, last_name, admission_number').eq('organization_id', profile.organization_id).eq('is_active', true).order('last_name'),
+\src\app\(dashboard)\training\enrolments\new\page.tsx:58: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\enrolments\new\page.tsx:60: const { error } = await supabase.from('training_enrolments').insert({
+\src\app\(dashboard)\training\learners\new\page.tsx:33: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\learners\new\page.tsx:37: supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\learners\new\page.tsx:38: supabase.from('groups').select('id, name, training_programme_id').eq('organization_id', profile.organization_id).eq('type', 'batch').order('name'),
+\src\app\(dashboard)\training\learners\new\page.tsx:61: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\learners\new\page.tsx:67: .from('learners')
+\src\app\(dashboard)\training\learners\new\page.tsx:68: .insert({
+\src\app\(dashboard)\training\learners\new\page.tsx:89: const { error: enrolError } = await supabase.from('training_enrolments').insert({
+\src\app\(dashboard)\training\modules\page.tsx:9: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\modules\page.tsx:12: .from('training_modules')
+\src\app\(dashboard)\training\modules\page.tsx:22: .from('training_programmes')
+\src\app\(dashboard)\training\modules\new\page.tsx:31: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\modules\new\page.tsx:39: supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\modules\new\page.tsx:40: supabase.from('assessment_templates').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\modules\new\page.tsx:41: supabase.from('school_roles').select('id').eq('organization_id', profile.organization_id).eq('name', 'Trainer').maybeSingle(),
+\src\app\(dashboard)\training\modules\new\page.tsx:49: .from('staff_role_assignments')
+\src\app\(dashboard)\training\modules\new\page.tsx:55: const { data: users } = await supabase.from('users').select('id, name').in('id', userIds).order('name')
+\src\app\(dashboard)\training\modules\new\page.tsx:71: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\modules\new\page.tsx:73: const { error } = await supabase.from('training_modules').insert({
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:36: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:45: supabase.from('training_programmes').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:46: supabase.from('assessment_templates').select('id, name').eq('organization_id', profile.organization_id).order('name'),
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:48: .from('training_modules')
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:53: supabase.from('school_roles').select('id').eq('organization_id', profile.organization_id).eq('name', 'Trainer').maybeSingle(),
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:65: .from('staff_role_assignments')
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:71: const { data: users } = await supabase.from('users').select('id, name').in('id', userIds).order('name')
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:103: .from('training_modules')
+\src\app\(dashboard)\training\modules\[id]\edit\page.tsx:104: .update({
+\src\app\(dashboard)\training\my-modules\page.tsx:10: .from('training_modules')
+\src\app\(dashboard)\training\my-modules\page.tsx:24: .from('training_enrolments')
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:34: const { data: mod } = await supabase.from('training_modules').select('name, template_id').eq('id', moduleId).single()
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:37: const { data: batch } = await supabase.from('groups').select('name').eq('id', batchId).single()
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:41: .from('assessment_components')
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:48: .from('training_enrolments')
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:50: .eq('training_programme_id', (await supabase.from('training_modules').select('training_programme_id').eq('id', moduleId).single()).data?.training_programme_id)
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:57: .from('training_scores')
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:72: .from('module_completions')
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:106: const { data, error } = await supabase.rpc('save_training_scores', {
+\src\app\(dashboard)\training\my-modules\[moduleId]\page.tsx:121: const { error } = await supabase.rpc('submit_training_module', { p_module_id: moduleId, p_batch_group_id: batchId })
+\src\app\(dashboard)\training\programmes\page.tsx:8: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\programmes\page.tsx:11: .from('training_programmes')
+\src\app\(dashboard)\training\programmes\new\page.tsx:26: const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user!.id).single()
+\src\app\(dashboard)\training\programmes\new\page.tsx:34: const { error } = await supabase.from('training_programmes').insert({

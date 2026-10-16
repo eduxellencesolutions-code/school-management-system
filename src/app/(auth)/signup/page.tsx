@@ -363,12 +363,17 @@ function SignupForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Institution type</label>
+              <label className="block text-sm font-medium text-ink mb-1">
+                Institution type <span className="text-ink-faint font-normal">(proposed)</span>
+              </label>
               <select className="input" {...register('org_type')}>
                 <option value="school">School (Nursery / Primary / Secondary)</option>
                 <option value="university">University / Polytechnic / College</option>
                 <option value="centre">Tutorial Centre / Training Institute</option>
               </select>
+              <p className="text-xs text-ink-faint mt-1">
+                We confirm your institution type before billing starts. You can set up your account and enroll students in the meantime.
+              </p>
             </div>
 
             <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">

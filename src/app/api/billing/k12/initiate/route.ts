@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
   const { data: quote, error: quoteError } = await supabase.rpc('create_k12_payment_quote', {
     p_org_id: orgId, p_plan: plan, p_cycle: cycle, p_reference: `edux-k12q-${orgId}-${Date.now()}`,
   })
-  if (quoteError || !quote) return NextResponse.json({ error: quoteError?.message ?? 'Could not create a quote' }, { status: 400 })
+  if (quoteError || !quote) return NextResponse.json(
+    { error: quoteError?.message ?? 'Could not create a quote', code: /awaiting verification/i.test(quoteError?.message ?? '') ? 'type_unverified' : undefined },
+    { status: /awaiting verification/i.test(quoteError?.message ?? '') ? 403 : 400 })
 
   const amount = Number(quote.amount_due)
   if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {

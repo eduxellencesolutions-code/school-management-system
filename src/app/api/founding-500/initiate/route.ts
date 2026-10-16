@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Only a school admin can activate Founding 500' }, { status: 403 })
   }
   const orgId = profile.organization_id
+
+  const { data: verified } = await supabase.rpc('org_type_is_verified', { p_org_id: orgId })
+  if (!verified) return NextResponse.json({ error: 'Your institution classification is awaiting verification by Eduxellence.', code: 'type_unverified' }, { status: 403 })
+
   const { data: orgTypeRow } = await admin.from('organizations').select('type').eq('id', orgId).single()
   if (orgTypeRow?.type !== 'school') {
     return NextResponse.json({ error: 'Founding 500 is for schools.' }, { status: 403 })
