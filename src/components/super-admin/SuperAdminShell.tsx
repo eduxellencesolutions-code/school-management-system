@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen, Settings, TrendingUp, Briefcase, PhoneCall, MessageSquare, AlertTriangle, ChevronRight, Trophy } from 'lucide-react'
+import { LayoutDashboard, Building, Users, UsersRound, Ticket, DollarSign, Handshake, ShieldAlert, BarChart3, Megaphone, Menu, Home, Wallet, FolderOpen, Settings, TrendingUp, Briefcase, PhoneCall, MessageSquare, AlertTriangle, ChevronRight, Trophy, CreditCard } from 'lucide-react'
 import LogoutButton from '@/components/super-admin/LogoutButton'
 import GlobalSearch from '@/components/super-admin/GlobalSearch'
 import { getVisibleNavItems, NAV_GROUPS, type NavAccess } from '@/lib/auth/navConfig'
@@ -15,6 +15,7 @@ const ICONS: Record<string, any> = {
   schools: Building,
   'solo-teachers': Users,
   'founding-institutions': Building,
+  'gateway-tests': CreditCard,
   analytics: BarChart3,
   support: Ticket,
   commissions: DollarSign,
