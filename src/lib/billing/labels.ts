@@ -20,6 +20,7 @@ export const FEATURE_LABELS: Record<string, string> = {
 export const EXCLUDED_LABELS: Record<string, string> = {
   status_withdrawn: 'Withdrawn', status_transferred: 'Transferred', status_graduated: 'Graduated', status_suspended: 'Suspended',
   status_archived: 'Archived', inactive_flag: 'Marked inactive', missing_tertiary_record: 'No academic record',
+  no_active_enrolment: 'No active enrolment',
 }
 export const ISSUE_LABELS: Record<string, string> = {
   missing_names: 'students with a missing first or last name',

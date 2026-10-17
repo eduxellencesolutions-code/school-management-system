@@ -14,6 +14,8 @@ export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput):
         : `Tertiary: ${input.metadata.tierKey} (${input.metadata.billingCycle})`
     } else if (input.metadata.type === 'k12_subscription') {
       description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
+    } else if (input.metadata.type === 'gateway_test') {
+      description = 'Gateway verification test'
     } else {
       description = `${input.metadata.plan} (${input.metadata.cycle})`
     }

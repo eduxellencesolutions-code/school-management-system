@@ -43,20 +43,7 @@ export default function PlanUpgradeCard({ plan, label }: Props) {
     <div className="p-3 border border-surface-200 rounded-lg flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-ink">{label}</p>
-        <div className="flex gap-1 text-xs">
-          <button
-            onClick={() => setCurrency('NGN')}
-            className={`px-2 py-0.5 rounded ${currency === 'NGN' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
-          >
-            ₦ NGN
-          </button>
-          <button
-            onClick={() => setCurrency('USD')}
-            className={`px-2 py-0.5 rounded ${currency === 'USD' ? 'bg-brand-500 text-white' : 'bg-surface-100 text-ink-muted'}`}
-          >
-            $ USD
-          </button>
-        </div>
+        <div className="flex gap-1 text-xs"><span className="px-2 py-0.5 rounded bg-brand-500 text-white">₦ NGN</span></div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">

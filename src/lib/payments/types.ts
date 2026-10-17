@@ -50,7 +50,11 @@ export interface K12CheckoutMetadata {
   expected_currency: Currency
 }
 
-export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata
+export interface GatewayTestMetadata {
+  type: 'gateway_test'; runReference: string; platform_key: string; expected_amount: number; expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata
 
 export interface InitiateCheckoutInput {
   email: string

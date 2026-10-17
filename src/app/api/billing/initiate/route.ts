@@ -29,9 +29,7 @@ export async function POST(req: NextRequest) {
     console.error('Invalid plan received:', plan)
     return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 })
   }
-  if (!['NGN', 'USD'].includes(currency)) {
-    return NextResponse.json({ error: 'Invalid currency' }, { status: 400 })
-  }
+  if (currency !== 'NGN') return NextResponse.json({ error: 'Only NGN payments are currently available' }, { status: 400 })
   if (!['termly', 'annual'].includes(cycle)) {
     return NextResponse.json({ error: 'Invalid billing cycle' }, { status: 400 })
   }
