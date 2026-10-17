@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     const plan = m.type === 'founding_500' ? 'founding_500'
       : m.type === 'tertiary_subscription' ? (m.tierKey ?? 'founding_conversion')
       : m.type === 'k12_subscription' ? m.planKey
+      : m.type === 'gateway_test' ? 'gateway_test'
       : m.plan
     return NextResponse.json({ status: 'successful', plan })
   } catch (err) {
