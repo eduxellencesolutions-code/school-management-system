@@ -195,6 +195,7 @@ export default function SetupGuidePage() {
   const [error, setError] = useState<string | null>(null);
   const [founding, setFounding] = useState<{ founding_slot_number: number; promo_expires_at: string } | null>(null);
   const [foundingEligible, setFoundingEligible] = useState<{ eligible: boolean } | null>(null);
+  const [typeStatus, setTypeStatus] = useState<{ status: string; type: string } | null>(null);
 
   const supabase = createClient();
 
@@ -229,6 +230,17 @@ export default function SetupGuidePage() {
     }
     loadFounding();
   }, [data]);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: p } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+      if (!p?.organization_id) return;
+      const { data: o } = await supabase.from('organizations').select('type, type_verification_status').eq('id', p.organization_id).single();
+      if (o) setTypeStatus({ status: o.type_verification_status, type: o.type });
+    })();
+  }, []);
 
   async function handleStepClick(stepKey: string) {
     supabase.rpc('mark_onboarding_step_viewed', { p_step_key: stepKey });
@@ -267,6 +279,13 @@ export default function SetupGuidePage() {
         Current plan: <span className="font-medium text-gray-700">{data.current_plan}</span>
       </div>
 
+      {typeStatus && typeStatus.status !== 'verified' && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          <p className="font-medium">Institution type awaiting verification</p>
+          <p className="mt-0.5">We are confirming your institution type ({typeStatus.type}). You can keep setting up and enrolling students. Plans, Founding 500 activation and payment unlock once it is verified.</p>
+        </div>
+      )}
+
       {founding && (
         <FoundingBadge
           slotNumber={founding.founding_slot_number}
@@ -274,7 +293,7 @@ export default function SetupGuidePage() {
         />
       )}
 
-      {!founding && foundingEligible && (
+      {!founding && foundingEligible && typeStatus?.status === 'verified' && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between">
           <div>
             <p className="font-semibold text-amber-900">🏆 Founding 500 — Activation Pending</p>

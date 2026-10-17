@@ -49,9 +49,14 @@ export default async function GettingStartedPage() {
       { onConflict: 'user_id' }
     )
 
-  const schoolName = orgId
-    ? (await supabase.from('organizations').select('name').eq('id', orgId).single()).data?.name
-    : null
+  const { data: org } = orgId
+    ? await supabase.from('organizations').select('name, type, type_verification_status').eq('id', orgId).single()
+    : { data: null }
+  const orgType = org?.type as string | undefined
+  const unverified = !!orgId && org?.type_verification_status !== 'verified'
+  const noun = orgType === 'university' ? 'institution' : orgType === 'centre' ? 'training centre' : 'school'
+  const setupHref = orgType === 'university' ? '/settings/setup-wizard' : orgType === 'centre' ? '/training/programmes' : '/setup-guide'
+  const schoolName = org?.name ?? null
 
   return (
     <div className="max-w-lg mx-auto mt-12 px-4">
@@ -83,15 +88,15 @@ export default async function GettingStartedPage() {
           <>
             <h1 className="text-xl font-semibold text-gray-900">Welcome to Eduxellence Results 🎉</h1>
             <p className="text-sm text-gray-600 mt-3 leading-relaxed">
-              {schoolName ? `"${schoolName}"` : 'Your school'} has been created. The next
-              step is completing your school setup — your profile, academic structure,
-              staff, and grading system.
+              {schoolName ? `"${schoolName}"` : `Your ${noun}`} has been created. The next step is completing your setup.
             </p>
-            <Link
-              href="/setup-guide"
-              className="inline-flex items-center gap-2 mt-6 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg"
-            >
-              Set Up My School <ArrowRight size={16} />
+            {unverified && (
+              <p className="mt-4 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-3">
+                We are confirming your institution type ({noun}). You can set up and enroll students now. Plans and payment unlock once it is verified.
+              </p>
+            )}
+            <Link href={setupHref} className="inline-flex items-center gap-2 mt-6 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg">
+              Set Up My {noun === 'school' ? 'School' : 'Institution'} <ArrowRight size={16} />
             </Link>
           </>
         )}

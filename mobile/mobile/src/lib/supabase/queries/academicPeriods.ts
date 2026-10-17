@@ -40,7 +40,7 @@ export async function createTerm(orgId: string, sessionId: string, name: string,
 }
 
 export async function setCurrentTerm(orgId: string, termId: string | null): Promise<void> {
-  const { error } = await supabase.from('organizations').update({ current_term_id: termId }).eq('id', orgId)
+  const { error } = await supabase.rpc('set_current_term', { p_term_id: termId })
   if (error) throw new Error('Could not update current term.')
 }
 
