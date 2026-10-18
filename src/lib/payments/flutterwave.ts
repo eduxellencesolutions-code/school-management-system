@@ -16,6 +16,8 @@ export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput):
       description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
     } else if (input.metadata.type === 'gateway_test') {
       description = 'Gateway verification test'
+    } else if (input.metadata.type === 'centre_subscription') {
+      description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
     } else {
       description = `${input.metadata.plan} (${input.metadata.cycle})`
     }

@@ -8,6 +8,7 @@ const FLAG: Record<string, string> = {
   has_payment_history: 'Has payment history', founding_500: 'Founding 500', tertiary_data_but_not_university: 'Has university records but is not declared a university',
   training_data_but_not_centre: 'Has training data but is not declared a centre', k12_classes_but_not_school: 'Has K-12 classes but is not declared a school',
   tertiary_plan_but_not_university: 'Has a tertiary plan but is not a university', plan_not_eligible_for_type: 'Current plan does not fit its type', test_organization: 'Test organization',
+  billing_country_missing: 'Billing country not set',
 }
 
 export default function TypeVerificationPanel() {
@@ -44,6 +45,7 @@ export default function TypeVerificationPanel() {
             <p className="font-medium text-ink">{o.name} <span className="text-xs text-ink-muted">· declared: {LABEL[o.declared_type]} · {o.status}</span></p>
             <p className="text-xs text-ink-muted">{o.admin_contact ?? 'no admin contact'} · plan {o.plan}/{o.plan_status} · {o.learners} learners · {o.classes} classes · {o.cohorts} cohorts · {o.batches} batches · {o.programmes} programmes · {o.tertiary_records} university records · {o.payments} payments</p>
             {o.flags?.length > 0 && <p className="text-xs text-amber-700">{o.flags.map((f: string) => FLAG[f] ?? f).join(' · ')}</p>}
+            <BillingProfile org={o} onSaved={load} />
             {o.status === 'verified' && <p className="text-xs text-ink-faint">Verified {String(o.type_verified_at).slice(0, 10)} ({o.decision}): {o.reason}</p>}
             {o.status !== 'verified' && (
               <div className="flex gap-2 flex-wrap items-center">
@@ -56,6 +58,30 @@ export default function TypeVerificationPanel() {
               </div>)}
           </div>))}
       </div>
+    </div>
+  )
+}
+
+function BillingProfile({ org, onSaved }: { org: any; onSaved: () => void }) {
+  const supabase = createClient()
+  const [country, setCountry] = useState(org.billing_country ?? '')
+  const [treat, setTreat] = useState(org.tax_treatment ?? 'unreviewed')
+  const [taxId, setTaxId] = useState(org.tax_id ?? '')
+  async function save() {
+    const reason = window.prompt(`Billing country ${country.toUpperCase()} and tax treatment "${treat}" for "${org.name}". What did you check? (required)`)
+    if (!reason?.trim()) return
+    const { error } = await supabase.rpc('super_admin_set_billing_profile', { p_org_id: org.id, p_country: country, p_reason: reason, p_tax_treatment: treat, p_tax_id: taxId || null })
+    if (error) toast.error(error.message); else { toast.success('Billing profile saved'); onSaved() }
+  }
+  return (
+    <div className="flex gap-2 flex-wrap items-center text-xs">
+      <span className="text-ink-muted">Billing: {org.billing_country ?? 'not set'} {org.billing_currency ? `(${org.billing_currency})` : ''}</span>
+      <input className="input w-16" placeholder="NG" maxLength={2} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} />
+      <select className="input w-44" value={treat} onChange={e => setTreat(e.target.value)}>
+        {['unreviewed', 'standard_vat', 'zero_rated_export', 'exempt', 'not_applicable'].map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+      </select>
+      <input className="input w-36" placeholder="Tax ID (optional)" value={taxId} onChange={e => setTaxId(e.target.value)} />
+      <button onClick={save} className="btn-secondary btn-sm btn">Save billing profile</button>
     </div>
   )
 }

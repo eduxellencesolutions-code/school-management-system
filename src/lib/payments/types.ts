@@ -54,7 +54,18 @@ export interface GatewayTestMetadata {
   type: 'gateway_test'; runReference: string; platform_key: string; expected_amount: number; expected_currency: Currency
 }
 
-export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata
+export interface CentreCheckoutMetadata {
+  type: 'centre_subscription'
+  organizationId: string
+  quoteReference: string
+  planKey: string
+  billingCycle: 'monthly' | 'quarterly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata | CentreCheckoutMetadata
 
 export interface InitiateCheckoutInput {
   email: string

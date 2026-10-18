@@ -4,6 +4,7 @@ import { applySuccessfulSubscription } from './apply-subscription'
 import { applyFounding500Payment } from './apply-founding500'
 import { applySuccessfulTertiarySubscription } from './apply-tertiary-subscription'
 import { applySuccessfulK12Subscription } from './apply-k12-subscription'
+import { applySuccessfulCentreSubscription } from './apply-centre-subscription'
 
 export type ApplyResult = { success: boolean; error?: string; needsReview?: boolean; retryable?: boolean }
 
@@ -23,6 +24,7 @@ export async function applyVerifiedPayment(v: VerifyTransactionResult, provider:
       })
       return error ? { success: false, retryable: true, error: error.message } : { success: true }
     }
+    case 'centre_subscription': return applySuccessfulCentreSubscription(m, provider, v.reference, v.amount, currency)
     default: return applySuccessfulSubscription(m as CheckoutMetadata, provider, v.reference, v.amount, currency)
   }
 }
