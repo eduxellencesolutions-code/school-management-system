@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
   if (!['paystack', 'flutterwave'].includes(gateway)) return NextResponse.json({ error: 'Invalid gateway' }, { status: 400 })
   if (!['NGN', 'USD'].includes(currency)) return NextResponse.json({ error: 'Currency must be NGN or USD' }, { status: 400 })
   const amt = Number(amount)
-  if (!(amt > 0 && amt <= 50)) return NextResponse.json({ error: 'Amount must be above 0 and at most 50' }, { status: 400 })
+  const max = currency === 'NGN' ? 5000 : 50
+  if (!(amt > 0 && amt <= max)) return NextResponse.json({ error: `Amount must be above 0 and at most ${max}` }, { status: 400 })
 
   const reference = `edux-gwtest-${Date.now()}`
   const { error } = await supabase.rpc('create_gateway_test_run', { p_gateway: gateway, p_currency: currency, p_amount: amt, p_reference: reference })
