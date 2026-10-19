@@ -134,7 +134,7 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     ...(isAdmin && !isTertiary && !isCentre && has('promotion_wizard') ? [{ label: 'Promotion Center', href: '/promotion', icon: TrendingUp }] : []),
     ...(isAdmin && !isTertiary && !isCentre && has('promotion_wizard') ? [{ label: 'Promotion Rules', href: '/promotion/rules', icon: Settings }] : []),
     ...(isAdmin ? [{ label: 'Roles & Permissions', href: '/roles', icon: ShieldCheck }] : []),
-    ...(isAdmin ? [{ label: 'Setup Status', href: '/settings/setup-wizard', icon: AlertCircle }] : []),
+    ...(isAdmin && isTertiary ? [{ label: 'Setup Status', href: '/settings/setup-wizard', icon: AlertCircle }] : []),
     { label: 'Support', href: '/school-support', icon: TicketIcon },
   ]
 
