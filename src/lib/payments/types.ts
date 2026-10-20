@@ -65,7 +65,12 @@ export interface CentreCheckoutMetadata {
   expected_currency: Currency
 }
 
-export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata | CentreCheckoutMetadata
+export interface TopupCheckoutMetadata {
+  type: 'topup_subscription'; organizationId: string; quoteReference: string; planKey: string
+  platform_key: string; expected_amount: number; expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata | CentreCheckoutMetadata | TopupCheckoutMetadata
 
 export interface InitiateCheckoutInput {
   email: string

@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       : m.type === 'k12_subscription' ? m.planKey
       : m.type === 'gateway_test' ? 'gateway_test'
       : m.type === 'centre_subscription' ? m.planKey
+      : m.type === 'topup_subscription' ? m.planKey
       : m.plan
     return NextResponse.json({ status: 'successful', plan })
   } catch (err) {
