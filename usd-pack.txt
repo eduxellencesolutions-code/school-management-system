@@ -1,0 +1,579 @@
+﻿
+===== src\lib\payments\pricing.ts =====
+export type BillingCycle = 'termly' | 'annual'
+export type Currency = 'NGN' | 'USD'
+export type PaidPlan = 'small_school' | 'standard_school' | 'premium_school' | 'solo_teacher_pro'
+
+// Amounts are in the currency's smallest whole unit for display,
+// converted to kobo/cents at checkout time by each provider wrapper.
+export const PRICING: Record<PaidPlan, Record<Currency, Record<BillingCycle, number>>> = {
+  small_school: {
+    NGN: { termly: 15000, annual: 42000 },
+    USD: { termly: 15, annual: 42 },
+  },
+  standard_school: {
+    NGN: { termly: 35000, annual: 99000 },
+    USD: { termly: 35, annual: 99 },
+  },
+  premium_school: {
+    NGN: { termly: 75000, annual: 210000 },
+    USD: { termly: 75, annual: 210 },
+  },
+  solo_teacher_pro: {
+    NGN: { termly: 3000, annual: 8000 },
+    USD: { termly: 3, annual: 8 },
+  },
+}
+
+export function getPrice(plan: PaidPlan, currency: Currency, cycle: BillingCycle): number {
+  return PRICING[plan][currency][cycle]
+}
+
+// Approximate cycle length used to compute subscription_expires_at.
+// 1 term â‰ˆ 1/3 of a school year.
+export function getCycleDurationDays(cycle: BillingCycle): number {
+  return cycle === 'annual' ? 365 : 122
+}
+
+// âœ… Dynamically computed savings â€” never hardcode a percentage.
+// Compares the annual price against what 3 terms would cost if paid termly.
+export function getAnnualSavingsPercent(plan: PaidPlan, currency: Currency): number {
+  const termly = getPrice(plan, currency, 'termly')
+  const annual = getPrice(plan, currency, 'annual')
+  if (termly === 0 || annual === 0) return 0
+  const fullYearIfTermly = termly * 3
+  return Math.round(((fullYearIfTermly - annual) / fullYearIfTermly) * 100)
+}
+
+===== src\lib\payments\types.ts =====
+import { BillingCycle, Currency, PaidPlan } from './pricing'
+
+export type { Currency } from './pricing'
+
+export type AccountType = 'org' | 'solo'
+
+export interface CheckoutMetadata {
+  type: 'subscription'
+  accountType: AccountType
+  accountId: string   // organization_id or user_id
+  plan: PaidPlan
+  cycle: BillingCycle
+  platform_key: string   // âœ… ADDED - identifies platform to central router
+  expected_amount: number   // âœ… ADDED - amount central expects
+  expected_currency: Currency   // âœ… ADDED - currency central expects
+}
+
+// Founding 500 is institution-only (organization_id is NOT NULL on
+// founding500_enrollments, confirmed against the schema) â€” no accountType
+// needed, it's always an org.
+export interface FoundingCheckoutMetadata {
+  type: 'founding_500'
+  organizationId: string
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+  referral_code?: string   // Founding 500 only
+}
+
+export interface TertiaryCheckoutMetadata {
+  type: 'tertiary_subscription'
+  quoteKind: 'period' | 'founding_conversion'
+  organizationId: string
+  quoteReference: string
+  tierKey?: string
+  billingCycle?: 'termly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export interface K12CheckoutMetadata {
+  type: 'k12_subscription'
+  organizationId: string
+  quoteReference: string
+  planKey: string
+  billingCycle: 'termly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export interface GatewayTestMetadata {
+  type: 'gateway_test'; runReference: string; platform_key: string; expected_amount: number; expected_currency: Currency
+}
+
+export interface CentreCheckoutMetadata {
+  type: 'centre_subscription'
+  organizationId: string
+  quoteReference: string
+  planKey: string
+  billingCycle: 'monthly' | 'quarterly' | 'annual'
+  platform_key: string
+  expected_amount: number
+  expected_currency: Currency
+}
+
+export interface TopupCheckoutMetadata {
+  type: 'topup_subscription'; organizationId: string; quoteReference: string; planKey: string
+  platform_key: string; expected_amount: number; expected_currency: Currency
+}
+
+export type AnyCheckoutMetadata = CheckoutMetadata | FoundingCheckoutMetadata | TertiaryCheckoutMetadata | K12CheckoutMetadata | GatewayTestMetadata | CentreCheckoutMetadata | TopupCheckoutMetadata
+
+export interface InitiateCheckoutInput {
+  email: string
+  name: string
+  amount: number
+  currency: Currency
+  reference: string
+  redirectUrl: string
+  metadata: AnyCheckoutMetadata
+}
+
+export interface InitiateCheckoutResult {
+  success: boolean
+  paymentLink?: string
+  error?: string
+}
+
+export interface VerifyTransactionResult {
+  success: boolean
+  status: 'successful' | 'failed' | 'pending'
+  amount?: number
+  currency?: Currency
+  metadata?: AnyCheckoutMetadata
+  reference?: string
+  error?: string
+}
+
+===== src\lib\payments\paystack.ts =====
+import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, CheckoutMetadata } from './types'
+
+const PAYSTACK_BASE = 'https://api.paystack.co'
+
+// Paystack expects amounts in the smallest currency unit
+// (kobo for NGN, cents for USD) â€” i.e. multiplied by 100.
+export async function initiatePaystackCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
+  try {
+    const res = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: input.email,
+        amount: Math.round(input.amount * 100),
+        currency: input.currency,
+        reference: input.reference,
+        callback_url: input.redirectUrl,
+        metadata: input.metadata,
+      }),
+    })
+
+    const json = await res.json()
+
+    if (!json.status || !json.data?.authorization_url) {
+      console.error('Paystack initiate error:', json)
+      return { success: false, error: json.message ?? 'Failed to initiate Paystack checkout' }
+    }
+
+    return { success: true, paymentLink: json.data.authorization_url }
+  } catch (err: any) {
+    console.error('Paystack initiate error:', err)
+    return { success: false, error: 'Failed to initiate Paystack checkout' }
+  }
+}
+
+export async function verifyPaystackTransaction(reference: string): Promise<VerifyTransactionResult> {
+  try {
+    const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+    })
+    const json = await res.json()
+
+    if (!json.status || json.data?.status !== 'success') {
+      return { success: true, status: 'failed' }
+    }
+
+    return {
+      success: true,
+      status: 'successful',
+      amount: json.data.amount / 100,
+      currency: json.data.currency,
+      metadata: json.data.metadata as CheckoutMetadata,
+      reference: json.data.reference,   // âœ… NEW
+    }
+  } catch (err: any) {
+    console.error('Paystack verify error:', err)
+    return { success: false, status: 'failed', error: 'Verification failed' }
+  }
+}
+
+===== src\lib\payments\flutterwave.ts =====
+import { InitiateCheckoutInput, InitiateCheckoutResult, VerifyTransactionResult, AnyCheckoutMetadata } from './types'
+
+const FLW_BASE = 'https://api.flutterwave.com/v3'
+
+export async function initiateFlutterwaveCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
+  try {
+    // Build description based on metadata type
+    let description: string
+    if (input.metadata.type === 'founding_500') {
+      description = 'Founding 500 Enrollment'
+    } else if (input.metadata.type === 'tertiary_subscription') {
+      description = input.metadata.quoteKind === 'founding_conversion'
+        ? 'Founding 50 conversion fee'
+        : `Tertiary: ${input.metadata.tierKey} (${input.metadata.billingCycle})`
+    } else if (input.metadata.type === 'k12_subscription') {
+      description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
+    } else if (input.metadata.type === 'gateway_test') {
+      description = 'Gateway verification test'
+    } else if (input.metadata.type === 'centre_subscription') {
+      description = `${input.metadata.planKey} (${input.metadata.billingCycle})`
+    } else if (input.metadata.type === 'topup_subscription') {
+      description = `Top-up to ${input.metadata.planKey}`
+    } else {
+      description = `${input.metadata.plan} (${input.metadata.cycle})`
+    }
+
+    const response = await fetch(`${FLW_BASE}/payments`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tx_ref: input.reference,
+        amount: input.amount,
+        currency: input.currency,
+        redirect_url: input.redirectUrl,
+        customer: { email: input.email, name: input.name },
+        customizations: { title: 'Eduxellence', description },
+        meta: input.metadata,
+      }),
+    })
+
+    const json = await response.json()
+
+    if (json.status !== 'success' || !json.data?.link) {
+      console.error('Flutterwave initiate error:', json)
+      return { success: false, error: json.message ?? 'Failed to initiate Flutterwave checkout' }
+    }
+
+    return { success: true, paymentLink: json.data.link }
+  } catch (err: any) {
+    console.error('Flutterwave initiate error:', err)
+    return { success: false, error: 'Failed to initiate Flutterwave checkout' }
+  }
+}
+
+export async function verifyFlutterwaveTransaction(transactionId: string): Promise<VerifyTransactionResult> {
+  try {
+    const response = await fetch(`${FLW_BASE}/transactions/${transactionId}/verify`, {
+      headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` },
+    })
+    const json = await response.json()
+
+    if (json.status !== 'success' || json.data?.status !== 'successful') {
+      return { success: true, status: 'failed' }
+    }
+
+    return {
+      success: true,
+      status: 'successful',
+      amount: json.data.amount,
+      currency: json.data.currency,
+      metadata: json.data.meta as AnyCheckoutMetadata,
+      reference: String(json.data.id),   // âœ… NEW â€” canonical, matches what the webhook itself sees
+    }
+  } catch (err: any) {
+    console.error('Flutterwave verify error:', err)
+    return { success: false, status: 'failed', error: 'Verification failed' }
+  }
+}
+
+===== src\lib\payments\dispatch.ts =====
+import { createClient } from '@supabase/supabase-js'
+import { VerifyTransactionResult, CheckoutMetadata } from './types'
+import { applySuccessfulSubscription } from './apply-subscription'
+import { applyFounding500Payment } from './apply-founding500'
+import { applySuccessfulTertiarySubscription } from './apply-tertiary-subscription'
+import { applySuccessfulK12Subscription } from './apply-k12-subscription'
+import { applySuccessfulCentreSubscription } from './apply-centre-subscription'
+import { applySuccessfulTopup } from './apply-topup-subscription'
+
+export type ApplyResult = { success: boolean; error?: string; needsReview?: boolean; retryable?: boolean }
+
+export async function applyVerifiedPayment(v: VerifyTransactionResult, provider: 'paystack' | 'flutterwave', source: 'webhook' | 'redirect' = 'redirect'): Promise<ApplyResult> {
+  const m = v.metadata
+  if (!m || !v.reference || v.amount === undefined) return { success: false, error: 'Payment verification incomplete' }
+  const currency = v.currency ?? 'NGN'
+  switch (m.type) {
+    case 'founding_500': return applyFounding500Payment(m, provider, v.reference, v.amount, currency)
+    case 'tertiary_subscription': return applySuccessfulTertiarySubscription(m, provider, v.reference, v.amount, currency)
+    case 'k12_subscription': return applySuccessfulK12Subscription(m, provider, v.reference, v.amount, currency)
+    case 'gateway_test': {
+      const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
+      const { error } = await admin.rpc('record_gateway_test_result', {
+        p_reference: m.runReference, p_verified_amount: v.amount, p_verified_currency: currency, p_gateway_status: v.status ?? 'unknown',
+        p_payer_country: null, p_channel: null, p_from_webhook: source === 'webhook',
+      })
+      return error ? { success: false, retryable: true, error: error.message } : { success: true }
+    }
+    case 'centre_subscription': return applySuccessfulCentreSubscription(m, provider, v.reference, v.amount, currency)
+    case 'topup_subscription': return applySuccessfulTopup(m, provider, v.reference, v.amount, currency)
+    default: return applySuccessfulSubscription(m as CheckoutMetadata, provider, v.reference, v.amount, currency)
+  }
+}
+
+===== src\app\api\billing\k12\initiate\route.ts =====
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+import { K12CheckoutMetadata } from '@/lib/payments/types'
+
+// Payment providers reject reserved test TLDs (.invalid, .test, .example).
+// Swap those for a real address so the test flow can proceed. This is
+// safe in production because RFC 2606 guarantees .invalid/.test/.example
+// are never real domains â€” no real user has such an email.
+const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+function paymentEmail(profileEmail: string | null | undefined, userEmail: string | null | undefined): string {
+  const raw = profileEmail ?? userEmail ?? ''
+  if (/\.(invalid|test|example)$/i.test(raw)) {
+    return PROVIDER_SAFE_EMAIL
+  }
+  return raw
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  const plan = String(body.plan ?? '')
+  const cycle = body.cycle as 'termly' | 'annual'
+  const provider = body.provider as 'paystack' | 'flutterwave'
+  const expectedAmount = Number(body.expectedAmount)
+  if (!['termly', 'annual'].includes(cycle)) return NextResponse.json({ error: 'Invalid billing cycle' }, { status: 400 })
+  if (!['paystack', 'flutterwave'].includes(provider)) return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+
+  const supabase = await createClient()
+  const { user } = await getAuthenticatedUser(supabase)
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  const { data: profile } = await supabase.from('users').select('organization_id, role, name, email').eq('id', user.id).single()
+  if (!profile?.organization_id || profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Only an institution admin can make billing payments' }, { status: 403 })
+  }
+  const orgId = profile.organization_id
+
+  const { data: gateways } = await supabase.rpc('get_available_gateways', { p_currency: 'NGN', p_scope: 'k12' })
+  if (!Array.isArray(gateways) || !gateways.includes(provider)) {
+    return NextResponse.json({ error: 'That payment method is not available right now.' }, { status: 400 })
+  }
+
+  const { data: quote, error: quoteError } = await supabase.rpc('create_k12_payment_quote', {
+    p_org_id: orgId, p_plan: plan, p_cycle: cycle, p_reference: `edux-k12q-${orgId}-${Date.now()}`,
+  })
+  if (quoteError || !quote) return NextResponse.json(
+    { error: quoteError?.message ?? 'Could not create a quote', code: /awaiting verification/i.test(quoteError?.message ?? '') ? 'type_unverified' : undefined },
+    { status: /awaiting verification/i.test(quoteError?.message ?? '') ? 403 : 400 })
+
+  const amount = Number(quote.amount_due)
+  if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {
+    return NextResponse.json({ error: 'The amount changed since you reviewed it. Please review the updated quote.', code: 'quote_changed', amount }, { status: 409 })
+  }
+
+  const reference = `${quote.reference}-${Date.now().toString(36)}`
+  const metadata: K12CheckoutMetadata = {
+    type: 'k12_subscription', organizationId: orgId, quoteReference: quote.reference, planKey: quote.plan_key,
+    billingCycle: quote.billing_cycle, platform_key: 'results', expected_amount: amount, expected_currency: 'NGN',
+  }
+  const input = {
+    email: paymentEmail(profile.email, user.email), name: profile.name ?? 'Institution Admin', amount, currency: 'NGN' as const,
+    reference, redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
+  }
+  const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(input) : await initiatePaystackCheckout(input)
+  if (!result.success || !result.paymentLink) return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+  return NextResponse.json({ paymentLink: result.paymentLink, amount, currency: 'NGN', periodLabel: quote.period_label })
+}
+
+===== src\app\api\tertiary\billing\initiate\route.ts =====
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { initiateFlutterwaveCheckout } from '@/lib/payments/flutterwave'
+import { initiatePaystackCheckout } from '@/lib/payments/paystack'
+import { getAuthenticatedUser } from '@/lib/supabase/authHelpers'
+import { Currency } from '@/lib/payments/pricing'
+import { TertiaryCheckoutMetadata } from '@/lib/payments/types'
+
+// Payment providers reject reserved test TLDs (.invalid, .test, .example).
+// In non-production, swap those for a real address so the test flow can proceed.
+const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
+function paymentEmail(profileEmail: string | null, userEmail: string | null): string {
+  const raw = profileEmail ?? userEmail ?? ''
+  if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) {
+    return PROVIDER_SAFE_EMAIL
+  }
+  return raw
+}
+
+export async function POST(req: NextRequest) {
+  if (process.env.TERTIARY_BILLING_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'Tertiary billing checkout is not yet available.' }, { status: 503 })
+  }
+  const body = await req.json().catch(() => ({}))
+  const expectedAmount = Number(body.expectedAmount)
+  const provider = body.provider as 'flutterwave' | 'paystack'
+  const kind: 'period' | 'founding_conversion' = body.kind === 'founding_conversion' ? 'founding_conversion' : 'period'
+  const applicationId = typeof body.applicationId === 'string' ? body.applicationId : null
+  if (!['flutterwave', 'paystack'].includes(provider)) return NextResponse.json({ error: 'Invalid payment provider' }, { status: 400 })
+  if (kind === 'founding_conversion' && !applicationId) return NextResponse.json({ error: 'Application is required' }, { status: 400 })
+
+  const supabase = await createClient()
+  const { user } = await getAuthenticatedUser(supabase)
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('users').select('organization_id, role, name, email').eq('id', user.id).single()
+  if (!profile?.organization_id || profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Only an institution admin can make tertiary billing payments' }, { status: 403 })
+  }
+  const orgId = profile.organization_id
+  const { data: org } = await supabase.from('organizations').select('type').eq('id', orgId).single()
+  if (org?.type !== 'university') {
+    return NextResponse.json({ error: 'Tertiary billing only applies to University/Polytechnic/College institutions' }, { status: 400 })
+  }
+
+  const { data: gateways } = await supabase.rpc('get_available_gateways', { p_currency: 'NGN', p_scope: 'tertiary' })
+  if (!Array.isArray(gateways) || !gateways.includes(provider)) return NextResponse.json({ error: 'That payment method is not available right now.' }, { status: 400 })
+
+  const quoteReference = `edux-tq-${orgId}-${Date.now()}`
+  const { data: quote, error: quoteError } = kind === 'period'
+    ? await supabase.rpc('create_tertiary_payment_quote', { p_org_id: orgId, p_reference: quoteReference })
+    : await supabase.rpc('create_founding_conversion_quote', { p_application_id: applicationId, p_reference: quoteReference })
+  if (quoteError || !quote) return NextResponse.json(
+    { error: quoteError?.message ?? 'Could not create a quote', code: /awaiting verification/i.test(quoteError?.message ?? '') ? 'type_unverified' : undefined },
+    { status: /awaiting verification/i.test(quoteError?.message ?? '') ? 403 : 400 })
+
+  const amount = Number(quote.amount_due)
+  if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {
+    return NextResponse.json({ error: 'The amount changed since you reviewed it. Please review the updated quote.', code: 'quote_changed', amount }, { status: 409 })
+  }
+  const currency = quote.currency as Currency
+  const reference = `${quote.reference}-${Date.now().toString(36)}`
+
+  const metadata: TertiaryCheckoutMetadata = {
+    type: 'tertiary_subscription', quoteKind: kind, organizationId: orgId, quoteReference: quote.reference,
+    tierKey: quote.tier_key ?? undefined, billingCycle: quote.billing_cycle ?? undefined,
+    platform_key: 'results', expected_amount: amount, expected_currency: currency,
+  }
+  const commonInput = {
+    email: paymentEmail(profile.email, user.email ?? null),
+    name: profile.name ?? 'Institution Admin', amount, currency, reference,
+    redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
+  }
+  const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(commonInput) : await initiatePaystackCheckout(commonInput)
+  if (!result.success || !result.paymentLink) return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
+
+  return NextResponse.json({ paymentLink: result.paymentLink, amount, currency, reused: quote.reused, periodLabel: quote.period_label ?? null })
+}
+
+===== src\app\api\billing\verify-status\route.ts =====
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
+import { verifyPaystackTransaction } from '@/lib/payments/paystack'
+import { applyVerifiedPayment } from '@/lib/payments/dispatch'
+
+export async function GET(req: NextRequest) {
+  const provider = req.nextUrl.searchParams.get('provider')
+  const ref = req.nextUrl.searchParams.get('ref')
+  const transactionId = req.nextUrl.searchParams.get('transaction_id')
+  if (!provider || !ref) return NextResponse.json({ status: 'error', message: 'Missing provider or reference' }, { status: 400 })
+
+  try {
+    const verification = provider === 'flutterwave'
+      ? await verifyFlutterwaveTransaction(transactionId ?? ref)
+      : await verifyPaystackTransaction(ref)
+    if (!verification.success) return NextResponse.json({ status: 'error', message: verification.error ?? 'Verification failed' })
+    if (verification.status !== 'successful') return NextResponse.json({ status: verification.status })
+    if (!verification.metadata) return NextResponse.json({ status: 'error', message: 'Payment verified but no subscription details found' })
+    if (!verification.reference || verification.amount === undefined) {
+      return NextResponse.json({ status: 'error', message: 'Payment verification incomplete â€” please contact support' })
+    }
+
+    const applied = await applyVerifiedPayment(verification, provider === 'flutterwave' ? 'flutterwave' : 'paystack')
+    if (!applied.success) {
+      if (applied.needsReview) return NextResponse.json({ status: 'needs_review', message: applied.error })
+      return NextResponse.json({ status: 'error', message: applied.error ?? 'Failed to activate subscription' })
+    }
+
+    const m = verification.metadata
+    const plan = m.type === 'founding_500' ? 'founding_500'
+      : m.type === 'tertiary_subscription' ? (m.tierKey ?? 'founding_conversion')
+      : m.type === 'k12_subscription' ? m.planKey
+      : m.type === 'gateway_test' ? 'gateway_test'
+      : m.type === 'centre_subscription' ? m.planKey
+      : m.type === 'topup_subscription' ? m.planKey
+      : m.plan
+    return NextResponse.json({ status: 'successful', plan })
+  } catch (err) {
+    console.error('Verify status error:', err)
+    return NextResponse.json({ status: 'error', message: 'Something went wrong verifying your payment' }, { status: 500 })
+  }
+}
+
+===== src\app\api\webhooks\paystack\route.ts =====
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { verifyPaystackTransaction } from '@/lib/payments/paystack'
+import { applyVerifiedPayment } from '@/lib/payments/dispatch'
+import { safeEqual } from '@/lib/payments/safeEqual'
+
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text()
+  const signature = req.headers.get('x-paystack-signature')
+  const expected = crypto.createHmac('sha512', process.env.PAYSTACK_SECRET_KEY!).update(rawBody).digest('hex')
+  if (!signature || !safeEqual(signature, expected)) return new NextResponse(null, { status: 401 })
+
+  const event = JSON.parse(rawBody)
+  if (event.event === 'charge.success') {
+    const verification = await verifyPaystackTransaction(event.data.reference)
+    if (verification.success && verification.status === 'successful') {
+      const result = await applyVerifiedPayment(verification, 'paystack')
+      if (!result.success) {
+        console.error('Failed to apply payment:', result.error)
+        if (result.retryable) return new NextResponse(null, { status: 500 })
+      }
+    }
+  }
+  return new NextResponse(null, { status: 200 })
+}
+
+===== src\app\api\webhooks\flutterwave\route.ts =====
+export const runtime = 'nodejs'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyFlutterwaveTransaction } from '@/lib/payments/flutterwave'
+import { applyVerifiedPayment } from '@/lib/payments/dispatch'
+import { safeEqual } from '@/lib/payments/safeEqual'
+
+export async function POST(req: NextRequest) {
+  const signature = req.headers.get('verif-hash')
+  const secret = process.env.FLW_WEBHOOK_HASH
+  if (!signature || !secret || !safeEqual(signature, secret)) return new NextResponse(null, { status: 401 })
+
+  const event = await req.json()
+  if (event.event === 'charge.completed' && event.data.status === 'successful') {
+    const verification = await verifyFlutterwaveTransaction(String(event.data.id))
+    if (verification.success && verification.status === 'successful') {
+      const result = await applyVerifiedPayment(verification, 'flutterwave')
+      if (!result.success) {
+        console.error('Failed to apply payment:', result.error)
+        if (result.retryable) return new NextResponse(null, { status: 500 })
+      }
+    }
+  }
+  return new NextResponse(null, { status: 200 })
+}

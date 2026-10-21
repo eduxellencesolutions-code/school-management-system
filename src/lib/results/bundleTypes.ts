@@ -90,6 +90,7 @@ export interface ResultsBundle {
   generated_at: string
   institution: { name: string; logo_url: string | null; address: string | null; motto: string | null }
   profile: {
+    learner_id: string
     first_name: string
     last_name: string
     other_names: string | null

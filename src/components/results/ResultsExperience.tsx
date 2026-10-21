@@ -2,11 +2,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Download, FileSpreadsheet, Share2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import JourneyLine from './JourneyLine'
+import ShareCardDialog from './ShareCardDialog'
 import { SemesterView, YearView, FinalView, CARD, fmt } from './Views'
 import { useCountUp } from './useCountUp'
+import { downloadStatementPdf, downloadStatementXlsx, recordExport } from '@/lib/results/statementExports'
 import type { ResultsBundle } from '@/lib/results/bundleTypes'
 
 type View = 'semester' | 'year' | 'final'
@@ -143,16 +146,18 @@ function Hero({ bundle, showMatric, onToggleMatric }: { bundle: ResultsBundle; s
   )
 }
 
-export default function ResultsExperience({ previewBundle }: { previewBundle?: ResultsBundle }) {
+export default function ResultsExperience({ learnerId }: { learnerId?: string }) {
   const supabase = useMemo(() => createClient(), [])
-  const [bundle, setBundle] = useState<ResultsBundle | null>(previewBundle ?? null)
+  const [bundle, setBundle] = useState<ResultsBundle | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(!previewBundle)
+  const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('semester')
   const [termId, setTermId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>('auto')
   const [showMatric, setShowMatric] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -182,7 +187,9 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: rpcError } = await supabase.rpc('get_my_tertiary_results_bundle')
+    const { data, error: rpcError } = learnerId
+      ? await supabase.rpc('get_tertiary_results_bundle_for', { p_learner_id: learnerId })
+      : await supabase.rpc('get_my_tertiary_results_bundle')
     if (rpcError) {
       setError(rpcError.message)
       setLoading(false)
@@ -192,17 +199,28 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
     setBundle(b)
     focusOn(b)
     setLoading(false)
-  }, [supabase, focusOn])
+  }, [supabase, learnerId, focusOn])
 
   useEffect(() => {
-    if (previewBundle) {
-      focusOn(previewBundle)
-      return
-    }
     void load()
-  }, [previewBundle, load, focusOn])
+  }, [load])
 
   const insights = useMemo(() => (bundle ? buildInsights(bundle) : []), [bundle])
+
+  async function runExport(kind: 'statement_pdf' | 'statement_xlsx') {
+    if (!bundle) return
+    setBusy(kind)
+    try {
+      const exportId = await recordExport(supabase, bundle.profile.learner_id, kind)
+      if (kind === 'statement_pdf') await downloadStatementPdf(bundle, exportId)
+      else await downloadStatementXlsx(bundle, exportId)
+      toast.success('Statement downloaded. It is marked unofficial.')
+    } catch (e) {
+      toast.error((e as Error).message || 'The statement could not be created')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -218,7 +236,7 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
       <div className="edux-results" data-theme={theme}>
         <style>{THEME_CSS}</style>
         <div className={CARD}>
-          <p className="font-medium text-[var(--r-ink)]">Your results could not be loaded</p>
+          <p className="font-medium text-[var(--r-ink)]">The results could not be loaded</p>
           <p className="text-sm text-[var(--r-muted)] mt-1">{error ?? 'Something went wrong. Please try again.'}</p>
           <button type="button" onClick={() => void load()} className="mt-3 btn-primary btn btn-sm">Try again</button>
         </div>
@@ -227,14 +245,11 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
   }
 
   const scaleMax = bundle.totals.cgpa_scale_max
+  const hasPublished = bundle.semesters.some(s => s.published_courses > 0)
 
   return (
     <div className="edux-results rounded-3xl p-3 md:p-5 space-y-4" data-theme={theme} style={{ background: 'var(--r-bg)' }}>
       <style>{THEME_CSS}</style>
-
-      {previewBundle && (
-        <p className="text-xs rounded-lg border border-[var(--r-gold)] text-[var(--r-ink)] px-3 py-2">SAMPLE DATA. Development preview only. These are not real results.</p>
-      )}
 
       <div className="flex justify-end gap-1 text-xs" role="group" aria-label="Colour theme">
         {(['auto', 'light', 'dark'] as Theme[]).map(t => (
@@ -251,6 +266,21 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
       </div>
 
       <Hero bundle={bundle} showMatric={showMatric} onToggleMatric={() => setShowMatric(v => !v)} />
+
+      {hasPublished && (
+        <section className="flex flex-wrap items-center gap-2" aria-label="Statement and sharing">
+          <button type="button" className="btn-secondary btn btn-sm" disabled={busy !== null} onClick={() => void runExport('statement_pdf')}>
+            {busy === 'statement_pdf' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Statement (PDF)
+          </button>
+          <button type="button" className="btn-secondary btn btn-sm" disabled={busy !== null} onClick={() => void runExport('statement_xlsx')}>
+            {busy === 'statement_xlsx' ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />} Statement (Excel)
+          </button>
+          <button type="button" className="btn-secondary btn btn-sm" disabled={busy !== null} onClick={() => setShareOpen(true)}>
+            <Share2 size={14} /> Share card
+          </button>
+          <span className="text-xs text-[var(--r-muted)]">Statements are marked unofficial. Official transcripts are issued by your institution&apos;s registry.</span>
+        </section>
+      )}
 
       {bundle.semesters.length === 0 ? (
         <div className={CARD}>
@@ -275,8 +305,8 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
           </section>
 
           {insights.length > 0 && (
-            <section className={CARD} aria-label="Insights from your own record">
-              <p className="font-medium text-[var(--r-ink)] mb-1">From your record</p>
+            <section className={CARD} aria-label="Insights from the record">
+              <p className="font-medium text-[var(--r-ink)] mb-1">From the record</p>
               <ul className="text-sm text-[var(--r-muted)] list-disc pl-5 space-y-1">
                 {insights.map((line, i) => <li key={i}>{line}</li>)}
               </ul>
@@ -319,6 +349,8 @@ export default function ResultsExperience({ previewBundle }: { previewBundle?: R
           </nav>
         </>
       )}
+
+      {shareOpen && <ShareCardDialog bundle={bundle} onClose={() => setShareOpen(false)} />}
     </div>
   )
 }

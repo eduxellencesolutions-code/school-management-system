@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
 import { getPrice, getAnnualSavingsPercent, BillingCycle, Currency, PaidPlan } from '@/lib/payments/pricing'
@@ -10,15 +11,23 @@ interface Props {
   label: string
 }
 
+const SOLO_PLANS: PaidPlan[] = ['solo_teacher_pro']
+
 export default function PlanUpgradeCard({ plan, label }: Props) {
+  const router = useRouter()
   const [cycle, setCycle] = useState<BillingCycle>('annual')
   const [currency, setCurrency] = useState<Currency>('NGN')
   const [loadingProvider, setLoadingProvider] = useState<'flutterwave' | 'paystack' | null>(null)
 
   const price = getPrice(plan, currency, cycle)
   const symbol = currency === 'NGN' ? '₦' : '$'
+  const isSolo = SOLO_PLANS.includes(plan)
 
   async function checkout(provider: 'flutterwave' | 'paystack') {
+    if (isSolo) {
+      router.push('/settings/billing/solo')
+      return
+    }
     setLoadingProvider(provider)
     try {
       const res = await fetch('/api/billing/initiate', {
@@ -73,15 +82,17 @@ export default function PlanUpgradeCard({ plan, label }: Props) {
           disabled={loadingProvider !== null}
           className="btn-primary btn-sm btn flex-1 disabled:opacity-50"
         >
-          {loadingProvider === 'flutterwave' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Flutterwave'}
+          {isSolo ? 'Continue to Solo billing' : loadingProvider === 'flutterwave' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Flutterwave'}
         </button>
-        <button
-          onClick={() => checkout('paystack')}
-          disabled={loadingProvider !== null}
-          className="btn-secondary btn-sm btn flex-1 disabled:opacity-50"
-        >
-          {loadingProvider === 'paystack' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Paystack'}
-        </button>
+        {!isSolo && (
+          <button
+            onClick={() => checkout('paystack')}
+            disabled={loadingProvider !== null}
+            className="btn-secondary btn-sm btn flex-1 disabled:opacity-50"
+          >
+            {loadingProvider === 'paystack' ? <Loader2 size={13} className="animate-spin" /> : 'Pay with Paystack'}
+          </button>
+        )}
       </div>
     </div>
   )

@@ -5,12 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import TypeVerificationPanel from '@/components/super-admin/TypeVerificationPanel'
 import BillingSettingsPanel from '@/components/super-admin/BillingSettingsPanel'
 import TopupPanel from '@/components/super-admin/TopupPanel'
+import SoloReviewPanel from '@/components/super-admin/SoloReviewPanel'
 
 const naira = (n: any) => n == null ? '—' : new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(n))
 
 export default function BillingOpsClient({ canReview, canResolve, isSuperAdmin }: { canReview: boolean; canResolve: boolean; isSuperAdmin: boolean }) {
   const supabase = createClient()
-  const [tab, setTab] = useState<'orgs' | 'review' | 'types' | 'settings' | 'topups'>('orgs')
+  const [tab, setTab] = useState<'orgs' | 'review' | 'types' | 'settings' | 'topups' | 'solo'>('orgs')
   const [orgs, setOrgs] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [detail, setDetail] = useState<any>(null)
@@ -54,9 +55,9 @@ export default function BillingOpsClient({ canReview, canResolve, isSuperAdmin }
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        {(['orgs', 'review', 'types', 'settings', 'topups'] as const).filter(t => isSuperAdmin || !['types', 'settings', 'topups'].includes(t)).map(t => (
+        {(['orgs', 'review', 'types', 'settings', 'topups', 'solo'] as const).filter(t => isSuperAdmin || !['types', 'settings', 'topups', 'solo'].includes(t)).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`btn-sm btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
-            {t === 'orgs' ? 'Organizations' : t === 'review' ? `Needs review (${recon.length || '…'})` : t === 'types' ? 'Type verification' : t === 'settings' ? 'Billing settings' : 'Top-ups'}</button>))}
+            {t === 'orgs' ? 'Organizations' : t === 'review' ? `Needs review (${recon.length || '…'})` : t === 'types' ? 'Type verification' : t === 'settings' ? 'Billing settings' : t === 'topups' ? 'Top-ups' : 'Solo reviews'}</button>))}
       </div>
 
       {tab === 'orgs' && (
@@ -111,6 +112,8 @@ export default function BillingOpsClient({ canReview, canResolve, isSuperAdmin }
       {tab === 'settings' && isSuperAdmin && <BillingSettingsPanel />}
 
       {tab === 'topups' && isSuperAdmin && <TopupPanel />}
+
+      {tab === 'solo' && isSuperAdmin && <SoloReviewPanel />}
     </div>
   )
 }
