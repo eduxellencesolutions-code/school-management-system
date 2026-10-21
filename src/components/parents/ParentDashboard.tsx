@@ -95,6 +95,7 @@ export default function ParentDashboard() {
             <Link href={`/parent/homework/${child.id}`} className="btn-secondary btn-sm btn">
               Homework
             </Link>
+            <Link href="/parent/results" className="btn-secondary btn-sm btn">University results</Link>
             <Link href={`/parent/history/${child.id}`} className="btn-secondary btn-sm btn">
               Academic History
             </Link>
