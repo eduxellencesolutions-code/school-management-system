@@ -38,6 +38,7 @@ export default function SettingsSidebar({ isInstitution, isAdmin }: Props) {
     { label: 'Templates', href: '/settings/templates', icon: FileText },
     { label: 'Subjects', href: '/settings/subjects', icon: BookOpen },
     { label: 'Academic Periods', href: '/settings/academic', icon: Calendar },
+    { label: 'Tertiary Grading', href: '/settings/tertiary-grading', icon: Calendar },
     { label: 'Billing', href: '/settings#billing', icon: CreditCard },
   )
 

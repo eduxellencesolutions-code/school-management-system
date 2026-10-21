@@ -26,6 +26,7 @@ export default function TertiaryGradingSetupPage() {
   const [error, setError] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
+  const [orgType, setOrgType] = useState<string | null>(null)
   const [configs, setConfigs] = useState<any[]>([])
   const [defs, setDefs] = useState<any[]>([])
   const [terms, setTerms] = useState<any[]>([])
@@ -45,6 +46,8 @@ export default function TertiaryGradingSetupPage() {
     const org = o.data as string
     setOrgId(org)
     setRole((r.data as string) ?? null)
+    const orgRow = await supabase.from('organizations').select('type').eq('id', org).single()
+    setOrgType((orgRow.data?.type as string) ?? null)
 
     const [c, d, t, m] = await Promise.all([
       supabase.from('grading_scale_configs').select('id, scale_type, name, max_point, is_active').order('scale_type'),
@@ -123,6 +126,9 @@ export default function TertiaryGradingSetupPage() {
 
   if (loading) return <div className="p-6 text-sm text-ink-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading…</div>
   if (error && !orgId) return <div className="card p-6"><p className="text-sm text-red-600">{error}</p></div>
+  if (orgType !== 'university') {
+    return <div className="card p-6"><p className="text-sm text-ink-muted">This page is for higher institutions only.</p></div>
+  }
   if (role !== 'admin') {
     return <div className="card p-6"><p className="text-sm text-ink-muted">Only an institution administrator can set up grading.</p></div>
   }

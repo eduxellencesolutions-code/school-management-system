@@ -37,10 +37,10 @@ export default async function StudentLayout({ children }: { children: React.Reac
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface-50">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-surface-50">
       <StudentPortalShell />
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-6 py-6">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-6 pb-28 md:pb-6">
           {children}
         </div>
       </main>
