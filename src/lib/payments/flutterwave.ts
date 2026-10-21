@@ -66,6 +66,8 @@ export async function verifyFlutterwaveTransaction(transactionId: string): Promi
       return { success: true, status: 'failed' }
     }
 
+    const countryToken = String(json.data.card?.country ?? '').trim().split(/\s+/).pop() ?? ''
+
     return {
       success: true,
       status: 'successful',
@@ -73,6 +75,7 @@ export async function verifyFlutterwaveTransaction(transactionId: string): Promi
       currency: json.data.currency,
       metadata: json.data.meta as AnyCheckoutMetadata,
       reference: String(json.data.id),   // ✅ NEW — canonical, matches what the webhook itself sees
+      payerCountry: /^[A-Za-z]{2}$/.test(countryToken) ? countryToken.toUpperCase() : undefined,
     }
   } catch (err: any) {
     console.error('Flutterwave verify error:', err)

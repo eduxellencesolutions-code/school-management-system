@@ -95,5 +95,6 @@ export interface VerifyTransactionResult {
   currency?: Currency
   metadata?: AnyCheckoutMetadata
   reference?: string
+  payerCountry?: string
   error?: string
 }

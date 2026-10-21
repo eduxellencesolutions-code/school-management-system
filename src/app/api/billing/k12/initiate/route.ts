@@ -13,9 +13,7 @@ import { K12CheckoutMetadata } from '@/lib/payments/types'
 const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
 function paymentEmail(profileEmail: string | null | undefined, userEmail: string | null | undefined): string {
   const raw = profileEmail ?? userEmail ?? ''
-  if (/\.(invalid|test|example)$/i.test(raw)) {
-    return PROVIDER_SAFE_EMAIL
-  }
+  if (/\.(invalid|test|example)$/i.test(raw)) return PROVIDER_SAFE_EMAIL
   return raw
 }
 
@@ -37,33 +35,37 @@ export async function POST(req: NextRequest) {
   }
   const orgId = profile.organization_id
 
-  const { data: gateways } = await supabase.rpc('get_available_gateways', { p_currency: 'NGN', p_scope: 'k12' })
-  if (!Array.isArray(gateways) || !gateways.includes(provider)) {
-    return NextResponse.json({ error: 'That payment method is not available right now.' }, { status: 400 })
+  const { data: billing } = await supabase.rpc('resolve_org_billing', { p_org_id: orgId })
+  if (!billing?.ready) {
+    return NextResponse.json({ error: billing?.message ?? 'Billing is not available for your institution yet.', code: billing?.blocked_reason }, { status: 403 })
+  }
+  if (!Array.isArray(billing.gateways) || !billing.gateways.includes(provider)) {
+    return NextResponse.json({ error: 'That payment method is not available for your billing country.' }, { status: 400 })
   }
 
   const { data: quote, error: quoteError } = await supabase.rpc('create_k12_payment_quote', {
     p_org_id: orgId, p_plan: plan, p_cycle: cycle, p_reference: `edux-k12q-${orgId}-${Date.now()}`,
   })
+  const blockedMsg = /awaiting verification|billing country|not yet available/i.test(quoteError?.message ?? '')
   if (quoteError || !quote) return NextResponse.json(
     { error: quoteError?.message ?? 'Could not create a quote', code: /awaiting verification/i.test(quoteError?.message ?? '') ? 'type_unverified' : undefined },
-    { status: /awaiting verification/i.test(quoteError?.message ?? '') ? 403 : 400 })
+    { status: blockedMsg ? 403 : 400 })
 
   const amount = Number(quote.amount_due)
   if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {
     return NextResponse.json({ error: 'The amount changed since you reviewed it. Please review the updated quote.', code: 'quote_changed', amount }, { status: 409 })
   }
-
+  const currency = quote.currency as 'NGN' | 'USD'
   const reference = `${quote.reference}-${Date.now().toString(36)}`
   const metadata: K12CheckoutMetadata = {
     type: 'k12_subscription', organizationId: orgId, quoteReference: quote.reference, planKey: quote.plan_key,
-    billingCycle: quote.billing_cycle, platform_key: 'results', expected_amount: amount, expected_currency: 'NGN',
+    billingCycle: quote.billing_cycle, platform_key: 'results', expected_amount: amount, expected_currency: currency,
   }
   const input = {
-    email: paymentEmail(profile.email, user.email), name: profile.name ?? 'Institution Admin', amount, currency: 'NGN' as const,
+    email: paymentEmail(profile.email, user.email), name: profile.name ?? 'Institution Admin', amount, currency,
     reference, redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/billing/verify?provider=${provider}&ref=${reference}`, metadata,
   }
   const result = provider === 'flutterwave' ? await initiateFlutterwaveCheckout(input) : await initiatePaystackCheckout(input)
   if (!result.success || !result.paymentLink) return NextResponse.json({ error: result.error ?? 'Failed to start checkout' }, { status: 500 })
-  return NextResponse.json({ paymentLink: result.paymentLink, amount, currency: 'NGN', periodLabel: quote.period_label })
+  return NextResponse.json({ paymentLink: result.paymentLink, amount, currency, periodLabel: quote.period_label })
 }

@@ -7,12 +7,13 @@ export async function applySuccessfulSubscription(
   reference: string,
   amountPaid: number,
   currencyPaid: string = 'NGN',
+  payerCountry?: string,
 ): Promise<{ success: boolean; error?: string; needsReview?: boolean; retryable?: boolean }> {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } })
   const { data, error } = await admin.rpc('confirm_solo_payment', {
     p_provider: provider, p_reference: reference, p_user_id: metadata.accountId, p_plan: metadata.plan,
-    p_cycle: metadata.cycle ?? null, p_amount: amountPaid, p_currency: currencyPaid, p_account_type: metadata.accountType,
+    p_cycle: metadata.cycle ?? null, p_amount: amountPaid, p_currency: currencyPaid, p_account_type: metadata.accountType, p_payer_country: payerCountry ?? null,
   })
   if (error) {
     console.error('confirm_solo_payment failed:', error.message)

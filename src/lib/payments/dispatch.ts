@@ -21,12 +21,12 @@ export async function applyVerifiedPayment(v: VerifyTransactionResult, provider:
       const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
       const { error } = await admin.rpc('record_gateway_test_result', {
         p_reference: m.runReference, p_verified_amount: v.amount, p_verified_currency: currency, p_gateway_status: v.status ?? 'unknown',
-        p_payer_country: null, p_channel: null, p_from_webhook: source === 'webhook',
+        p_payer_country: v.payerCountry ?? null, p_channel: null, p_from_webhook: source === 'webhook',
       })
       return error ? { success: false, retryable: true, error: error.message } : { success: true }
     }
     case 'centre_subscription': return applySuccessfulCentreSubscription(m, provider, v.reference, v.amount, currency)
     case 'topup_subscription': return applySuccessfulTopup(m, provider, v.reference, v.amount, currency)
-    default: return applySuccessfulSubscription(m as CheckoutMetadata, provider, v.reference, v.amount, currency)
+    default: return applySuccessfulSubscription(m as CheckoutMetadata, provider, v.reference, v.amount, currency, v.payerCountry)
   }
 }

@@ -54,6 +54,7 @@ export async function verifyPaystackTransaction(reference: string): Promise<Veri
       currency: json.data.currency,
       metadata: json.data.metadata as CheckoutMetadata,
       reference: json.data.reference,   // ✅ NEW
+      payerCountry: /^[A-Za-z]{2}$/.test(String(json.data.authorization?.country_code ?? '')) ? String(json.data.authorization.country_code).toUpperCase() : undefined,
     }
   } catch (err: any) {
     console.error('Paystack verify error:', err)
