@@ -24,7 +24,9 @@ function toCards(s: any): Card[] {
         eligible: !!t?.eligible && !o.is_custom,
         reasons: t?.eligible ? [] : [o.is_custom ? 'Arranged individually. Contact Eduxellence.' : 'Your student count is above this plan’s limit.'],
         prices: { termly: t?.eligible ? Number(t.amount_due) : null, annual: a?.eligible ? Number(a.amount_due) : null },
-        note: t?.eligible ? (t.quantity_is_minimum ? `Billed for this plan’s minimum of ${Number(t.billable_quantity).toLocaleString()} students (you have ${Number(t.verified_count).toLocaleString()}).`
+        note: t?.eligible ? ((t.minimum_adjusted || a?.minimum_adjusted)
+          ? `A minimum invoice of ${money(Number(t.minimum_invoice), cur)} applies: the calculated amount is lower, so you are charged the minimum. The total is shown before you pay.`
+          : t.quantity_is_minimum ? `Billed for this plan’s minimum of ${Number(t.billable_quantity).toLocaleString()} students (you have ${Number(t.verified_count).toLocaleString()}).`
           : `${Number(t.billable_quantity).toLocaleString()} students × ${money(t.unit_price, cur)} per term`) : undefined,
         benefits: (s.benefits?.[o.tier_key] ?? []).map((k: string) => CAPABILITY_LABELS[k] ?? k), recommended: s.recommended_tier_key === o.tier_key,
       }

@@ -12,9 +12,7 @@ import { TertiaryCheckoutMetadata } from '@/lib/payments/types'
 const PROVIDER_SAFE_EMAIL = 'no-reply@eduxellence.org'
 function paymentEmail(profileEmail: string | null, userEmail: string | null): string {
   const raw = profileEmail ?? userEmail ?? ''
-  if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) {
-    return PROVIDER_SAFE_EMAIL
-  }
+  if (process.env.NODE_ENV !== 'production' && /\.(invalid|test|example)$/i.test(raw)) return PROVIDER_SAFE_EMAIL
   return raw
 }
 
@@ -44,16 +42,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Tertiary billing only applies to University/Polytechnic/College institutions' }, { status: 400 })
   }
 
-  const { data: gateways } = await supabase.rpc('get_available_gateways', { p_currency: 'NGN', p_scope: 'tertiary' })
-  if (!Array.isArray(gateways) || !gateways.includes(provider)) return NextResponse.json({ error: 'That payment method is not available right now.' }, { status: 400 })
+  const { data: billing } = await supabase.rpc('resolve_org_billing', { p_org_id: orgId })
+  if (!billing?.ready) {
+    return NextResponse.json({ error: billing?.message ?? 'Billing is not available for your institution yet.', code: billing?.blocked_reason }, { status: 403 })
+  }
+  if (!Array.isArray(billing.gateways) || !billing.gateways.includes(provider)) {
+    return NextResponse.json({ error: 'That payment method is not available for your billing country.' }, { status: 400 })
+  }
 
   const quoteReference = `edux-tq-${orgId}-${Date.now()}`
   const { data: quote, error: quoteError } = kind === 'period'
     ? await supabase.rpc('create_tertiary_payment_quote', { p_org_id: orgId, p_reference: quoteReference })
     : await supabase.rpc('create_founding_conversion_quote', { p_application_id: applicationId, p_reference: quoteReference })
+  const blockedMsg = /awaiting verification|billing country|not yet available|not available yet/i.test(quoteError?.message ?? '')
   if (quoteError || !quote) return NextResponse.json(
     { error: quoteError?.message ?? 'Could not create a quote', code: /awaiting verification/i.test(quoteError?.message ?? '') ? 'type_unverified' : undefined },
-    { status: /awaiting verification/i.test(quoteError?.message ?? '') ? 403 : 400 })
+    { status: blockedMsg ? 403 : 400 })
 
   const amount = Number(quote.amount_due)
   if (Number.isFinite(expectedAmount) && Math.abs(amount - expectedAmount) > 0.005) {
