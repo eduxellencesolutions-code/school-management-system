@@ -91,6 +91,9 @@ export default function Sidebar({ user, org, features, isSchoolAdmin, permission
     { label: 'Programmes', href: '/programmes', icon: GraduationCap },
     { label: 'Cohorts', href: '/cohorts', icon: Layers },
     { label: 'Courses', href: '/courses', icon: BookMarked },
+    { label: 'Course catalogue', href: '/tertiary/catalogue', icon: BookMarked },
+    { label: 'Transcripts', href: '/tertiary/transcripts', icon: GraduationCap },
+    { label: 'Graduation', href: '/tertiary/graduation', icon: GraduationCap },
     { label: 'My Courses', href: '/lecturer/courses', icon: UserCog },
     { label: 'Result Review', href: '/results/review', icon: CheckSquare },
   ] : []

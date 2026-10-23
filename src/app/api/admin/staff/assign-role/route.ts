@@ -38,11 +38,7 @@ export async function POST(request: Request) {
   }
 
   const { error } = await supabase
-    .from('staff_role_assignments')
-    .upsert(
-      { organization_id: userRow.organization_id, user_id: userId, role_id: roleId, assigned_by: user.id, is_active: true },
-      { onConflict: 'user_id,role_id' }
-    );
+    .rpc('assign_staff_role', { p_user_id: userId, p_role_id: roleId });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

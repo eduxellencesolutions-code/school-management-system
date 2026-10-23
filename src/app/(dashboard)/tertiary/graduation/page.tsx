@@ -145,6 +145,7 @@ export default function GraduationPage() {
                     )}
                     <div className="flex gap-2 justify-end mt-2">
                       <Link href={`/tertiary/students/${r.learner_id}/results`} className="btn-ghost btn btn-sm">View as student</Link>
+                      <Link href={`/tertiary/students/${r.learner_id}/attempts`} className="btn-ghost btn btn-sm">Attempts</Link>
                       {r.approved_at
                         ? <button className="btn-secondary btn btn-sm" onClick={() => open(r, 'revoke')}>Revoke</button>
                         : <button className="btn-primary btn btn-sm" onClick={() => open(r, 'approve')}>Review &amp; approve</button>}

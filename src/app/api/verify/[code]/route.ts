@@ -12,11 +12,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   const { code } = await params
   const supabase = await createClient()
 
-  const { data: rep } = await supabase
-    .from('public_representative_verification')
-    .select('full_name, referral_code, level, status, photo_status')
-    .eq('referral_code', code)
-    .maybeSingle()
+  const { data } = await supabase.rpc('verify_representative', { p_code: code }).maybeSingle()
+  const rep = data as { full_name: string; referral_code: string; level: string; status: string; photo_status: string } | null
 
   if (!rep) {
     return NextResponse.json({ found: false }, { status: 404 })

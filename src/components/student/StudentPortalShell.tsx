@@ -4,11 +4,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { GraduationCap, LogOut } from 'lucide-react'
+import { FileText, GraduationCap, LogOut } from 'lucide-react'
 
 // Only areas that actually exist are linked.
 const NAV_ITEMS = [
   { label: 'My results', href: '/student', icon: GraduationCap },
+  { label: 'Transcripts', href: '/student/transcripts', icon: FileText },
 ]
 
 export default function StudentPortalShell() {

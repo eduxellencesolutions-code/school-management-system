@@ -1,4 +1,4 @@
-﻿import { createServerClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { NAV_ITEMS } from '@/lib/auth/navConfig'
@@ -6,7 +6,8 @@ import { NAV_ITEMS } from '@/lib/auth/navConfig'
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const { pathname } = request.nextUrl
-  const isAdminHost = hostname.startsWith('admin.')
+  const host = hostname.split(':')[0].toLowerCase()
+  const isAdminHost = host === 'admin.eduxellence.org' || host === 'admin.localhost'
 
   let response = NextResponse.next({ request })
 
@@ -36,6 +37,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/access') ||
     pathname.startsWith('/founding-institutions') ||
     pathname.startsWith('/pricing') ||
+    pathname.startsWith('/verify') ||
     pathname === '/' ||
     pathname.includes('.')
   ) {
@@ -125,6 +127,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth|founding-institutions|pricing).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|parent|access|api/parent|api/parents|login|signup|auth/set-password|api/auth|founding-institutions|pricing|verify).*)',
   ],
 }

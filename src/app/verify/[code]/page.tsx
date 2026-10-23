@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle, ShieldCheck } from 'lucide-react'
 
 async function getVerification(code: string) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-  const res = await fetch(`${siteUrl}/api/verify/${code}`, { cache: 'no-store' })
+  const res = await fetch(`${siteUrl}/api/verify/${encodeURIComponent(code)}`, { cache: 'no-store' })
   if (!res.ok) return null
   return res.json()
 }

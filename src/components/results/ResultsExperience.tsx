@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import JourneyLine from './JourneyLine'
 import ShareCardDialog from './ShareCardDialog'
+import AttemptHistory from './AttemptHistory'
 import { SemesterView, YearView, FinalView, CARD, fmt } from './Views'
 import { useCountUp } from './useCountUp'
 import { downloadStatementPdf, downloadStatementXlsx, recordExport } from '@/lib/results/statementExports'
@@ -313,6 +314,7 @@ export default function ResultsExperience({ learnerId }: { learnerId?: string })
             </section>
           )}
 
+          <AttemptHistory learnerId={bundle.profile.learner_id} />
           <div className="hidden md:flex gap-2" role="tablist" aria-label="Results views">
             {TABS.map(t => (
               <button
