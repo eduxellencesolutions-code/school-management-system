@@ -7,20 +7,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-
-const NIGERIAN_STATES = [
-  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue',
-  'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu',
-  'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi',
-  'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun',
-  'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
-]
+import { CountrySelect, StateSelect } from 'react-country-state-city'
+import 'react-country-state-city/dist/react-country-state-city.css'
 
 const schema = z.object({
   fullName: z.string().min(2, 'Enter your full name'),
   email: z.string().email('Enter a valid email'),
   phone: z.string().min(7, 'Enter a valid phone number').optional().or(z.literal('')),
-  state: z.string().min(1, 'Select your state'),
 })
 
 type FormData = z.infer<typeof schema>
@@ -30,11 +23,23 @@ export default function ApplyRepresentativePage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState<{ referralCode: string } | null>(null)
 
+  const [countryId, setCountryId] = useState<number>(0)
+  const [stateId, setStateId] = useState<number>(0)
+  const [countryCode, setCountryCode] = useState<string>('')
+  const [regionCode, setRegionCode] = useState<string>('')
+  const [regionName, setRegionName] = useState<string>('')
+  const [locationError, setLocationError] = useState<string | null>(null)
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
   async function onSubmit(data: FormData) {
+    if (!countryCode || !regionName) {
+      setLocationError('Select your country and state/region')
+      return
+    }
+    setLocationError(null)
     setLoading(true)
     try {
       const res = await fetch('/api/representatives/apply', {
@@ -44,7 +49,9 @@ export default function ApplyRepresentativePage() {
           fullName: data.fullName.trim(),
           email: data.email.trim(),
           phone: data.phone?.trim() || undefined,
-          state: data.state,
+          state: regionName,
+          countryCode,
+          regionCode,
         }),
       })
 
@@ -128,15 +135,38 @@ export default function ApplyRepresentativePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-ink mb-1">State</label>
-          <select className="input" {...register('state')} defaultValue="">
-            <option value="" disabled>Select your state</option>
-            {NIGERIAN_STATES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          {errors.state && <p className="text-xs text-red-500 mt-1">{errors.state.message}</p>}
+          <label className="block text-sm font-medium text-ink mb-1">Country</label>
+          <CountrySelect
+            onChange={(e: any) => {
+              setCountryId(e?.id ?? 0)
+              setCountryCode(e?.iso2?.toUpperCase() ?? '')
+              setStateId(0)
+              setRegionCode('')
+              setRegionName('')
+              setLocationError(null)
+            }}
+            placeHolder="Select country"
+          />
         </div>
+
+        {countryId > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1">State / Province / Region</label>
+            <StateSelect
+              countryid={countryId}
+              onChange={(e: any) => {
+                setStateId(e?.id ?? 0)
+                const iso = e?.iso2 ? String(e.iso2).toUpperCase() : ''
+                setRegionCode(iso ? `${countryCode}-${iso}` : '')
+                setRegionName(e?.name ?? '')
+                setLocationError(null)
+              }}
+              placeHolder="Select region"
+            />
+          </div>
+        )}
+
+        {locationError && <p className="text-xs text-red-500">{locationError}</p>}
 
         <button type="submit" disabled={loading} className="btn-primary btn mt-2">
           {loading ? 'Submitting…' : 'Apply now'}

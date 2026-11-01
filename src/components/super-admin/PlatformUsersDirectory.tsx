@@ -24,6 +24,12 @@ const STATUS_STYLE: Record<string, string> = {
   suspended: 'bg-amber-100 text-amber-800',
 }
 
+function repLocation(rep: any): string {
+  if (!rep) return '—'
+  const parts = [rep.region_name, rep.country_code].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : '—'
+}
+
 export default function PlatformUsersDirectory({ 
   canManageLocks, 
   canForceReset, 
@@ -297,7 +303,7 @@ export default function PlatformUsersDirectory({
                 {detail.representative && (
                   <div className="text-sm">
                     <p className="text-xs font-semibold text-ink-muted uppercase mb-1 flex items-center gap-1"><Handshake size={12} /> Representative</p>
-                    <p className="text-ink">{detail.representative.territory_state ?? '—'} · Level {detail.representative.level ?? '—'}</p>
+                    <p className="text-ink">{repLocation(detail.representative)} · Level {detail.representative.level ?? '—'}</p>
                   </div>
                 )}
 

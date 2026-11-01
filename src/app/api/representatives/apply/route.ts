@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { fullName, email, phone, state } = body;
+  const { fullName, email, phone, state, countryCode, regionCode } = body;
 
   if (!fullName || !email) {
     return NextResponse.json({ error: 'Full name and email are required' }, { status: 400 });
@@ -38,7 +38,16 @@ export async function POST(request: Request) {
 
   const { data: rep, error } = await admin
     .from('representatives')
-    .insert({ user_id: user.id, full_name: fullName, email, phone: phone ?? null, referral_code: referralCode, territory_state: state ?? null })
+    .insert({
+      user_id: user.id,
+      full_name: fullName,
+      email,
+      phone: phone ?? null,
+      referral_code: referralCode,
+      region_name: state ?? null,
+      country_code: countryCode ? String(countryCode).toUpperCase() : null,
+      region_code: regionCode ? String(regionCode).toUpperCase() : null,
+    })
     .select('id, referral_code')
     .single();
 

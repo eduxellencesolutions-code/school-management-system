@@ -7,6 +7,12 @@ import GrowthLevelCard from './GrowthLevelCard'
 import SchoolPortfolioSummaryCard from './SchoolPortfolioSummaryCard'
 import LeaderboardCard from './LeaderboardCard'
 
+function displayLocation(rep: any): string {
+  if (!rep) return '—'
+  const parts = [rep.region_name, rep.country_code].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : '—'
+}
+
 export default function RepDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -31,7 +37,7 @@ export default function RepDashboard() {
     <div className="max-w-4xl mx-auto flex flex-col gap-4">
       <div className="card p-5">
         <p className="text-sm text-ink-muted">Welcome, {rep.full_name}</p>
-        <p className="text-xs text-ink-faint">Territory: {rep.territory_state ?? '—'}</p>
+        <p className="text-xs text-ink-faint">Territory: {displayLocation(rep)}</p>
         <p className="text-xs text-ink-faint font-mono mt-1">Referral code: {rep.referral_code}</p>
       </div>
 

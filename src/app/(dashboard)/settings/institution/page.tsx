@@ -33,6 +33,16 @@ interface BillingEstimate {
   currency?: string
 }
 
+function displayCountry(code: string | null | undefined): string {
+  if (!code) return '—'
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase())
+    return name && name !== code ? name : code
+  } catch {
+    return code
+  }
+}
+
 export default function InstitutionSettingsPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -61,6 +71,12 @@ export default function InstitutionSettingsPage() {
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null)
   const [pendingQuote, setPendingQuote] = useState<PendingQuote | null>(null)
 
+  const [location, setLocation] = useState<{ country_code: string | null; region_name: string | null; city: string | null }>({
+    country_code: null,
+    region_name: null,
+    city: null,
+  })
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -84,7 +100,7 @@ export default function InstitutionSettingsPage() {
 
       const { data: org } = await supabase
         .from('organizations')
-        .select('type, tertiary_plan, tertiary_billing_cycle, tertiary_billing_currency')
+        .select('type, tertiary_plan, tertiary_billing_cycle, tertiary_billing_currency, country_code, region_name, city')
         .eq('id', profile.organization_id)
         .single()
       if (org) {
@@ -94,6 +110,11 @@ export default function InstitutionSettingsPage() {
         setCurrentBillingCycle(org.tertiary_billing_cycle ?? 'termly')
         setSelectedTierKey(org.tertiary_plan ?? '')
         setSelectedBillingCycle(org.tertiary_billing_cycle ?? 'termly')
+        setLocation({
+          country_code: org.country_code ?? null,
+          region_name: org.region_name ?? null,
+          city: org.city ?? null,
+        })
       }
 
       const { data: scaleData } = await supabase.rpc('get_active_tertiary_scale', { p_org_id: profile.organization_id })
@@ -158,6 +179,27 @@ export default function InstitutionSettingsPage() {
 
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4"><p className="text-sm text-red-700">{decodeURIComponent(error)}</p></div>}
       {success && <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4"><p className="text-sm text-green-700">{decodeURIComponent(success)}</p></div>}
+
+      <div className="card p-6 flex flex-col gap-4 mb-6">
+        <h2 className="font-semibold text-sm text-ink">Location</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-ink-faint mb-0.5">Country</p>
+            <p className="text-ink">{displayCountry(location.country_code)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-faint mb-0.5">Region / State</p>
+            <p className="text-ink">{location.region_name ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-faint mb-0.5">City / Town</p>
+            <p className="text-ink">{location.city ?? '—'}</p>
+          </div>
+        </div>
+        <p className="text-xs text-ink-faint">
+          Location is set when the institution is registered. To correct it, contact support with the correct country, region and city.
+        </p>
+      </div>
 
       <form action={setInstitutionType} className="card p-6 flex flex-col gap-4 mb-6">
         <div>

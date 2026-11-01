@@ -138,17 +138,22 @@ async function handleRepresentativeSignup(admin: AdminClient, rep: any) {
     admin,
     'representatives',
     rep.id,
-    'id, full_name, email, phone, referral_code, territory_state, created_at'
+    'id, full_name, email, phone, referral_code, region_name, country_code, region_code, created_at'
   )
   if (!claimed) return NextResponse.json({ skipped: true }, { status: 200 })
 
   try {
+    const locationParts = [
+      claimed.region_name,
+      claimed.country_code,
+    ].filter(Boolean)
+
     const html = `
       <h2>New Representative Signup</h2>
       <p><strong>Name:</strong> ${escapeHtml(claimed.full_name)}</p>
       <p><strong>Email:</strong> ${escapeHtml(claimed.email)}</p>
       <p><strong>Phone:</strong> ${escapeHtml(claimed.phone || 'Not provided')}</p>
-      <p><strong>State/territory:</strong> ${escapeHtml(claimed.territory_state || 'Not provided')}</p>
+      <p><strong>Location:</strong> ${escapeHtml(locationParts.join(', ') || 'Not provided')}</p>
       <p><strong>Their new referral code:</strong> ${escapeHtml(claimed.referral_code)}</p>
       <p><strong>Registered:</strong> ${formatDate(claimed.created_at)}</p>
       <p><strong>Representative ID:</strong> ${claimed.id}</p>

@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import PassportReview from '@/components/super-admin/PassportReview'
 
+function repLocation(rep: any): string {
+  if (!rep) return '—'
+  const parts = [rep.region_name, rep.country_code].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : '—'
+}
+
 export default function RepresentativesTable() {
   const [reps, setReps] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,7 +40,7 @@ export default function RepresentativesTable() {
           {reps.map(r => (
             <tr key={r.id} className="border-b border-surface-100">
               <td className="px-4 py-3 font-medium">{r.full_name}<div className="text-xs text-ink-faint">{r.level.replace(/_/g,' ')}</div></td>
-              <td className="px-4 py-3 text-ink-muted">{r.territory_state ?? '—'}</td>
+              <td className="px-4 py-3 text-ink-muted">{repLocation(r)}</td>
               <td className="px-4 py-3 text-center font-mono">{r.totalReferrals}</td>
               <td className="px-4 py-3 text-center font-mono">{r.qualifiedReferrals}</td>
               <td className="px-4 py-3 text-center font-mono">{r.conversionRate}%</td>

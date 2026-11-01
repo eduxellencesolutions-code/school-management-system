@@ -7384,6 +7384,7 @@ export type Database = {
         Row: {
           admin_signup_notified_at: string | null
           commission_rate: number
+          country_code: string | null
           created_by: string | null
           email: string
           full_name: string
@@ -7399,8 +7400,9 @@ export type Database = {
           qualified_customers_count: number
           recruited_by: string | null
           referral_code: string
+          region_code: string | null
+          region_name: string | null
           status: Database["public"]["Enums"]["representative_status"]
-          territory_state: string | null
           territory_zone: string | null
           total_commission_earned: number
           total_commission_paid: number
@@ -7409,6 +7411,7 @@ export type Database = {
         Insert: {
           admin_signup_notified_at?: string | null
           commission_rate?: number
+          country_code?: string | null
           created_by?: string | null
           email: string
           full_name: string
@@ -7424,8 +7427,9 @@ export type Database = {
           qualified_customers_count?: number
           recruited_by?: string | null
           referral_code: string
+          region_code?: string | null
+          region_name?: string | null
           status?: Database["public"]["Enums"]["representative_status"]
-          territory_state?: string | null
           territory_zone?: string | null
           total_commission_earned?: number
           total_commission_paid?: number
@@ -7434,6 +7438,7 @@ export type Database = {
         Update: {
           admin_signup_notified_at?: string | null
           commission_rate?: number
+          country_code?: string | null
           created_by?: string | null
           email?: string
           full_name?: string
@@ -7449,8 +7454,9 @@ export type Database = {
           qualified_customers_count?: number
           recruited_by?: string | null
           referral_code?: string
+          region_code?: string | null
+          region_name?: string | null
           status?: Database["public"]["Enums"]["representative_status"]
-          territory_state?: string | null
           territory_zone?: string | null
           total_commission_earned?: number
           total_commission_paid?: number

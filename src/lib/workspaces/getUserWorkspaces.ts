@@ -57,14 +57,15 @@ export async function getUserWorkspaces(
   // Retained even after staff promotion so commission history stays viewable.
   const { data: rep } = await supabase
     .from('representatives')
-    .select('id, territory_state')
+    .select('id, region_name, country_code')
     .eq('user_id', userId)
     .maybeSingle()
   if (rep) {
+    const locationParts = [rep.region_name, rep.country_code].filter(Boolean)
     workspaces.push({
       type: 'representative',
       label: 'Representative Portal',
-      sublabel: rep.territory_state ? `${rep.territory_state} territory` : 'Representative',
+      sublabel: locationParts.length > 0 ? `${locationParts.join(', ')} territory` : 'Representative',
       href: '/rep',
     })
   }

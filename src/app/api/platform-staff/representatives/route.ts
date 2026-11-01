@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data: reps, error } = await supabase
     .from('representatives')
-    .select('id, full_name, email, phone, referral_code, level, status, territory_state, qualified_customers_count, commission_rate, total_commission_earned, total_commission_paid, joined_at, photo_url, photo_status, photo_rejection_reason, photo_reviewed_at')
+    .select('id, full_name, email, phone, referral_code, level, status, region_name, country_code, region_code, qualified_customers_count, commission_rate, total_commission_earned, total_commission_paid, joined_at, photo_url, photo_status, photo_rejection_reason, photo_reviewed_at')
     .order('joined_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

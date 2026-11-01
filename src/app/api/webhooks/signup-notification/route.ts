@@ -53,7 +53,7 @@ function buildEmail(signupType: string, payload: Record<string, any>) {
     ['Signup type', label],
     ['Organization / school', payload.organization_name],
     ['Institution type', payload.organization_type],
-    ['State / territory', payload.territory_state],
+    ['Location', payload.region_name ?? payload.territory_state],
     ['Phone', payload.phone],
     ['Estimated students', payload.estimated_students != null ? String(payload.estimated_students) : undefined],
     ['Programmes', payload.programmes],

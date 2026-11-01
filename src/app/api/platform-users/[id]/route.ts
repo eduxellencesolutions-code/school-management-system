@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     profile.organization_id
       ? admin.from('organizations').select('id, name, subscription_plan, subscription_status').eq('id', profile.organization_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from('representatives').select('id, territory_state, territory_zone, level, status').eq('user_id', id).maybeSingle(),
+    admin.from('representatives').select('id, region_name, country_code, region_code, territory_zone, level, status').eq('user_id', id).maybeSingle(),
     admin.from('platform_staff').select('id, status, role_id, platform_roles(name)').eq('user_id', id).eq('status', 'active').maybeSingle(),
     admin.from('parent_accounts').select('full_name, email, phone, access_code, access_code_active').eq('auth_user_id', id).maybeSingle(),  // ← FIXED
     admin.from('login_history').select('success, ip_address, user_agent, created_at').eq('user_id', id).order('created_at', { ascending: false }).limit(10),
