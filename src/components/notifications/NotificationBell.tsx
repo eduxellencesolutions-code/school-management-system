@@ -20,7 +20,7 @@ interface Notification {
   metadata?: {
     link?: string
     category?: string
-    i18n?: { key: string; params?: Record<string, string | number | boolean | Date | null | undefined> }
+    i18n?: { key: string; params?: Record<string, string | number | Date> }
   }
 }
 
