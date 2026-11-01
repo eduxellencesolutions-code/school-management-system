@@ -152,7 +152,10 @@ export type Database = {
           created_at: string
           id: string
           organization_id: string
+          source_filename: string | null
           status: string
+          strict: boolean
+          total_rows: number | null
           uploaded_by: string | null
         }
         Insert: {
@@ -160,7 +163,10 @@ export type Database = {
           created_at?: string
           id?: string
           organization_id: string
+          source_filename?: string | null
           status?: string
+          strict?: boolean
+          total_rows?: number | null
           uploaded_by?: string | null
         }
         Update: {
@@ -168,7 +174,10 @@ export type Database = {
           created_at?: string
           id?: string
           organization_id?: string
+          source_filename?: string | null
           status?: string
+          strict?: boolean
+          total_rows?: number | null
           uploaded_by?: string | null
         }
         Relationships: [
@@ -263,45 +272,57 @@ export type Database = {
           batch_id: string
           created_at: string
           created_learner_id: string | null
+          error_code: string | null
           error_detail: string | null
+          errors: Json
           id: string
           raw_data: Json
+          resolved_campus_id: string | null
           resolved_department_id: string | null
           resolved_faculty_id: string | null
           resolved_group_id: string | null
           resolved_programme_id: string | null
           resolved_session_id: string | null
           row_status: string
+          source_row: number | null
           updated_at: string
         }
         Insert: {
           batch_id: string
           created_at?: string
           created_learner_id?: string | null
+          error_code?: string | null
           error_detail?: string | null
+          errors?: Json
           id?: string
           raw_data: Json
+          resolved_campus_id?: string | null
           resolved_department_id?: string | null
           resolved_faculty_id?: string | null
           resolved_group_id?: string | null
           resolved_programme_id?: string | null
           resolved_session_id?: string | null
           row_status?: string
+          source_row?: number | null
           updated_at?: string
         }
         Update: {
           batch_id?: string
           created_at?: string
           created_learner_id?: string | null
+          error_code?: string | null
           error_detail?: string | null
+          errors?: Json
           id?: string
           raw_data?: Json
+          resolved_campus_id?: string | null
           resolved_department_id?: string | null
           resolved_faculty_id?: string | null
           resolved_group_id?: string | null
           resolved_programme_id?: string | null
           resolved_session_id?: string | null
           row_status?: string
+          source_row?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -317,6 +338,13 @@ export type Database = {
             columns: ["created_learner_id"]
             isOneToOne: false
             referencedRelation: "learners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admission_import_rows_resolved_campus_id_fkey"
+            columns: ["resolved_campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
             referencedColumns: ["id"]
           },
           {
@@ -397,6 +425,95 @@ export type Database = {
           },
           {
             foreignKeyName: "announcements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      approval_workflow_stages: {
+        Row: {
+          allow_admin_override: boolean
+          id: string
+          label_en: string
+          label_fr: string | null
+          position: number
+          require_distinct_actor: boolean
+          required_permission: string
+          scope_level: string
+          stage_key: string
+          workflow_id: string
+        }
+        Insert: {
+          allow_admin_override?: boolean
+          id?: string
+          label_en: string
+          label_fr?: string | null
+          position: number
+          require_distinct_actor?: boolean
+          required_permission: string
+          scope_level?: string
+          stage_key: string
+          workflow_id: string
+        }
+        Update: {
+          allow_admin_override?: boolean
+          id?: string
+          label_en?: string
+          label_fr?: string | null
+          position?: number
+          require_distinct_actor?: boolean
+          required_permission?: string
+          scope_level?: string
+          stage_key?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_workflow_stages_required_permission_fkey"
+            columns: ["required_permission"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "approval_workflow_stages_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "approval_workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      approval_workflows: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          kind: string
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind?: string
+          name: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind?: string
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_workflows_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -843,6 +960,182 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      campus_departments: {
+        Row: {
+          campus_id: string
+          department_id: string
+          organization_id: string
+        }
+        Insert: {
+          campus_id: string
+          department_id: string
+          organization_id: string
+        }
+        Update: {
+          campus_id?: string
+          department_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_departments_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_departments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campus_faculties: {
+        Row: {
+          campus_id: string
+          faculty_id: string
+          is_home: boolean
+          organization_id: string
+        }
+        Insert: {
+          campus_id: string
+          faculty_id: string
+          is_home?: boolean
+          organization_id: string
+        }
+        Update: {
+          campus_id?: string
+          faculty_id?: string
+          is_home?: boolean
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_faculties_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_faculties_faculty_id_fkey"
+            columns: ["faculty_id"]
+            isOneToOne: false
+            referencedRelation: "faculties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_faculties_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campus_programmes: {
+        Row: {
+          campus_id: string
+          organization_id: string
+          programme_id: string
+        }
+        Insert: {
+          campus_id: string
+          organization_id: string
+          programme_id: string
+        }
+        Update: {
+          campus_id?: string
+          organization_id?: string
+          programme_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_programmes_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_programmes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_programmes_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campuses: {
+        Row: {
+          city: string | null
+          code: string
+          country: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          name_i18n: Json
+          organization_id: string
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          code: string
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          name_i18n?: Json
+          organization_id: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          code?: string
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          name_i18n?: Json
+          organization_id?: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campuses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       centre_payment_quotes: {
         Row: {
@@ -1304,11 +1597,13 @@ export type Database = {
           grade_point: number | null
           id: string
           learner_id: string
+          official_mark: number | null
           organization_id: string
           prior_attempt_id: string | null
           quality_points: number | null
           registered_at: string
           registered_by: string | null
+          rounding_policy_id: string | null
           session_id: string
           status: string
           subject_id: string
@@ -1329,11 +1624,13 @@ export type Database = {
           grade_point?: number | null
           id?: string
           learner_id: string
+          official_mark?: number | null
           organization_id: string
           prior_attempt_id?: string | null
           quality_points?: number | null
           registered_at?: string
           registered_by?: string | null
+          rounding_policy_id?: string | null
           session_id: string
           status?: string
           subject_id: string
@@ -1354,11 +1651,13 @@ export type Database = {
           grade_point?: number | null
           id?: string
           learner_id?: string
+          official_mark?: number | null
           organization_id?: string
           prior_attempt_id?: string | null
           quality_points?: number | null
           registered_at?: string
           registered_by?: string | null
+          rounding_policy_id?: string | null
           session_id?: string
           status?: string
           subject_id?: string
@@ -1419,6 +1718,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "course_registrations_rounding_policy_id_fkey"
+            columns: ["rounding_policy_id"]
+            isOneToOne: false
+            referencedRelation: "tertiary_rounding_policies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "course_registrations_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
@@ -1465,6 +1771,7 @@ export type Database = {
           submitted_by: string | null
           term_id: string
           updated_at: string
+          workflow_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1489,6 +1796,7 @@ export type Database = {
           submitted_by?: string | null
           term_id: string
           updated_at?: string
+          workflow_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1513,6 +1821,7 @@ export type Database = {
           submitted_by?: string | null
           term_id?: string
           updated_at?: string
+          workflow_id?: string | null
         }
         Relationships: [
           {
@@ -1583,6 +1892,13 @@ export type Database = {
             columns: ["term_id"]
             isOneToOne: false
             referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_result_submissions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "approval_workflows"
             referencedColumns: ["id"]
           },
         ]
@@ -3334,6 +3650,7 @@ export type Database = {
           max_point: number
           name: string
           organization_id: string
+          rules: Json
           scale_type: string
         }
         Insert: {
@@ -3343,6 +3660,7 @@ export type Database = {
           max_point: number
           name: string
           organization_id: string
+          rules?: Json
           scale_type: string
         }
         Update: {
@@ -3352,6 +3670,7 @@ export type Database = {
           max_point?: number
           name?: string
           organization_id?: string
+          rules?: Json
           scale_type?: string
         }
         Relationships: [
@@ -3362,7 +3681,44 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "grading_scale_configs_scale_type_fk"
+            columns: ["scale_type"]
+            isOneToOne: false
+            referencedRelation: "grading_scale_types"
+            referencedColumns: ["key"]
+          },
         ]
+      }
+      grading_scale_types: {
+        Row: {
+          aggregation_method: string
+          created_at: string
+          default_pass_mark: number | null
+          key: string
+          label_en: string
+          label_fr: string
+          score_max: number | null
+        }
+        Insert: {
+          aggregation_method: string
+          created_at?: string
+          default_pass_mark?: number | null
+          key: string
+          label_en: string
+          label_fr: string
+          score_max?: number | null
+        }
+        Update: {
+          aggregation_method?: string
+          created_at?: string
+          default_pass_mark?: number | null
+          key?: string
+          label_en?: string
+          label_fr?: string
+          score_max?: number | null
+        }
+        Relationships: []
       }
       grading_systems: {
         Row: {
@@ -3420,6 +3776,7 @@ export type Database = {
       groups: {
         Row: {
           arm: string | null
+          campus_id: string | null
           code: string | null
           created_at: string
           department_id: string | null
@@ -3441,6 +3798,7 @@ export type Database = {
         }
         Insert: {
           arm?: string | null
+          campus_id?: string | null
           code?: string | null
           created_at?: string
           department_id?: string | null
@@ -3462,6 +3820,7 @@ export type Database = {
         }
         Update: {
           arm?: string | null
+          campus_id?: string | null
           code?: string | null
           created_at?: string
           department_id?: string | null
@@ -3482,6 +3841,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "groups_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "groups_department_id_fkey"
             columns: ["department_id"]
@@ -4082,6 +4448,7 @@ export type Database = {
           address: string | null
           admission_number: string | null
           auth_user_id: string | null
+          campus_id: string | null
           created_at: string
           date_of_birth: string | null
           destination_school: string | null
@@ -4116,6 +4483,7 @@ export type Database = {
           address?: string | null
           admission_number?: string | null
           auth_user_id?: string | null
+          campus_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           destination_school?: string | null
@@ -4150,6 +4518,7 @@ export type Database = {
           address?: string | null
           admission_number?: string | null
           auth_user_id?: string | null
+          campus_id?: string | null
           created_at?: string
           date_of_birth?: string | null
           destination_school?: string | null
@@ -4181,6 +4550,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "learners_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "learners_group_id_fkey"
             columns: ["group_id"]
@@ -4745,9 +5121,11 @@ export type Database = {
           centre_billing_cycle: string | null
           centre_billing_months: number
           centre_plan: string | null
+          city: string | null
           colors: Json | null
           contact_email: string | null
           contact_phone: string | null
+          country_code: string | null
           created_at: string
           current_term_id: string | null
           email: string | null
@@ -4763,6 +5141,8 @@ export type Database = {
           principal_name: string | null
           principal_signature_url: string | null
           principal_title: string | null
+          region_code: string | null
+          region_name: string | null
           report_card_settings: Json | null
           school_name: string | null
           session_name: string | null
@@ -4812,9 +5192,11 @@ export type Database = {
           centre_billing_cycle?: string | null
           centre_billing_months?: number
           centre_plan?: string | null
+          city?: string | null
           colors?: Json | null
           contact_email?: string | null
           contact_phone?: string | null
+          country_code?: string | null
           created_at?: string
           current_term_id?: string | null
           email?: string | null
@@ -4830,6 +5212,8 @@ export type Database = {
           principal_name?: string | null
           principal_signature_url?: string | null
           principal_title?: string | null
+          region_code?: string | null
+          region_name?: string | null
           report_card_settings?: Json | null
           school_name?: string | null
           session_name?: string | null
@@ -4879,9 +5263,11 @@ export type Database = {
           centre_billing_cycle?: string | null
           centre_billing_months?: number
           centre_plan?: string | null
+          city?: string | null
           colors?: Json | null
           contact_email?: string | null
           contact_phone?: string | null
+          country_code?: string | null
           created_at?: string
           current_term_id?: string | null
           email?: string | null
@@ -4897,6 +5283,8 @@ export type Database = {
           principal_name?: string | null
           principal_signature_url?: string | null
           principal_title?: string | null
+          region_code?: string | null
+          region_name?: string | null
           report_card_settings?: Json | null
           school_name?: string | null
           session_name?: string | null
@@ -7646,28 +8034,40 @@ export type Database = {
         Row: {
           assigned_at: string | null
           assigned_by: string | null
+          campus_id: string | null
+          department_id: string | null
+          faculty_id: string | null
           id: string
           is_active: boolean
           organization_id: string
           role_id: string
+          scope_type: string
           user_id: string
         }
         Insert: {
           assigned_at?: string | null
           assigned_by?: string | null
+          campus_id?: string | null
+          department_id?: string | null
+          faculty_id?: string | null
           id?: string
           is_active?: boolean
           organization_id: string
           role_id: string
+          scope_type?: string
           user_id: string
         }
         Update: {
           assigned_at?: string | null
           assigned_by?: string | null
+          campus_id?: string | null
+          department_id?: string | null
+          faculty_id?: string | null
           id?: string
           is_active?: boolean
           organization_id?: string
           role_id?: string
+          scope_type?: string
           user_id?: string
         }
         Relationships: [
@@ -7676,6 +8076,27 @@ export type Database = {
             columns: ["assigned_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_role_assignments_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_role_assignments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_role_assignments_faculty_id_fkey"
+            columns: ["faculty_id"]
+            isOneToOne: false
+            referencedRelation: "faculties"
             referencedColumns: ["id"]
           },
           {
@@ -8025,6 +8446,7 @@ export type Database = {
       subjects: {
         Row: {
           code: string | null
+          coefficient: number | null
           course_id: string | null
           course_status: string | null
           course_type: string | null
@@ -8041,11 +8463,13 @@ export type Database = {
           organization_id: string | null
           prerequisite_subject_id: string | null
           teacher_id: string | null
+          teaching_unit_id: string | null
           template_id: string | null
           updated_at: string
         }
         Insert: {
           code?: string | null
+          coefficient?: number | null
           course_id?: string | null
           course_status?: string | null
           course_type?: string | null
@@ -8062,11 +8486,13 @@ export type Database = {
           organization_id?: string | null
           prerequisite_subject_id?: string | null
           teacher_id?: string | null
+          teaching_unit_id?: string | null
           template_id?: string | null
           updated_at?: string
         }
         Update: {
           code?: string | null
+          coefficient?: number | null
           course_id?: string | null
           course_status?: string | null
           course_type?: string | null
@@ -8083,6 +8509,7 @@ export type Database = {
           organization_id?: string | null
           prerequisite_subject_id?: string | null
           teacher_id?: string | null
+          teaching_unit_id?: string | null
           template_id?: string | null
           updated_at?: string
         }
@@ -8137,10 +8564,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "subjects_teaching_unit_id_fkey"
+            columns: ["teaching_unit_id"]
+            isOneToOne: false
+            referencedRelation: "teaching_units"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "subjects_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "assessment_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_reviews: {
+        Row: {
+          acted_at: string
+          action: string
+          actor: string
+          id: string
+          organization_id: string
+          reason: string | null
+          stage_key: string
+          submission_id: string
+        }
+        Insert: {
+          acted_at?: string
+          action: string
+          actor: string
+          id?: string
+          organization_id: string
+          reason?: string | null
+          stage_key: string
+          submission_id: string
+        }
+        Update: {
+          acted_at?: string
+          action?: string
+          actor?: string
+          id?: string
+          organization_id?: string
+          reason?: string | null
+          stage_key?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_reviews_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_reviews_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "course_result_submissions"
             referencedColumns: ["id"]
           },
         ]
@@ -8482,8 +8971,76 @@ export type Database = {
           },
         ]
       }
+      teaching_units: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          credits: number
+          curriculum_id: string | null
+          department_id: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          title: string
+          title_i18n: Json
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          credits: number
+          curriculum_id?: string | null
+          department_id?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          title: string
+          title_i18n?: Json
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          credits?: number
+          curriculum_id?: string | null
+          department_id?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          title?: string
+          title_i18n?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teaching_units_curriculum_id_fkey"
+            columns: ["curriculum_id"]
+            isOneToOne: false
+            referencedRelation: "curricula"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_units_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teaching_units_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_connectors: {
         Row: {
+          campus_id: string | null
           config: Json
           created_at: string
           created_by: string | null
@@ -8498,6 +9055,7 @@ export type Database = {
           verified_at: string | null
         }
         Insert: {
+          campus_id?: string | null
           config?: Json
           created_at?: string
           created_by?: string | null
@@ -8512,6 +9070,7 @@ export type Database = {
           verified_at?: string | null
         }
         Update: {
+          campus_id?: string | null
           config?: Json
           created_at?: string
           created_by?: string | null
@@ -8526,6 +9085,13 @@ export type Database = {
           verified_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_connectors_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_connectors_organization_id_fkey"
             columns: ["organization_id"]
@@ -8581,6 +9147,83 @@ export type Database = {
             foreignKeyName: "tenant_settings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_sso_domains: {
+        Row: {
+          auto_provision: boolean
+          campus_id: string | null
+          connector_id: string | null
+          created_at: string
+          default_school_role_id: string | null
+          default_user_role: string | null
+          email_domain: string
+          id: string
+          idp_tenant_id: string | null
+          is_active: boolean
+          organization_id: string
+          principal_kind: string
+          provider: string
+        }
+        Insert: {
+          auto_provision?: boolean
+          campus_id?: string | null
+          connector_id?: string | null
+          created_at?: string
+          default_school_role_id?: string | null
+          default_user_role?: string | null
+          email_domain: string
+          id?: string
+          idp_tenant_id?: string | null
+          is_active?: boolean
+          organization_id: string
+          principal_kind: string
+          provider: string
+        }
+        Update: {
+          auto_provision?: boolean
+          campus_id?: string | null
+          connector_id?: string | null
+          created_at?: string
+          default_school_role_id?: string | null
+          default_user_role?: string | null
+          email_domain?: string
+          id?: string
+          idp_tenant_id?: string | null
+          is_active?: boolean
+          organization_id?: string
+          principal_kind?: string
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_sso_domains_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_sso_domains_connector_id_fkey"
+            columns: ["connector_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_connectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_sso_domains_default_school_role_id_fkey"
+            columns: ["default_school_role_id"]
+            isOneToOne: false
+            referencedRelation: "school_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_sso_domains_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -9063,9 +9706,172 @@ export type Database = {
         }
         Relationships: []
       }
+      tertiary_regulation_bindings: {
+        Row: {
+          bound_at: string
+          bound_by: string
+          cgpa_after: number | null
+          cgpa_before: number | null
+          id: string
+          learner_id: string
+          organization_id: string
+          override_reason: string | null
+          reason: string
+          regulation_set_id: string
+        }
+        Insert: {
+          bound_at?: string
+          bound_by: string
+          cgpa_after?: number | null
+          cgpa_before?: number | null
+          id?: string
+          learner_id: string
+          organization_id: string
+          override_reason?: string | null
+          reason: string
+          regulation_set_id: string
+        }
+        Update: {
+          bound_at?: string
+          bound_by?: string
+          cgpa_after?: number | null
+          cgpa_before?: number | null
+          id?: string
+          learner_id?: string
+          organization_id?: string
+          override_reason?: string | null
+          reason?: string
+          regulation_set_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tertiary_regulation_bindings_learner_id_fkey"
+            columns: ["learner_id"]
+            isOneToOne: true
+            referencedRelation: "learners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tertiary_regulation_bindings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tertiary_regulation_bindings_regulation_set_id_fkey"
+            columns: ["regulation_set_id"]
+            isOneToOne: false
+            referencedRelation: "tertiary_regulation_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tertiary_regulation_sets: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          effective_from: string
+          id: string
+          name: string
+          organization_id: string
+          programme_id: string | null
+          reason: string
+          rules: Json
+          version: number
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          effective_from: string
+          id?: string
+          name: string
+          organization_id: string
+          programme_id?: string | null
+          reason: string
+          rules: Json
+          version: number
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          effective_from?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          programme_id?: string | null
+          reason?: string
+          rules?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tertiary_regulation_sets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tertiary_regulation_sets_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tertiary_rounding_policies: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          decimals: number
+          effective_from: string
+          grade_on: string
+          id: string
+          method: string
+          organization_id: string
+          reason: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          decimals: number
+          effective_from: string
+          grade_on: string
+          id?: string
+          method: string
+          organization_id: string
+          reason: string
+          version: number
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          decimals?: number
+          effective_from?: string
+          grade_on?: string
+          id?: string
+          method?: string
+          organization_id?: string
+          reason?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tertiary_rounding_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tertiary_student_records: {
         Row: {
           academic_status: string
+          campus_id: string | null
           classification: string | null
           created_at: string
           current_level: string | null
@@ -9089,6 +9895,7 @@ export type Database = {
         }
         Insert: {
           academic_status?: string
+          campus_id?: string | null
           classification?: string | null
           created_at?: string
           current_level?: string | null
@@ -9112,6 +9919,7 @@ export type Database = {
         }
         Update: {
           academic_status?: string
+          campus_id?: string | null
           classification?: string | null
           created_at?: string
           current_level?: string | null
@@ -9134,6 +9942,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tertiary_student_records_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tertiary_student_records_entry_session_id_fkey"
             columns: ["entry_session_id"]
@@ -9801,6 +10616,93 @@ export type Database = {
           },
         ]
       }
+      ue_results: {
+        Row: {
+          average: number | null
+          computed_at: string
+          config_id: string | null
+          credits_awarded: number
+          ec_count: number
+          ec_published: number
+          id: string
+          learner_id: string
+          organization_id: string
+          reason: string | null
+          rules_snapshot: Json
+          status: string
+          teaching_unit_id: string
+          term_id: string
+        }
+        Insert: {
+          average?: number | null
+          computed_at?: string
+          config_id?: string | null
+          credits_awarded?: number
+          ec_count?: number
+          ec_published?: number
+          id?: string
+          learner_id: string
+          organization_id: string
+          reason?: string | null
+          rules_snapshot?: Json
+          status: string
+          teaching_unit_id: string
+          term_id: string
+        }
+        Update: {
+          average?: number | null
+          computed_at?: string
+          config_id?: string | null
+          credits_awarded?: number
+          ec_count?: number
+          ec_published?: number
+          id?: string
+          learner_id?: string
+          organization_id?: string
+          reason?: string | null
+          rules_snapshot?: Json
+          status?: string
+          teaching_unit_id?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ue_results_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "grading_scale_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ue_results_learner_id_fkey"
+            columns: ["learner_id"]
+            isOneToOne: false
+            referencedRelation: "learners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ue_results_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ue_results_teaching_unit_id_fkey"
+            columns: ["teaching_unit_id"]
+            isOneToOne: false
+            referencedRelation: "teaching_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ue_results_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           account_status: string
@@ -10356,9 +11258,23 @@ export type Database = {
       }
     }
     Functions: {
+      _apply_semester_compensation: {
+        Args: { p_learner: string; p_rules: Json; p_term: string }
+        Returns: undefined
+      }
       _compute_onboarding_status: {
         Args: { p_learner_id: string }
         Returns: Json
+      }
+      _compute_ue_for_learner: {
+        Args: {
+          p_cfg: string
+          p_learner: string
+          p_rules: Json
+          p_term: string
+          p_ue: string
+        }
+        Returns: undefined
       }
       _current_paid_period: { Args: { p_org_id: string }; Returns: Json }
       _derive_grade_outcome: {
@@ -10373,6 +11289,10 @@ export type Database = {
       _edux_request_role: { Args: never; Returns: string }
       _entitlement_decision: {
         Args: { p_feature: string; p_org_id: string }
+        Returns: Json
+      }
+      _imp_err: {
+        Args: { p_code: string; p_field: string; p_message: string }
         Returns: Json
       }
       _issue_topup: {
@@ -10391,6 +11311,7 @@ export type Database = {
           learner_id: string
         }[]
       }
+      _lmd_results_bundle: { Args: { p_learner_id: string }; Returns: Json }
       _registration_is_protected: {
         Args: { p_org_id: string; p_subject_id: string; p_term_id: string }
         Returns: boolean
@@ -10399,9 +11320,26 @@ export type Database = {
         Args: { p_org_id: string; p_term_id: string; p_total: number }
         Returns: Record<string, unknown>
       }
+      _resolve_grade_for_total_core: {
+        Args: { p_org_id: string; p_term_id: string; p_total: number }
+        Returns: Record<string, unknown>
+      }
+      _tertiary_apply_overlay: {
+        Args: {
+          p_core: Json
+          p_hold_all?: boolean
+          p_hold_keys?: Json
+          p_rules: Json
+        }
+        Returns: Json
+      }
       _tertiary_attempt_authority: {
         Args: { p_level: string; p_org: string }
         Returns: boolean
+      }
+      _tertiary_canonical_course: {
+        Args: { p_course: string }
+        Returns: string
       }
       _tertiary_entitlement_core: { Args: { p_org_id: string }; Returns: Json }
       _tertiary_graduation_blockers: {
@@ -10420,6 +11358,23 @@ export type Database = {
         Args: { p_learner_id: string }
         Returns: Json
       }
+      _tertiary_results_bundle_core: {
+        Args: { p_learner_id: string }
+        Returns: Json
+      }
+      _tertiary_results_bundle_gpa: {
+        Args: { p_learner_id: string }
+        Returns: Json
+      }
+      _tertiary_results_bundle_view: {
+        Args: { p_learner_id: string; p_viewer: string }
+        Returns: Json
+      }
+      _tertiary_round_mark: {
+        Args: { p_decimals: number; p_method: string; p_value: number }
+        Returns: number
+      }
+      _tertiary_rules_are_legacy: { Args: { p_rules: Json }; Returns: boolean }
       _tertiary_scale_in_use: {
         Args: {
           p_org_id: string
@@ -10428,9 +11383,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      _tertiary_term_rounding_policy: {
+        Args: { p_org: string; p_term: string }
+        Returns: {
+          decimals: number
+          grade_on: string
+          id: string
+          method: string
+        }[]
+      }
       _tertiary_transcript_authority: {
         Args: { p_kind: string; p_org: string }
         Returns: boolean
+      }
+      _tertiary_validate_rules: { Args: { p_rules: Json }; Returns: Json }
+      _validate_lmd_rules: {
+        Args: { p_max: number; p_rules: Json }
+        Returns: undefined
       }
       accept_founding_agreement: {
         Args: { p_application_id: string }
@@ -10525,6 +11494,26 @@ export type Database = {
         Args: { p_commission_id: string }
         Returns: undefined
       }
+      approve_regulation_set: {
+        Args: {
+          p_effective_from: string
+          p_name: string
+          p_programme_id?: string
+          p_reason: string
+          p_rules: Json
+        }
+        Returns: string
+      }
+      approve_rounding_policy: {
+        Args: {
+          p_decimals: number
+          p_effective_from: string
+          p_grade_on: string
+          p_method: string
+          p_reason: string
+        }
+        Returns: string
+      }
       approve_tertiary_graduation: {
         Args: {
           p_classification?: string
@@ -10550,6 +11539,17 @@ export type Database = {
         Args: { group_id: string; pin_length?: number }
         Returns: undefined
       }
+      assign_staff_role: {
+        Args: {
+          p_campus_id?: string
+          p_department_id?: string
+          p_faculty_id?: string
+          p_role_id: string
+          p_scope_type?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       assign_subject_to_curriculum: {
         Args: { p_curriculum_id: string; p_subject_id: string }
         Returns: undefined
@@ -10568,6 +11568,24 @@ export type Database = {
       billing_review_payment: {
         Args: { p_note: string; p_payment_id: string; p_recommendation: string }
         Returns: undefined
+      }
+      bind_learner_regulation: {
+        Args: {
+          p_learner_id: string
+          p_override_reason?: string
+          p_reason: string
+          p_set_id: string
+        }
+        Returns: Json
+      }
+      bind_regulation_for_entry: {
+        Args: {
+          p_entry_session_id: string
+          p_programme_id: string
+          p_reason: string
+          p_set_id: string
+        }
+        Returns: Json
       }
       bind_term_grading_scale: {
         Args: { p_config_id?: string; p_term_id: string }
@@ -10811,13 +11829,16 @@ export type Database = {
         Returns: Json
       }
       create_admission_import_batch: {
-        Args: never
+        Args: { p_filename?: string; p_strict?: boolean }
         Returns: {
           completed_at: string | null
           created_at: string
           id: string
           organization_id: string
+          source_filename: string | null
           status: string
+          strict: boolean
+          total_rows: number | null
           uploaded_by: string | null
         }
         SetofOptions: {
@@ -10826,6 +11847,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_approval_workflow: {
+        Args: { p_make_default?: boolean; p_name: string; p_stages: Json }
+        Returns: string
       }
       create_centre_payment_quote: {
         Args: {
@@ -10909,6 +11934,10 @@ export type Database = {
           p_reference: string
         }
         Returns: Json
+      }
+      create_lmd_grading: {
+        Args: { p_org_id: string; p_with_mentions?: boolean }
+        Returns: string
       }
       create_notification: {
         Args: {
@@ -11038,7 +12067,10 @@ export type Database = {
         Args: { p_feature: string; p_org_id: string }
         Returns: boolean
       }
-      execute_admission_import: { Args: { p_batch_id: string }; Returns: Json }
+      execute_admission_import: {
+        Args: { p_batch_id: string; p_limit?: number }
+        Returns: Json
+      }
       expire_founding_500_entitlements: { Args: never; Returns: undefined }
       expire_founding_500_grace_periods: { Args: never; Returns: undefined }
       extend_founding_application_pilot: {
@@ -11062,6 +12094,16 @@ export type Database = {
         Returns: Json
       }
       get_active_tertiary_scale: { Args: { p_org_id: string }; Returns: Json }
+      get_admission_import_errors: {
+        Args: { p_batch_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          codes: string
+          file_row: number
+          message: string
+          raw: Json
+          result: string
+        }[]
+      }
       get_admission_import_summary: {
         Args: { p_batch_id: string }
         Returns: Json
@@ -11214,6 +12256,10 @@ export type Database = {
         }[]
       }
       get_my_role: { Args: never; Returns: string }
+      get_my_scoped_campus_ids: {
+        Args: { p_permission_key: string }
+        Returns: string[]
+      }
       get_my_taught_group_ids: { Args: never; Returns: string[] }
       get_my_tertiary_academic_record: { Args: never; Returns: Json }
       get_my_tertiary_results_bundle: { Args: never; Returns: Json }
@@ -11247,6 +12293,7 @@ export type Database = {
         Args: { p_campaign_key: string }
         Returns: Json
       }
+      get_public_support_config: { Args: { p_hostname: string }; Returns: Json }
       get_public_tertiary_pricing: { Args: never; Returns: Json }
       get_representative_followup_performance: {
         Args: { p_representative_id: string }
@@ -11337,12 +12384,22 @@ export type Database = {
         Args: { p_group_id: string; p_org_id: string }
         Returns: boolean
       }
+      has_assigned_permission: { Args: { p_key: string }; Returns: boolean }
       has_permission: {
         Args: { p_permission_key: string; p_user_id: string }
         Returns: boolean
       }
       has_platform_permission: {
         Args: { p_permission_key: string; p_user_id: string }
+        Returns: boolean
+      }
+      has_scoped_permission: {
+        Args: {
+          p_campus_id?: string
+          p_department_id?: string
+          p_faculty_id?: string
+          p_permission_key: string
+        }
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
@@ -11418,6 +12475,10 @@ export type Database = {
       list_tertiary_transcript_issues: { Args: never; Returns: Json }
       list_tertiary_transcript_requests: {
         Args: { p_status?: string }
+        Returns: Json
+      }
+      lmd_rules: {
+        Args: { p_default_pass: number; p_rules: Json }
         Returns: Json
       }
       log_academic_action: {
@@ -11632,6 +12693,10 @@ export type Database = {
         }
         Returns: string
       }
+      recompute_ue_results: {
+        Args: { p_subject_id: string; p_term_id: string }
+        Returns: number
+      }
       record_commission: {
         Args: {
           p_amount: number
@@ -11736,11 +12801,13 @@ export type Database = {
         Args: { p_hostname: string }
         Returns: {
           colors: Json
+          default_locale: string
           is_primary: boolean
           logo_url: string
           org_name: string
           org_type: Database["public"]["Enums"]["org_type"]
           organization_id: string
+          supported_locales: string[]
         }[]
       }
       resolve_solo_payment_review: {
@@ -11879,6 +12946,7 @@ export type Database = {
         Args: { p_created_by: string; p_org_id: string }
         Returns: undefined
       }
+      seed_legacy_workflow: { Args: { p_org_id: string }; Returns: string }
       send_founding_500_expiry_reminders: { Args: never; Returns: undefined }
       send_founding_pilot_notices: { Args: never; Returns: number }
       send_onboarding_reminders: {
@@ -11956,12 +13024,17 @@ export type Database = {
         }
         Returns: Json
       }
+      set_grading_scale_rules: {
+        Args: { p_config_id: string; p_rules: Json }
+        Returns: undefined
+      }
       set_leaderboard_weights: { Args: { p_weights: Json }; Returns: undefined }
       set_learner_portal_status: {
         Args: { p_learner_id: string; p_status: string }
         Returns: undefined
       }
       set_my_billing_country: { Args: { p_country: string }; Returns: Json }
+      set_my_locale: { Args: { p_locale: string }; Returns: undefined }
       set_onboarding_deadline: {
         Args: {
           p_deadline_at: string
@@ -12267,6 +13340,16 @@ export type Database = {
           matches: boolean
           new_outstanding: number
           old_outstanding: number
+        }[]
+      }
+      verify_representative: {
+        Args: { p_code: string }
+        Returns: {
+          full_name: string
+          level: string
+          photo_status: string
+          referral_code: string
+          status: string
         }[]
       }
       verify_tertiary_transcript: {

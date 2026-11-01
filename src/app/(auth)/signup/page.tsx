@@ -9,6 +9,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
+import { CountrySelect, StateSelect, CitySelect } from 'react-country-state-city'
+import 'react-country-state-city/dist/react-country-state-city.css'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
@@ -73,6 +75,14 @@ function SignupForm() {
   const [captchaToken, setCaptchaToken] = useState<string | undefined>()
   const captcha = useRef<TurnstileInstance>(null)
 
+  // Institution location (cascading country → region → city)
+  const [countryId, setCountryId] = useState<number>(0)
+  const [stateId, setStateId] = useState<number>(0)
+  const [countryCode, setCountryCode] = useState<string>('')
+  const [regionCode, setRegionCode] = useState<string>('')
+  const [regionName, setRegionName] = useState<string>('')
+  const [cityName, setCityName] = useState<string>('')
+
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { account_type: 'individual', org_type: 'school', referral_code: referralCode ?? '' },
@@ -100,6 +110,10 @@ function SignupForm() {
       if (data.account_type === 'organization' && data.org_name) {
         metadata.organization_name = data.org_name.trim()
         metadata.organization_type = data.org_type ?? 'school'
+        metadata.organization_country_code = countryCode
+        metadata.organization_region_code = regionCode
+        metadata.organization_region_name = regionName
+        metadata.organization_city = cityName
       }
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -392,6 +406,53 @@ function SignupForm() {
                 We confirm your institution type before billing starts. You can set up your account and enroll students in the meantime.
               </p>
             </div>
+
+            {/* ── Country ── */}
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Country *</label>
+              <CountrySelect
+                onChange={(e: any) => {
+                  setCountryId(e?.id ?? 0)
+                  setCountryCode(e?.iso2?.toUpperCase() ?? '')
+                  setStateId(0)
+                  setRegionCode('')
+                  setRegionName('')
+                  setCityName('')
+                }}
+                placeHolder="Select country"
+              />
+            </div>
+
+            {/* ── State / Province / Region ── */}
+            {countryId > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">State / Province / Region *</label>
+                <StateSelect
+                  countryid={countryId}
+                  onChange={(e: any) => {
+                    setStateId(e?.id ?? 0)
+                    const iso = e?.iso2 ? String(e.iso2).toUpperCase() : ''
+                    setRegionCode(iso ? `${countryCode}-${iso}` : '')
+                    setRegionName(e?.name ?? '')
+                    setCityName('')
+                  }}
+                  placeHolder="Select region"
+                />
+              </div>
+            )}
+
+            {/* ── City / Town ── */}
+            {stateId > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-ink mb-1">City / Town *</label>
+                <CitySelect
+                  countryid={countryId}
+                  stateid={stateId}
+                  onChange={(e: any) => setCityName(e?.name ?? '')}
+                  placeHolder="Select city"
+                />
+              </div>
+            )}
 
             <div className="bg-brand-50 border border-brand-200 rounded p-3 text-xs text-brand-700">
               <p className="font-semibold mb-1">What you get as admin:</p>
