@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 
@@ -69,6 +70,8 @@ function SignupForm() {
   const [step, setStep] = useState<1 | 2>(1)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | undefined>()
+  const captcha = useRef<TurnstileInstance>(null)
 
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -102,8 +105,12 @@ function SignupForm() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email.trim(),
         password: data.password,
-        options: { data: metadata },
+        options: { data: metadata, captchaToken },
       })
+
+      // Tokens are single-use, so always reset after an attempt
+      captcha.current?.reset()
+      setCaptchaToken(undefined)
 
       if (authError) throw new Error(authError.message)
       if (!authData.user) throw new Error('Signup failed — please try again')
@@ -171,6 +178,8 @@ function SignupForm() {
 
     } catch (err: unknown) {
       console.error('Signup error:', err)
+      captcha.current?.reset()
+      setCaptchaToken(undefined)
       toast.error(err instanceof Error ? err.message : 'Signup failed')
     } finally {
       setLoading(false)
@@ -330,7 +339,15 @@ function SignupForm() {
                     Individual teachers get <strong>1 class, up to 30 students</strong>, and Excel/CSV exports free.
                   </div>
                 )}
-                <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+
+                <Turnstile
+                  ref={captcha}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                  onSuccess={setCaptchaToken}
+                  onExpire={() => setCaptchaToken(undefined)}
+                />
+
+                <button type="submit" disabled={loading || !captchaToken} className="btn-primary btn mt-2">
                   {loading
                     ? 'Creating account…'
                     : accountType === 'representative'
@@ -391,7 +408,14 @@ function SignupForm() {
               Starts on <strong>Free plan</strong> — 1 class, up to 30 students. Have a referral code from a rep? Enter it on the previous step and we'll follow up about Founding 500 access. Upgrade anytime from Settings.
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+            <Turnstile
+              ref={captcha}
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+              onSuccess={setCaptchaToken}
+              onExpire={() => setCaptchaToken(undefined)}
+            />
+
+            <button type="submit" disabled={loading || !captchaToken} className="btn-primary btn mt-2">
               {loading ? 'Setting up your school…' : 'Create school account'}
             </button>
           </>

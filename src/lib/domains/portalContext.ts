@@ -30,6 +30,8 @@ export interface PortalContext {
   logoUrl: string | null
   colors: { primary?: string; secondary?: string } | null
   isPrimaryDomain: boolean
+  defaultLocale?: string | null
+  supportedLocales?: string[] | null
 }
 
 const PLATFORM_HOSTS = new Set([
@@ -65,6 +67,8 @@ export const getPortalContext = cache(async (): Promise<PortalContext> => {
     logoUrl: null,
     colors: null,
     isPrimaryDomain: false,
+    defaultLocale: null,
+    supportedLocales: null,
   }
 
   if (!hostname || empty.isPlatformHost) return empty
@@ -85,6 +89,8 @@ export const getPortalContext = cache(async (): Promise<PortalContext> => {
       logo_url: string | null
       colors: { primary?: string; secondary?: string } | null
       is_primary: boolean
+      default_locale: string
+      supported_locales: string[]
     }
 
     return {
@@ -96,6 +102,8 @@ export const getPortalContext = cache(async (): Promise<PortalContext> => {
       logoUrl: data.logo_url,
       colors: data.colors,
       isPrimaryDomain: !!data.is_primary,
+      defaultLocale: data.default_locale,
+      supportedLocales: data.supported_locales,
     }
   } catch {
     return empty

@@ -64,7 +64,14 @@ export async function POST(request: Request) {
     p_recipient_id: userId,
     p_title: 'New role assigned',
     p_body: `You have been assigned the role of ${roleInfo?.name ?? 'a new role'}.`,
-    p_metadata: { category: 'role_assignment', link: '/dashboard' },
+    p_metadata: {
+      category: 'role_assignment',
+      link: '/dashboard',
+      i18n: {
+        key: 'notifications.roleAssigned',
+        params: { roleName: roleInfo?.name ?? '' },
+      },
+    },
   });
 
   // Send email notification if Resend is configured

@@ -1,0 +1,49 @@
+{
+  "common": { "save": "Enregistrer", "cancel": "Annuler", "download": "Télécharger", "language": "Langue", "loading": "Chargement..." },
+  "import": {
+    "title": "Importer les étudiants admis",
+    "subtitle": "CSV ou Excel. La faculté, le département, la filière et le campus doivent déjà exister ; le campus est identifié par son code.",
+    "template": "Modèle",
+    "chooseFile": "Choisir un fichier .csv, .xlsx ou .xls",
+    "rowsRead": "{count, plural, one {# ligne lue.} other {# lignes lues.}}",
+    "validate": "Valider {count} lignes",
+    "validating": "Validation... {percent} %",
+    "ready": "{count} prêtes", "errors": "{count} erreurs", "duplicates": "{count} doublons", "imported": "{count} importées",
+    "downloadErrors": "Télécharger le journal d'erreurs", "importValid": "Importer {count} lignes valides", "importing": "Import en cours...", "finished": "Terminé",
+    "errorCodes": {
+      "required": "Une valeur obligatoire est manquante", "too_long": "Valeur trop longue", "invalid_email": "Adresse e-mail invalide",
+      "invalid_phone": "Numéro de téléphone invalide", "invalid_gender": "Sexe non reconnu", "invalid_date": "Date illisible (utiliser AAAA-MM-JJ ou JJ/MM/AAAA)",
+      "out_of_range": "Date hors limites", "unknown_session": "Année universitaire inconnue", "unknown_faculty": "Faculté introuvable (nom ou code)",
+      "unknown_department": "Département introuvable dans cette faculté", "unknown_programme": "Filière introuvable dans ce département",
+      "unknown_campus": "Campus introuvable ; utiliser le code du campus", "ambiguous_campus": "Plusieurs campus correspondent ; utiliser le code du campus",
+      "campus_required": "Le campus est obligatoire (code du campus)", "programme_not_offered_at_campus": "Cette filière n'est pas proposée dans ce campus",
+      "duplicate_existing": "Ce matricule existe déjà", "duplicate_in_file": "Ce matricule apparaît déjà plus haut dans le fichier",
+      "import_failed": "La ligne n'a pas pu être importée"
+    }
+  },
+  "results": {
+    "ue": "Unité d'enseignement (UE)", "ec": "Élément constitutif (EC)", "coefficient": "Coefficient", "mark": "Note /20", "average": "Moyenne",
+    "credits": "Crédits", "creditsAwarded": "Crédits acquis", "semester": "Semestre",
+    "status": { "validated": "Validée", "not_validated": "Non validée", "compensated": "Validée par compensation", "pending": "En attente" },
+    "reason": {
+      "below_pass": "Moyenne inférieure au seuil de validation", "eliminatory_ec": "Une note est inférieure à la note éliminatoire",
+      "compensated": "Compensée par la moyenne du semestre", "awaiting_published_courses": "En attente de la publication des notes",
+      "missing_coefficients": "Coefficients manquants"
+    }
+  },
+  "workflow": { "department": "Revue du département", "faculty": "Revue de la faculté", "registry": "Revue de la scolarité", "jury": "Validation du jury", "senate": "Entérinement du Sénat" },
+  "notifications": {
+    "reportSubmitted": {
+      "title": "Rapport soumis pour approbation",
+      "body": "Le rapport de {className} a été soumis pour votre approbation par {submitterName}"
+    },
+    "reportApproved": {
+      "title": "Rapport approuvé",
+      "body": "Le rapport de {className} a été approuvé par {approverName} et est prêt à être verrouillé"
+    },
+    "roleAssigned": {
+      "title": "Nouveau rôle attribué",
+      "body": "Le rôle de {roleName} vous a été attribué."
+    }
+  }
+}

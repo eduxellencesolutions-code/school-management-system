@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale, getMessages } from 'next-intl/server'
 import AnnouncementTicker from '@/components/announcements/AnnouncementTicker'
 import TawkWidget from '@/components/support/TawkWidget'
 import SiteFooter from '@/components/brand/SiteFooter'
+import { getSupportConfig } from '@/lib/support/getSupportConfig'
 import '@/styles/globals.css'
 
 // ✅ Google Fonts using Next.js built-in optimization
@@ -89,15 +92,22 @@ export const viewport: Viewport = {
   maximumScale: 1,
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+  const support = await getSupportConfig()
+
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang={locale} className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="overflow-x-hidden w-full max-w-[100vw]">
         {/* ✅ Global Announcement Ticker */}
         <AnnouncementTicker />
-        {/* ✅ Tawk.to live chat */}
-        <TawkWidget />
-        {children}
+        {/* ✅ Tawk.to live chat (platform or tenant) */}
+        {support.mode === 'platform' && <TawkWidget />}
+        {support.mode === 'tenant' && <TawkWidget propertyId={support.propertyId} widgetId={support.widgetId} />}
+        <NextIntlClientProvider messages={messages}>
+          {children}
+        </NextIntlClientProvider>
         <SiteFooter />
         <Toaster
           position="top-right"

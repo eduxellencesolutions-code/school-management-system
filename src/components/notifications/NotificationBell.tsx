@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, BellOff, Check, X } from 'lucide-react'
 import Link from 'next/link'
@@ -19,10 +20,12 @@ interface Notification {
   metadata?: {
     link?: string
     category?: string
+    i18n?: { key: string; params?: Record<string, unknown> }
   }
 }
 
 export default function NotificationBell() {
+  const t = useTranslations()
   const supabase = createClient()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -162,6 +165,17 @@ export default function NotificationBell() {
     return link || '/dashboard'
   }
 
+  // Translate via metadata.i18n when present; fall back to the stored English text.
+  function notificationText(notification: Notification, field: 'title' | 'body') {
+    const i18n = notification.metadata?.i18n
+    if (i18n?.key) {
+      const key = field === 'title' ? `${i18n.key}.title` : `${i18n.key}.body`
+      const translated = t(key, i18n.params)
+      if (translated !== key) return translated
+    }
+    return notification[field]
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell Button */}
@@ -227,10 +241,10 @@ export default function NotificationBell() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold ${!notification.is_read ? 'text-ink' : 'text-ink-muted'}`}>
-                        {notification.title}
+                        {notificationText(notification, 'title')}
                       </p>
                       <p className={`text-xs ${!notification.is_read ? 'text-ink-muted' : 'text-ink-faint'}`}>
-                        {notification.body}
+                        {notificationText(notification, 'body')}
                       </p>
                       <p className="text-xs text-ink-faint mt-0.5">
                         {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}

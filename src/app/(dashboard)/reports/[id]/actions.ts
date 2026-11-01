@@ -45,6 +45,14 @@ async function notifyPrincipals(supabase: any, report: any, reportId: string, su
       report_id: reportId,
       title: 'Report submitted for approval',
       body: `${group?.name ?? 'A class'} report was submitted for your approval by ${submitterName}`,
+      metadata: {
+        link: `/reports/${reportId}`,
+        category: 'reports',
+        i18n: {
+          key: 'notifications.reportSubmitted',
+          params: { className: group?.name ?? 'A class', submitterName },
+        },
+      },
     }))
 
     const { error } = await supabase.from('notifications').insert(rows)
@@ -98,6 +106,14 @@ async function notifyAdmins(supabase: any, report: any, reportId: string, approv
       report_id: reportId,
       title: 'Report approved',
       body: `${group?.name ?? 'A class'} report was approved by ${approverName} and is ready to lock`,
+      metadata: {
+        link: `/reports/${reportId}`,
+        category: 'reports',
+        i18n: {
+          key: 'notifications.reportApproved',
+          params: { className: group?.name ?? 'A class', approverName },
+        },
+      },
     }))
 
     const { error } = await supabase.from('notifications').insert(rows)

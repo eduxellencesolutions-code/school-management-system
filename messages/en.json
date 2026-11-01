@@ -1,0 +1,49 @@
+{
+  "common": { "save": "Save", "cancel": "Cancel", "download": "Download", "language": "Language", "loading": "Loading..." },
+  "import": {
+    "title": "Import admitted students",
+    "subtitle": "CSV or Excel. Faculty, department, programme and campus must already exist; campus is matched by code.",
+    "template": "Template",
+    "chooseFile": "Choose a .csv, .xlsx or .xls file",
+    "rowsRead": "{count, plural, one {# row read.} other {# rows read.}}",
+    "validate": "Validate {count} rows",
+    "validating": "Validating... {percent}%",
+    "ready": "{count} ready", "errors": "{count} errors", "duplicates": "{count} duplicates", "imported": "{count} imported",
+    "downloadErrors": "Download error log", "importValid": "Import {count} valid rows", "importing": "Importing...", "finished": "Finished",
+    "errorCodes": {
+      "required": "A required value is missing", "too_long": "Value is too long", "invalid_email": "Invalid email address",
+      "invalid_phone": "Invalid phone number", "invalid_gender": "Unrecognised gender", "invalid_date": "Unreadable date (use YYYY-MM-DD or DD/MM/YYYY)",
+      "out_of_range": "Date out of range", "unknown_session": "Unknown academic year", "unknown_faculty": "Faculty not found (name or code)",
+      "unknown_department": "Department not found in this faculty", "unknown_programme": "Programme not found in this department",
+      "unknown_campus": "Campus not found; use the campus code", "ambiguous_campus": "More than one campus matches; use the campus code",
+      "campus_required": "Campus is required (use the campus code)", "programme_not_offered_at_campus": "This programme is not offered at this campus",
+      "duplicate_existing": "This admission number already exists", "duplicate_in_file": "This admission number appears earlier in the file",
+      "import_failed": "The row could not be imported"
+    }
+  },
+  "results": {
+    "ue": "Teaching unit (UE)", "ec": "Course (EC)", "coefficient": "Coefficient", "mark": "Mark /20", "average": "Average",
+    "credits": "Credits", "creditsAwarded": "Credits awarded", "semester": "Semester",
+    "status": { "validated": "Validated", "not_validated": "Not validated", "compensated": "Validated by compensation", "pending": "Pending" },
+    "reason": {
+      "below_pass": "Average below the pass mark", "eliminatory_ec": "A course is below the eliminatory mark",
+      "compensated": "Compensated by the semester average", "awaiting_published_courses": "Awaiting published courses",
+      "missing_coefficients": "Coefficients are missing"
+    }
+  },
+  "workflow": { "department": "Department review", "faculty": "Faculty review", "registry": "Registry review", "jury": "Jury approval", "senate": "Senate endorsement" },
+  "notifications": {
+    "reportSubmitted": {
+      "title": "Report submitted for approval",
+      "body": "{className} report was submitted for your approval by {submitterName}"
+    },
+    "reportApproved": {
+      "title": "Report approved",
+      "body": "{className} report was approved by {approverName} and is ready to lock"
+    },
+    "roleAssigned": {
+      "title": "New role assigned",
+      "body": "You have been assigned the role of {roleName}."
+    }
+  }
+}

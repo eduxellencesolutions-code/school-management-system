@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff } from 'lucide-react'
 import MFAChallenge from '@/components/auth/MFAChallenge'
@@ -24,6 +25,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | undefined>()
+  const captcha = useRef<TurnstileInstance>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -52,7 +55,12 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email.trim(),
         password: data.password,
+        options: { captchaToken },
       })
+
+      // Tokens are single-use, so always reset after an attempt
+      captcha.current?.reset()
+      setCaptchaToken(undefined)
 
       if (error) {
         // ── Record failed login attempt (fire-and-forget) ──
@@ -104,6 +112,8 @@ export default function LoginPage() {
       await afterFullyAuthenticated()
     } catch (err) {
       console.error('Login error:', err)
+      captcha.current?.reset()
+      setCaptchaToken(undefined)
       toast.error('Something went wrong. Please try again.')
       setLoading(false)
     }
@@ -165,7 +175,14 @@ export default function LoginPage() {
           {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>}
         </div>
 
-        <button type="submit" disabled={loading} className="btn-primary btn mt-2">
+        <Turnstile
+          ref={captcha}
+          siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+          onSuccess={setCaptchaToken}
+          onExpire={() => setCaptchaToken(undefined)}
+        />
+
+        <button type="submit" disabled={loading || !captchaToken} className="btn-primary btn mt-2">
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
